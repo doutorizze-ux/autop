@@ -1,18 +1,219 @@
 const { chromium } = require('playwright');
 
+// Função auxiliar para conversão de preço
+function parsePrice(priceStr) {
+    if (!priceStr) return 0;
+    const match = priceStr.match(/([0-9.,]+)/);
+    if (!match) return 0;
+    let clean = match[1].replace(/\./g, '').replace(',', '.');
+    return parseFloat(clean) || 0;
+}
+
+// Estratégias específicas por fornecedor
+const strategies = {
+    comdip: {
+        login: async (page, supplier) => {
+            console.error(`[DEBUG] Login COMDIP (CNPJ + Senha)`);
+            const cnpjSel = supplier.loginUserSelector || 'input[name*="cnpj"], input[placeholder*="cnpj" i], #Cnpj, #Login';
+            const passSel = supplier.loginPassSelector || 'input[type="password"]';
+            const submitSel = supplier.loginSubmitSelector || 'button:has-text("Entrar"), button:has-text("Login")';
+
+            await page.waitForSelector(cnpjSel, { state: 'visible' });
+            await page.locator(cnpjSel).first().fill(supplier.loginCredential.toString(), { force: true });
+            await page.locator(passSel).first().fill(supplier.password.toString(), { force: true });
+            await page.locator(submitSel).first().click({ force: true });
+        },
+        search: async (page, query) => {
+            const searchSel = 'input[type="search"], input[placeholder*="busca" i], .search-input';
+            await page.waitForSelector(searchSel, { state: 'visible' });
+            await page.locator(searchSel).first().fill(query);
+            await page.keyboard.press('Enter');
+        },
+        extract: async (page) => {
+            return await page.evaluate(() => {
+                const results = [];
+                // Resultados em grade
+                document.querySelectorAll('.product-card, .item-produto, .grid-item, article').forEach(el => {
+                    const text = el.innerText;
+                    if (!text.includes('R$')) return;
+                    
+                    const name = el.querySelector('.name, .title, h2, h3')?.innerText || text.split('\n')[0];
+                    const priceRaw = el.querySelector('.price, .valor, span:contains("R$")')?.innerText || text.match(/R\$\s?([0-9.,]+)/)?.[0];
+                    const code = el.querySelector('.code, .codigo, [data-code]')?.innerText || text.match(/(?:Cód|Código|Ref)[:\s]*([a-zA-Z0-9-]+)/i)?.[1] || "";
+                    const brand = el.querySelector('.brand, .marca')?.innerText || text.match(/(?:Marca)[:\s]*([a-zA-Z0-9]+)/i)?.[1] || "";
+
+                    if (priceRaw) results.push({ nome: name.trim(), codigo: code.trim(), marca: brand.trim(), preco: priceRaw, estoque: 0 });
+                });
+                return results;
+            });
+        }
+    },
+    kaizen: {
+        login: async (page, supplier) => {
+            console.error(`[DEBUG] Login KAIZEN (CNPJ + Senha)`);
+            const cnpjSel = supplier.loginUserSelector || 'input[name*="cnpj"], input[placeholder*="cnpj" i]';
+            const passSel = supplier.loginPassSelector || 'input[type="password"]';
+            const submitSel = supplier.loginSubmitSelector || 'button:has-text("Entrar")';
+
+            await page.waitForSelector(cnpjSel, { state: 'visible' });
+            await page.locator(cnpjSel).first().fill(supplier.loginCredential.toString());
+            await page.locator(passSel).first().fill(supplier.password.toString());
+            await page.locator(submitSel).first().click();
+        },
+        search: async (page, query) => {
+            const searchSel = 'input[placeholder*="código" i], input[placeholder*="descrição" i], input[type="text"]';
+            await page.waitForSelector(searchSel, { state: 'visible' });
+            await page.locator(searchSel).first().fill(query);
+            await page.keyboard.press('Enter');
+        },
+        extract: async (page) => {
+            return await page.evaluate(() => {
+                const results = [];
+                // Resultado em bloco
+                document.querySelectorAll('.bloco-produto, .product-block, .item').forEach(el => {
+                    const text = el.innerText;
+                    if (!text.includes('R$')) return;
+                    
+                    const name = el.querySelector('.nome, .descricao')?.innerText || text.split('\n')[0];
+                    const priceRaw = el.querySelector('.preco, .valor')?.innerText || text.match(/R\$\s?([0-9.,]+)/)?.[0];
+                    const code = text.match(/(?:Código|Cód)[:\s]*([a-zA-Z0-9-]+)/i)?.[1] || "";
+                    const brand = text.match(/(?:Marca)[:\s]*([a-zA-Z0-9]+)/i)?.[1] || "";
+                    const app = text.match(/(?:Aplicação)[:\s]*([^\n]+)/i)?.[1] || "";
+
+                    if (priceRaw) results.push({ nome: name.trim(), codigo: code.trim(), marca: brand.trim(), aplicacao: app.trim(), preco: priceRaw, estoque: 0 });
+                });
+                return results;
+            });
+        }
+    },
+    rmp: {
+        login: async (page, supplier) => {
+            console.error(`[DEBUG] Login RMP (Usuário + Senha)`);
+            const userSel = supplier.loginUserSelector || 'input[name*="user"], input[name*="login"]';
+            const passSel = supplier.loginPassSelector || 'input[type="password"]';
+            
+            await page.waitForSelector(userSel, { state: 'visible' });
+            await page.locator(userSel).first().fill(supplier.loginCredential.toString());
+            await page.locator(passSel).first().fill(supplier.password.toString());
+            await page.keyboard.press('Enter');
+        },
+        search: async (page, query) => {
+            const searchSel = 'input[placeholder*="código" i], input[placeholder*="descrição" i], input.busca';
+            await page.waitForSelector(searchSel, { state: 'visible' });
+            await page.locator(searchSel).first().fill(query);
+            await page.keyboard.press('Enter');
+        },
+        extract: async (page) => {
+            return await page.evaluate(() => {
+                const results = [];
+                // Layout em lista com filtros laterais
+                document.querySelectorAll('.lista-item, tr, .product-list-item').forEach(el => {
+                    const text = el.innerText;
+                    if (!text.includes('R$')) return;
+                    
+                    const name = el.querySelector('.nome, h2')?.innerText || text.split('\n')[0];
+                    const priceRaw = el.querySelector('.preco, td.price')?.innerText || text.match(/R\$\s?([0-9.,]+)/)?.[0];
+                    const code = el.querySelector('.codigo')?.innerText || text.match(/(?:Código|Cód)[:\s]*([a-zA-Z0-9-]+)/i)?.[1] || "";
+                    const brand = el.querySelector('.marca')?.innerText || text.match(/(?:Marca)[:\s]*([a-zA-Z0-9]+)/i)?.[1] || "";
+                    const app = el.querySelector('.aplicacao')?.innerText || text.match(/(?:Aplicação)[:\s]*([^\n]+)/i)?.[1] || "";
+
+                    if (priceRaw) results.push({ nome: name.trim(), codigo: code.trim(), marca: brand.trim(), aplicacao: app.trim(), preco: priceRaw, estoque: 0 });
+                });
+                return results;
+            });
+        }
+    },
+    sav: {
+        login: async (page, supplier) => {
+            console.error(`[DEBUG] Login SAV/FURAÇÃO (Usuário + Senha)`);
+            const userSel = supplier.loginUserSelector || '#username';
+            const passSel = supplier.loginPassSelector || '#password';
+            const extraSel = supplier.loginExtraSelector || '#f'; // Select de perfil
+            
+            await page.waitForSelector(userSel, { state: 'visible' });
+            if (supplier.loginExtraValue) {
+                try {
+                    await page.selectOption(extraSel, supplier.loginExtraValue.toString());
+                } catch(e) {}
+            }
+            await page.locator(userSel).first().fill(supplier.loginCredential.toString());
+            await page.locator(passSel).first().fill(supplier.password.toString());
+            await page.locator(supplier.loginSubmitSelector || 'button.btn-primary').first().click();
+        },
+        search: async (page, query) => {
+            const searchSel = '#gsearch, input[type="search"]';
+            await page.waitForSelector(searchSel, { state: 'visible' });
+            await page.locator(searchSel).first().fill(query);
+            await page.keyboard.press('Enter');
+        },
+        extract: async (page) => {
+            return await page.evaluate(() => {
+                const results = [];
+                // Resultados em cards
+                document.querySelectorAll('.product-box, .card').forEach(el => {
+                    const text = el.innerText;
+                    if (!text.includes('R$')) return;
+                    
+                    const name = el.querySelector('.product-title, .nome')?.innerText || text.split('\n')[0];
+                    const priceRaw = el.querySelector('.product-price, .preco')?.innerText || text.match(/R\$\s?([0-9.,]+)/)?.[0];
+                    const code = el.querySelector('.product-code')?.innerText || text.match(/(?:Código)[:\s]*([a-zA-Z0-9-]+)/i)?.[1] || "";
+                    const brand = el.querySelector('.product-brand')?.innerText || text.match(/(?:Marca)[:\s]*([a-zA-Z0-9]+)/i)?.[1] || "";
+                    const stock = text.match(/(?:Estoque|Qtd)[:\s]*([0-9]+)/i)?.[1] || "0";
+
+                    if (priceRaw) results.push({ nome: name.trim(), codigo: code.trim(), marca: brand.trim(), preco: priceRaw, estoque: parseInt(stock) });
+                });
+                return results;
+            });
+        }
+    },
+    sky: {
+        login: async (page, supplier) => {
+            console.error(`[DEBUG] Login SKY PEÇAS (CNPJ + Usuário + Senha)`);
+            const cnpjSel = supplier.loginExtraSelector || 'input[name*="cnpj"], input[placeholder*="cnpj" i]';
+            const userSel = supplier.loginUserSelector || 'input[name*="user"], input[name*="login"]';
+            const passSel = supplier.loginPassSelector || 'input[type="password"]';
+            
+            await page.waitForSelector(cnpjSel, { state: 'visible' });
+            await page.locator(cnpjSel).first().fill(supplier.loginExtraValue ? supplier.loginExtraValue.toString() : '');
+            await page.locator(userSel).first().fill(supplier.loginCredential.toString());
+            await page.locator(passSel).first().fill(supplier.password.toString());
+            await page.keyboard.press('Enter');
+        },
+        search: async (page, query) => {
+            const searchSel = 'input[placeholder*="código" i], input[placeholder*="descrição" i], input[placeholder*="veículo" i]';
+            await page.waitForSelector(searchSel, { state: 'visible' });
+            await page.locator(searchSel).first().fill(query);
+            await page.keyboard.press('Enter');
+        },
+        extract: async (page) => {
+            return await page.evaluate(() => {
+                const results = [];
+                // Resultados em lista horizontal
+                document.querySelectorAll('tr, .list-row, .horizontal-item').forEach(el => {
+                    const text = el.innerText;
+                    if (!text.includes('R$')) return;
+                    
+                    const name = el.querySelector('.nome, .descricao')?.innerText || text.split('\n')[0];
+                    const priceRaw = el.querySelector('.preco, .valor')?.innerText || text.match(/R\$\s?([0-9.,]+)/)?.[0];
+                    const code = el.querySelector('.codigo, .cod-fab')?.innerText || text.match(/(?:Cód\. Fáb|Código)[:\s]*([a-zA-Z0-9-]+)/i)?.[1] || "";
+                    const brand = el.querySelector('.marca')?.innerText || text.match(/(?:Marca)[:\s]*([a-zA-Z0-9]+)/i)?.[1] || "";
+                    const stock = text.match(/(?:Estoque|Disponível)[:\s]*([0-9]+)/i)?.[1] || "0";
+
+                    if (priceRaw) results.push({ nome: name.trim(), codigo: code.trim(), marca: brand.trim(), preco: priceRaw, estoque: parseInt(stock) });
+                });
+                return results;
+            });
+        }
+    }
+};
+
 async function scrapeProduct(supplier, productName) {
     const browser = await chromium.launch({
         headless: process.env.HEADLESS !== 'false',
         args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--disable-gpu',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process',
-            '--window-size=1920,1080' // Ajuda a evitar elementos escondidos por responsividade
+            '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas', '--disable-gpu', '--no-first-run',
+            '--no-zygote', '--single-process', '--window-size=1920,1080'
         ]
     });
 
@@ -26,181 +227,125 @@ async function scrapeProduct(supplier, productName) {
     page.setDefaultTimeout(40000); 
 
     try {
-        console.error(`[DEBUG] Iniciando scraping para: ${supplier.name} | Produto: ${productName}`);
+        console.error(`[DEBUG] Iniciando scraping para: ${supplier.name}`);
         
-        // --- SELETORES DEFAULT (Múltiplas opções para evitar falhas) ---
-        const loginUrl = supplier.loginUrl || supplier.url;
-        const userSel = supplier.loginUserSelector || 'input[type="email"], input[name*="user"], input[name*="login"], input[name*="email"], #Login, #usuario';
-        const passSel = supplier.loginPassSelector || 'input[type="password"], input[name*="pass"], #Senha, #senha';
-        const submitSel = supplier.loginSubmitSelector || 'button[type="submit"], input[type="submit"], button:has-text("Entrar"), button:has-text("Login")';
-        
-        const searchSel = supplier.searchBarSelector || 'input[type="search"], input[placeholder*="busca" i], input[name*="busca"], .search-input';
-        
-        const containerSel = supplier.itemContainerSelector || '.product-card, .item-produto, .product-item, .prod-item, tr, article';
-        const nameSel = supplier.productNameSelector || '.product-name, h2, h3, .name, .title, .descricao';
-        const priceSel = supplier.priceSelector || '.price-value, .preco, .price, .valor';
+        const sName = supplier.name.toLowerCase();
+        let strategyKey = null;
+        if (sName.includes('comdip')) strategyKey = 'comdip';
+        else if (sName.includes('kaizen')) strategyKey = 'kaizen';
+        else if (sName.includes('rmp')) strategyKey = 'rmp';
+        else if (sName.includes('furacao') || sName.includes('sav')) strategyKey = 'sav';
+        else if (sName.includes('sky')) strategyKey = 'sky';
 
         // 1. NAVEGAÇÃO E LOGIN
-        console.error(`[DEBUG] Acessando URL de login: ${loginUrl}`);
+        const loginUrl = supplier.loginUrl || supplier.url;
         await page.goto(loginUrl, { waitUntil: 'domcontentloaded' });
-        await page.waitForTimeout(2000); // Aguarda scripts iniciais
+        await page.waitForTimeout(2000);
 
         if (supplier.needsLogin) {
-            console.error(`[DEBUG] Procurando campo de usuário...`);
-            
-            // Lógica para lidar com modals/inputs escondidos
-            try {
-                // Tenta esperar o input ficar visível. Se falhar, pode ser um modal fechado.
-                await page.waitForSelector(userSel, { state: 'visible', timeout: 10000 });
-            } catch (e) {
-                console.error(`[DEBUG] Input não visível imediatamente. Procurando botões de 'Login' para abrir modal...`);
-                // Tenta clicar em um botão de login/entrar na navbar para abrir modal
-                const modalBtn = await page.$('a:has-text("Login"), a:has-text("Entrar"), button:has-text("Entrar")');
-                if (modalBtn) {
-                    await modalBtn.click({ force: true }).catch(()=>console.error("[DEBUG] Erro ao forçar clique no modal"));
-                    await page.waitForTimeout(2000);
-                    await page.waitForSelector(userSel, { state: 'visible', timeout: 5000 }).catch(()=>console.error("[DEBUG] Ainda não visível"));
-                }
-            }
-
-            // Preenche Usuário
-            const userLocator = page.locator(userSel).first();
-            if (await userLocator.count() > 0) {
-                await userLocator.scrollIntoViewIfNeeded();
-                await userLocator.fill(supplier.loginCredential.toString(), { force: true });
+            if (strategyKey && strategies[strategyKey].login) {
+                await strategies[strategyKey].login(page, supplier);
             } else {
-                throw new Error(`Campo de usuário não encontrado na DOM (${userSel})`);
+                // Fallback de login
+                const userSel = supplier.loginUserSelector || 'input[type="email"], input[name*="user"], input[name*="login"]';
+                const passSel = supplier.loginPassSelector || 'input[type="password"]';
+                await page.waitForSelector(userSel, { state: 'visible' });
+                await page.locator(userSel).first().fill(supplier.loginCredential.toString());
+                await page.locator(passSel).first().fill(supplier.password.toString());
+                await page.keyboard.press('Enter');
             }
 
-            // Preenche Senha
-            const passLocator = page.locator(passSel).first();
-            if (await passLocator.count() > 0) {
-                await passLocator.fill(supplier.password.toString(), { force: true });
-            } else {
-                throw new Error(`Campo de senha não encontrado na DOM (${passSel})`);
-            }
-
-            // Aguarda botão estar habilitado antes de clicar (resolve "element is not enabled")
-            console.error(`[DEBUG] Aguardando botão de submit estar habilitado...`);
-            try {
-                // Garantir que não estamos pegando um botão genérico, mas o primeiro que match
-                const submitLocator = page.locator(submitSel).first();
-                await submitLocator.waitFor({ state: 'visible', timeout: 5000 });
-                
-                // Espera explícita pelo estado enabled no DOM
-                await page.waitForFunction((selector) => {
-                    const el = document.querySelector(selector);
-                    return el && !el.disabled && !el.hasAttribute('disabled');
-                }, submitSel, { timeout: 5000 });
-                
-                await submitLocator.click({ force: true });
-            } catch (err) {
-                console.error(`[DEBUG] Botão de submit falhou via click normal. Tentando Enter...`);
-                await passLocator.press('Enter');
-            }
-
-            // Validação estrita de Login
-            console.error(`[DEBUG] Aguardando processamento do login...`);
             await page.waitForLoadState('networkidle').catch(() => {});
-            await page.waitForTimeout(3000); // Dar tempo pro redirect ou JWT token
-
-            // Verifica se a URL mudou OU se o campo de senha sumiu da tela
-            const isLoginStillVisible = await page.isVisible(passSel).catch(()=>false);
-            const currentUrl = page.url();
+            await page.waitForTimeout(3000);
             
-            if (currentUrl.includes('login') && isLoginStillVisible) {
-                throw new Error("Falha no login: As credenciais foram recusadas ou a tela não avançou.");
-            } else {
-                console.error(`[DEBUG] Login Validado! URL atual: ${currentUrl}`);
+            if (page.url().includes('login') || page.url() === loginUrl) {
+                const passVisible = await page.isVisible('input[type="password"]').catch(()=>false);
+                if (passVisible) throw new Error("Falha no login: credenciais recusadas ou bloqueio de modal.");
             }
         }
 
-        // 2. BUSCA DO PRODUTO
-        console.error(`[DEBUG] Buscando pelo produto: ${productName}`);
-        
+        // Determinar queries de busca: tentar Código e depois Nome
+        // O backend passa productName que pode ser o código ou nome. Tentaremos a query diretamente.
+        // Se a query falhar ou retornar zero, tentamos uma variação caso seja JSON (ex: {code, name})
+        let queries = [productName];
         try {
-            await page.waitForSelector(searchSel, { state: 'visible', timeout: 15000 });
-            const searchBar = page.locator(searchSel).first();
-            await searchBar.scrollIntoViewIfNeeded();
+            const parsed = JSON.parse(productName);
+            if (parsed.codigo && parsed.nome) {
+                queries = [parsed.codigo, parsed.nome];
+            }
+        } catch(e) {}
+
+        let finalItems = [];
+
+        for (const query of queries) {
+            console.error(`[DEBUG] Buscando por: ${query}`);
             
-            // Simula digitação humana para disparar eventos de frontend (ex: React onChange)
-            await searchBar.fill(''); 
-            await searchBar.type(productName, { delay: 50 });
-            await page.keyboard.press('Enter');
-            console.error(`[DEBUG] Busca disparada.`);
-        } catch (err) {
-            throw new Error(`Campo de busca não encontrado ou não ficou visível: ${searchSel}`);
+            // 2. BUSCA
+            if (strategyKey && strategies[strategyKey].search) {
+                await strategies[strategyKey].search(page, query);
+            } else {
+                // Fallback busca
+                const searchSel = supplier.searchBarSelector || 'input[type="search"], input[type="text"]';
+                await page.waitForSelector(searchSel, { state: 'visible' });
+                await page.locator(searchSel).first().fill(query);
+                await page.keyboard.press('Enter');
+            }
+
+            await page.waitForLoadState('networkidle');
+            await page.waitForTimeout(3000); // Aguarda renderização DOM
+
+            // 3. EXTRAÇÃO
+            console.error(`[DEBUG] Extraindo itens...`);
+            let items = [];
+            if (strategyKey && strategies[strategyKey].extract) {
+                items = await strategies[strategyKey].extract(page);
+            } else {
+                // Fallback extração genérica
+                items = await page.evaluate(() => {
+                    const res = [];
+                    document.querySelectorAll('tr, .product-card, .item').forEach(el => {
+                        const t = el.innerText;
+                        if (!t.includes('R$')) return;
+                        const match = t.match(/R\$\s?([0-9.,]+)/);
+                        if (match) res.push({ nome: t.split('\n')[0], preco: match[0], codigo: "", marca: "", estoque: 0 });
+                    });
+                    return res;
+                });
+            }
+
+            // Converter precos e limpar
+            items = items.map(i => {
+                return {
+                    fornecedor: supplier.name,
+                    nome: i.nome,
+                    codigo: i.codigo || "",
+                    marca: i.marca || "",
+                    preco: parsePrice(i.preco),
+                    estoque: parseInt(i.estoque) || 0,
+                    aplicacao: i.aplicacao || ""
+                };
+            }).filter(i => i.preco > 0);
+
+            if (items.length > 0) {
+                finalItems = items;
+                break; // Achou pelo código, não precisa tentar o nome
+            } else {
+                console.error(`[DEBUG] Nenhum resultado para "${query}". Tentando próxima query se houver.`);
+                // Limpar busca antes de tentar a próxima
+                await page.goto(supplier.searchUrl || page.url(), { waitUntil: 'domcontentloaded' }).catch(()=>{});
+            }
         }
 
-        // Aguarda os resultados carregarem REAIS
-        console.error(`[DEBUG] Aguardando carregamento da rede...`);
-        await page.waitForLoadState('networkidle');
-        
-        // Espera container
-        try {
-            await page.waitForSelector(containerSel, { state: 'visible', timeout: 15000 });
-        } catch (e) {
-            console.error(`[DEBUG] Timeout esperando produtos renderizarem (${containerSel}). Tentando extrair do que tem...`);
-        }
-        await page.waitForTimeout(3000); // Waits extras para frameworks dinâmicos 
-
-        // 3. EXTRAÇÃO
-        console.error(`[DEBUG] Extraindo itens...`);
-        const items = await page.evaluate(({ cSel, nSel, pSel }) => {
-            const results = [];
-            const elements = document.querySelectorAll(cSel);
-            
-            elements.forEach(el => {
-                try {
-                    let name = '';
-                    const nameEl = el.querySelector(nSel);
-                    if (nameEl) {
-                        name = nameEl.innerText.trim();
-                    } else {
-                        // Heurística secundária: pega o primeiro texto legível grande se não tiver seletor
-                        const texts = el.innerText.split('\n').map(t => t.trim()).filter(t => t.length > 5);
-                        if(texts.length > 0) name = texts[0];
-                    }
-
-                    let priceText = '';
-                    const priceEl = el.querySelector(pSel);
-                    if (priceEl) {
-                        priceText = priceEl.innerText.trim();
-                    } else {
-                        // Busca regex R$ de forma estrita no bloco inteiro
-                        const match = el.innerText.match(/R\$\s?([0-9.]+[,.][0-9]{2})/);
-                        if (match) priceText = match[0];
-                    }
-
-                    if (name && priceText) {
-                        const cleanPriceMatch = priceText.match(/R\$\s?([0-9.]+[,.][0-9]{2})/);
-                        results.push({
-                            name: name.substring(0, 100),
-                            price: cleanPriceMatch ? cleanPriceMatch[0] : priceText
-                        });
-                    }
-                } catch (e) {}
-            });
-
-            return results.slice(0, 5); 
-        }, { cSel: containerSel, nSel: nameSel, pSel: priceSel });
-
-        if (items.length === 0) {
-            throw new Error("Nenhum produto encontrado. Verifique se o nome buscado existe ou se o seletor do resultado mudou.");
+        if (finalItems.length === 0) {
+            throw new Error("Nenhum produto encontrado.");
         }
 
-        console.error(`[DEBUG] Sucesso! ${items.length} itens extraídos.`);
-
-        // Retorno limpo
-        return {
-            provider: supplier.name,
-            items: items
-        };
+        return finalItems;
 
     } catch (error) {
         console.error(`[ERROR] ${error.message}`);
         return {
-            provider: supplier.name,
+            fornecedor: supplier.name,
             error: error.message
         };
     } finally {
