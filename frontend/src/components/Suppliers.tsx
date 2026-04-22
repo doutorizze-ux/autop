@@ -75,8 +75,8 @@ export const Suppliers = () => {
                 availableSelector: ''
             });
             fetchSuppliers();
-        } catch (err) {
-            alert('Erro ao cadastrar fornecedor');
+        } catch (err: any) {
+            alert('Erro ao cadastrar: ' + (err.response?.data?.message || err.message));
         }
     };
 

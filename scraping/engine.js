@@ -57,6 +57,29 @@ async function scrapeProduct(supplier, productName) {
             console.log(`[${supplier.name}] Fazendo login em ${supplier.loginUrl || supplier.url}`);
             await page.goto(supplier.loginUrl || supplier.url, { waitUntil: 'domcontentloaded' });
             
+            // B2B Heuristic: Try to select "Cliente" in any profile dropdown
+            try {
+                const selects = await page.locator('select').all();
+                for (const select of selects) {
+                    const content = await select.textContent();
+                    if (content && content.toUpperCase().includes('CLIENTE')) {
+                        const options = await select.locator('option').all();
+                        for (const opt of options) {
+                            const optText = await opt.textContent();
+                            if (optText && optText.toUpperCase().includes('CLIENTE')) {
+                                const val = await opt.getAttribute('value');
+                                if (val) {
+                                    await select.selectOption(val);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.log('Erro na heurística de dropdown:', e.message);
+            }
+
             // Try defined user selector OR heuristics
             const userSelectors = supplier.loginUserSelector 
                 ? [supplier.loginUserSelector, 'input[name="username"]', 'input[type="email"]', 'input[name*="user"]', 'input[name*="login"]', 'input[name*="email"]', 'input[type="text"]']
