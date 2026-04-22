@@ -1,0 +1,75 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("FUNCIONARIO") // ADMIN ou FUNCIONARIO
+  createdAt DateTime @default(now())
+}
+
+model Client {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String   @unique
+  status    String   @default("NOVO") // NOVO, EM_ATENDIMENTO, FINALIZADO
+  history   String?  // Can be JSON string or simple text for now
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  name      String
+  url       String
+  type      String?  // Ex: "Atacado", "Varejo"
+  
+  // Configurações de Login
+  needsLogin       Boolean @default(false)
+  loginUrl         String?
+  loginUserSelector String?
+  loginPassSelector String?
+  loginSubmitSelector String?
+  loginCredential   String? // Documento/Email
+  password          String? // Senha (criptografada)
+  loginExtraSelector String? // Para campos como "Perfil"
+  loginExtraValue    String? // Valor para o campo extra
+
+  // Configurações de Busca
+  searchUrl         String? // Alguns sites permitem busca via URL: site.com/busca?q=peca
+  searchBarSelector String? // Input de busca
+  searchBtnSelector String? // Botão de lupa/busca
+
+  // Configurações de Resultado
+  itemContainerSelector String? // O "quadrado" do produto
+  productNameSelector   String? // Onde fica o nome dentro do quadrado
+  priceSelector         String? // Onde fica o preço dentro do quadrado
+  availableSelector     String? // Seletor para verificar estoque (opcional)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
+model Quote {
+  id        String   @id @default(uuid())
+  product   String
+  results   String   // Store as JSON string
+  createdAt DateTime @default(now())
+}
+
+model SystemConfig {
+  id        String   @id @default("system_settings")
+  aiKey     String?
+  whatsappMode String @default("baileys")
+  updatedAt DateTime @updatedAt
+}
+

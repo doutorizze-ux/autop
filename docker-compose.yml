@@ -1,0 +1,26 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend/sessions:/app/backend/sessions
+      - ./backend/prisma/dev.db:/app/backend/prisma/dev.db
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-secret}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+networks:
+  default:
+    name: autocrm_network

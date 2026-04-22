@@ -1,0 +1,14 @@
+node_modules
+dist
+.env
+*.db
+*.db-journal
+sessions
+backend/sessions
+scraping/node_modules
+frontend/dist
+.DS_Store
+auth.json
+creds.json
+tokens.json
+debug_error.png
