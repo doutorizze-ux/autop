@@ -7,8 +7,9 @@ services:
       - "3521:5000"
     volumes:
       - ./backend/sessions:/app/backend/sessions
-      - ./backend/prisma:/app/backend/prisma
+      - ./backend/data:/app/backend/data
     environment:
+      - DATABASE_URL=file:///app/backend/data/dev.db
       - JWT_SECRET=${JWT_SECRET:-secret}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
     restart: unless-stopped
