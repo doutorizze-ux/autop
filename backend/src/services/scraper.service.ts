@@ -21,32 +21,40 @@ export class ScraperService {
                     
                     exec(command, { cwd: scrapingPath, timeout: 90000 }, (error, stdout, stderr) => {
                         let finalErrorMsg = 'Falha desconhecida no Scraper.';
-                        if (error) {
-                            console.error(`[Scraper Warning] Falha na execução para ${supplier.name}: `, error ? error.message : 'Timeout');
-                            finalErrorMsg = `Timeout ou Erro Crítico: ${error.message}`;
+                        
+                        if (stdout) {
+                            try {
+                                // Tenta encontrar o JSON no stdout (caso haja algum outro log perdido)
+                                const jsonMatch = stdout.match(/\{.*\}/);
+                                if (jsonMatch) {
+                                    const data = JSON.parse(jsonMatch[0]);
+                                    
+                                    if (data.items && data.items.length > 0) {
+                                        // Mapeia para o formato esperado pelo frontend se necessário
+                                        const bestItem = data.items[0];
+                                        resolve({
+                                            provider: data.provider,
+                                            product: bestItem.name,
+                                            price: bestItem.price,
+                                            available: true,
+                                            link: supplier.url
+                                        });
+                                        return;
+                                    } else if (data.error) {
+                                        finalErrorMsg = `Erro do Bot: ${data.error}`;
+                                    } else {
+                                        finalErrorMsg = `Nenhum produto encontrado.`;
+                                    }
+                                }
+                            } catch (e) {
+                                console.log('[ScraperService] JSON parse error:', e, 'STDOUT:', stdout);
+                                finalErrorMsg = `Erro de comunicação com o robô.`;
+                            }
                         }
 
-                        if (stdout) {
-                            const match = stdout.match(/RESULTADO_JSON:(.*)/);
-                            if (match) {
-                                try {
-                                    const data = JSON.parse(match[1]);
-                                    if (data.length > 0 && !data[0].error) {
-                                        resolve(Array.isArray(data) ? data[0] : data);
-                                        return;
-                                    }
-                                    if (data.length > 0 && data[0].error) {
-                                        finalErrorMsg = `Erro do Bot: ${data[0].error}`;
-                                    }
-                                    console.log('[ScraperService] Data parsed but has error or empty:', data);
-                                } catch (e) {
-                                    console.log('[ScraperService] JSON parse error:', e);
-                                    finalErrorMsg = `Erro de Parse JSON.`;
-                                }
-                            } else {
-                                console.log('[ScraperService] No RESULTADO_JSON found in stdout. STDOUT:', stdout);
-                                finalErrorMsg = `O robô não finalizou corretamente. Sem output válido.`;
-                            }
+                        if (error) {
+                            console.error(`[Scraper Warning] Falha na execução para ${supplier.name}: `, error.message);
+                            finalErrorMsg = `Timeout ou Erro Crítico.`;
                         }
                             
                         // Se chegou aqui, é porque falhou em capturar os dados reais
@@ -58,9 +66,7 @@ export class ScraperService {
                             link: supplier.url,
                             available: false
                         });
-
-
-                        });
+                    });
                     });
                 });
 

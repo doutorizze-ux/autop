@@ -1,162 +1,181 @@
 const { chromium } = require('playwright');
 
-/**
- * Função principal de scraping ultra-robusta
- */
 async function scrapeProduct(supplier, productName) {
-    const browser = await chromium.launch({ 
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    // Configurações focadas em Linux / Docker / Coolify
+    const browser = await chromium.launch({
+        headless: process.env.HEADLESS !== 'false',
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--disable-gpu',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process'
+        ]
     });
+
     const context = await browser.newContext({
-        viewport: { width: 1280, height: 720 },
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        viewport: { width: 1366, height: 768 },
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
     });
+
     const page = await context.newPage();
-    page.setDefaultTimeout(30000);
+    page.setDefaultTimeout(35000); // Timeout de 35s por ação para não travar o server
 
     try {
-        console.log(`[${supplier.name}] Iniciando busca: ${productName}`);
+        console.error(`[DEBUG] Iniciando scraping para: ${supplier.name} | Produto: ${productName}`);
+        
+        // --- SELETORES DEFAULT (Foco no Comdip e Padrões Reais) ---
+        const isComdip = supplier.name.toLowerCase().includes('comdip');
+        
+        const loginUrl = supplier.loginUrl || supplier.url;
+        const userSel = supplier.loginUserSelector || (isComdip ? 'input#Login' : 'input[name="email"], input[name="login"], input[type="text"]');
+        const passSel = supplier.loginPassSelector || (isComdip ? 'input#Senha' : 'input[name="senha"], input[type="password"]');
+        const submitSel = supplier.loginSubmitSelector || (isComdip ? 'button:has-text("Entrar")' : 'button[type="submit"], input[type="submit"], button:has-text("Entrar")');
+        
+        const searchSel = supplier.searchBarSelector || (isComdip ? 'input.search-input, input[placeholder*="busca" i]' : 'input[type="search"], input[placeholder*="busca" i], input[name*="busca"]');
+        
+        const containerSel = supplier.itemContainerSelector || (isComdip ? '.product-card, .item-produto' : '.product-item, .prod-item, tr, .item, .product-card');
+        const nameSel = supplier.productNameSelector || (isComdip ? '.product-name, h2' : 'h2, h3, .name, .title, .descricao');
+        const priceSel = supplier.priceSelector || (isComdip ? '.price-value, .preco' : '.price, .valor, .preco, span:has-text("R$")');
 
-        // 1. LOGIN
+        // 1. NAVEGAÇÃO E LOGIN
+        console.error(`[DEBUG] Acessando URL de login: ${loginUrl}`);
+        await page.goto(loginUrl, { waitUntil: 'load' });
+
         if (supplier.needsLogin) {
-            console.log(`[${supplier.name}] Fazendo login...`);
-            await page.goto(supplier.loginUrl || supplier.url, { waitUntil: 'domcontentloaded' }).catch(() => {});
+            console.error(`[DEBUG] Preenchendo credenciais...`);
             
-            // Heurística de Campo Extra (CNPJ/Perfil)
-            if (supplier.loginExtraSelector && supplier.loginExtraValue) {
+            // Preenche Usuário
+            await page.waitForSelector(userSel, { state: 'visible' }).catch(() => console.error(`[DEBUG] Seletor de usuário não achado: ${userSel}`));
+            const userInputs = await page.$$(userSel);
+            if(userInputs.length > 0) {
+                await userInputs[0].fill(supplier.loginCredential.toString());
+            } else {
+                throw new Error(`Campo de usuário não encontrado (${userSel})`);
+            }
+
+            // Preenche Senha
+            const passInputs = await page.$$(passSel);
+            if(passInputs.length > 0) {
+                await passInputs[0].fill(supplier.password.toString());
+            } else {
+                throw new Error(`Campo de senha não encontrado (${passSel})`);
+            }
+
+            // Clica Entrar
+            console.error(`[DEBUG] Clicando em Entrar...`);
+            const btnInputs = await page.$$(submitSel);
+            if(btnInputs.length > 0) {
+                await btnInputs[0].click();
+            } else {
+                await page.keyboard.press('Enter');
+            }
+
+            // Aguarda a rede acalmar após o login
+            console.error(`[DEBUG] Aguardando redirecionamento de login...`);
+            await page.waitForLoadState('networkidle');
+            await page.waitForTimeout(2000); // Wait extra para garantir renderização JS
+
+            // Validação de Login: Se a URL continuou a mesma e tem erro de senha, ou se um botão sair apareceu
+            if (page.url().includes('login') || page.url() === loginUrl) {
+                console.error(`[DEBUG] Aviso: URL não mudou após login. Pode ser um modal ou falha.`);
+            } else {
+                console.error(`[DEBUG] Login aparentemente bem-sucedido. URL atual: ${page.url()}`);
+            }
+        }
+
+        // 2. BUSCA DO PRODUTO
+        console.error(`[DEBUG] Buscando pelo produto: ${productName}`);
+        
+        // Tenta encontrar a barra de busca
+        await page.waitForSelector(searchSel, { state: 'visible', timeout: 10000 }).catch(() => console.error(`[DEBUG] Seletor de busca não visível rápido: ${searchSel}`));
+        const searchBars = await page.$$(searchSel);
+        
+        if (searchBars.length > 0) {
+            await searchBars[0].fill(productName);
+            await page.keyboard.press('Enter');
+            console.error(`[DEBUG] Enter pressionado na busca.`);
+        } else {
+            console.error(`[DEBUG] Tentativa de heurística para achar campo de busca...`);
+            const fallbackSearch = await page.$('input[type="text"]');
+            if (fallbackSearch) {
+                await fallbackSearch.fill(productName);
+                await page.keyboard.press('Enter');
+            } else {
+                throw new Error("Não foi possível encontrar a barra de busca na página.");
+            }
+        }
+
+        // Aguarda os resultados carregarem
+        console.error(`[DEBUG] Aguardando carregamento dos resultados...`);
+        await page.waitForLoadState('networkidle');
+        
+        // Espera pelo container do produto aparecer na tela
+        await page.waitForSelector(containerSel, { state: 'visible', timeout: 15000 }).catch(() => {
+            console.error(`[DEBUG] Container de produtos (${containerSel}) não apareceu no tempo esperado.`);
+        });
+        await page.waitForTimeout(2000); // Wait de estabilidade para JS que renderiza preços via API
+
+        // 3. EXTRAÇÃO
+        console.error(`[DEBUG] Extraindo itens da tela...`);
+        const items = await page.evaluate(({ cSel, nSel, pSel }) => {
+            const results = [];
+            const elements = document.querySelectorAll(cSel);
+            
+            elements.forEach(el => {
                 try {
-                    const el = page.locator(supplier.loginExtraSelector).first();
-                    const tagName = await el.evaluate(e => e.tagName).catch(() => 'INPUT');
-                    if (tagName === 'SELECT') {
-                        await el.selectOption({ label: supplier.loginExtraValue }).catch(() => {});
+                    let name = '';
+                    const nameEl = el.querySelector(nSel);
+                    if (nameEl) {
+                        name = nameEl.innerText.trim();
                     } else {
-                        await el.fill(supplier.loginExtraValue.toString()).catch(() => {});
+                        // Fallback pra nome: pega o primeiro texto grande
+                        name = el.innerText.split('\n')[0].trim();
+                    }
+
+                    let priceText = '';
+                    const priceEl = el.querySelector(pSel);
+                    if (priceEl) {
+                        priceText = priceEl.innerText.trim();
+                    } else {
+                        // Fallback pra preço: procura R$
+                        const text = el.innerText;
+                        const match = text.match(/R\$\s?([0-9.]+[,.][0-9]{2})/);
+                        if (match) priceText = match[0];
+                    }
+
+                    if (name && priceText) {
+                        // Filtra o preço final para ser legível (ex: R$ 100,00)
+                        const cleanPrice = priceText.match(/R\$\s?([0-9.]+[,.][0-9]{2})/);
+                        results.push({
+                            name: name.substring(0, 100),
+                            price: cleanPrice ? cleanPrice[0] : priceText
+                        });
                     }
                 } catch (e) {}
-            }
+            });
 
-            // Fill User
-            const userSelectors = supplier.loginUserSelector ? [supplier.loginUserSelector] : ['input[type="text"]', 'input[name*="user"]', 'input[name*="login"]'];
-            for (const s of userSelectors) {
-                try {
-                    await page.locator(s).first().fill(supplier.loginCredential.toString());
-                    break;
-                } catch(e) {}
-            }
+            return results.slice(0, 5); // Retorna os 5 primeiros mais relevantes
+        }, { cSel: containerSel, nSel: nameSel, pSel: priceSel });
 
-            // Fill Pass
-            const passSelectors = supplier.loginPassSelector ? [supplier.loginPassSelector] : ['input[type="password"]', 'input[name*="pass"]'];
-            for (const s of passSelectors) {
-                try {
-                    await page.locator(s).first().fill(supplier.password.toString());
-                    break;
-                } catch(e) {}
-            }
+        console.error(`[DEBUG] Encontrados ${items.length} itens.`);
 
-            // Submit
-            const btnSelectors = supplier.loginSubmitSelector ? [supplier.loginSubmitSelector] : ['button[type="submit"]', 'input[type="submit"]', 'button:has-text("Entrar")'];
-            for (const s of btnSelectors) {
-                try {
-                    if (s.includes('has-text')) {
-                        await page.locator(s).first().click();
-                    } else {
-                        await page.click(s);
-                    }
-                    break;
-                } catch(e) {}
-            }
-            await page.waitForTimeout(5000);
-
-            // AUTO-DISMISS POPUPS/BANNERS
-            try {
-                const closeSelectors = ['button:has-text("Aceitar")', 'button:has-text("OK")', 'button:has-text("Fechar")', '.close', '#close', '[class*="close"]', 'button:has-text("Confirmar")'];
-                for (const sel of closeSelectors) {
-                    const btn = page.locator(sel).first();
-                    if (await btn.isVisible()) {
-                        await btn.click().catch(() => {});
-                    }
-                }
-            } catch (e) {}
-        } else {
-            await page.goto(supplier.url, { waitUntil: 'domcontentloaded' }).catch(() => {});
-        }
-
-        // 2. SEARCH
-        console.log(`[${supplier.name}] Buscando produto...`);
-        const searchBarSelectors = supplier.searchBarSelector ? [supplier.searchBarSelector] : ['input[type="search"]', 'input[placeholder*="busca" i]', 'input[name*="busca"]'];
-        let filled = false;
-        for (const s of searchBarSelectors) {
-            try {
-                await page.locator(s).first().fill(productName);
-                filled = true;
-                break;
-            } catch(e) {}
-        }
-
-        if (filled) {
-            await page.keyboard.press('Enter');
-            if (supplier.itemContainerSelector) {
-                await page.waitForSelector(supplier.itemContainerSelector, { timeout: 10000 }).catch(() => {});
-            } else {
-                await page.waitForTimeout(8000);
-            }
-        }
-
-        // 3. EXTRACTION
-        console.log(`[${supplier.name}] Extraindo dados...`);
-        const results = await page.evaluate((s) => {
-            try {
-                // Tenta ser o mais genérico possível na captura de blocos de produto
-                const containerSel = (s.itemContainerSelector && !s.itemContainerSelector.includes(':')) 
-                    ? s.itemContainerSelector 
-                    : '.prod-item, .product-item, .item-produto, article, tr, .product-card';
-                
-                let items = Array.from(document.querySelectorAll(containerSel));
-                
-                // Heurística de emergência: se não achou pelo seletor, procura qualquer DIV que tenha um R$
-                if (items.length === 0) {
-                    items = Array.from(document.querySelectorAll('div, tr, li')).filter(el => {
-                        const text = el.innerText || '';
-                        return text.includes('R$') && text.length < 600 && text.length > 40;
-                    });
-                }
-
-                const extracted = items.map(item => {
-                    try {
-                        const text = item.innerText || '';
-                        // Regex ultra-robusto para pegar o valor após R$
-                        const match = text.match(/R\$\s?([0-9.]+[,.][0-9]{2})/);
-                        if (match) {
-                            let p = match[1].replace(/\./g, '').replace(',', '.');
-                            const val = parseFloat(p);
-                            if (val > 5) { // Ignora valores muito baixos que não são a peça
-                                return {
-                                    provider: s.name,
-                                    product: text.split('\n')[0].substring(0, 50).trim(),
-                                    price: val.toFixed(2),
-                                    available: true
-                                };
-                            }
-                        }
-                    } catch (e) {}
-                    return null;
-                }).filter(r => r !== null);
-
-                // Ordena por preço (menor primeiro) para pegar o preço mais competitivo
-                return extracted.sort((a, b) => parseFloat(a.price) - parseFloat(b.price)).slice(0, 3);
-            } catch (err) {
-                return [];
-            }
-        }, supplier);
-
-        if (results && results.length > 0) return results;
-
-        return [{ provider: supplier.name, error: 'Não foi possível extrair preços deste portal.' }];
+        // Retorna sucesso
+        return {
+            provider: supplier.name,
+            items: items
+        };
 
     } catch (error) {
-        console.error('Erro no Scraper:', error.message);
-        return [{ provider: supplier.name, error: error.message }];
+        console.error(`[ERROR] Falha crítica no scraping: ${error.message}`);
+        // Retorna formato de erro
+        return {
+            provider: supplier.name,
+            error: error.message
+        };
     } finally {
         await browser.close().catch(() => {});
     }

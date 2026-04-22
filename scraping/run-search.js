@@ -20,10 +20,16 @@ async function main() {
 
     try {
         const results = await scrapeProduct(supplier, productName);
-        console.log('RESULTADO_JSON:' + JSON.stringify(results));
+        // GARANTIA ABSOLUTA DE SAÍDA JSON NO FORMATO SOLICITADO
+        console.log(JSON.stringify(results));
+        process.exit(0);
     } catch (err) {
-        console.error(err);
-        process.exit(1);
+        // GARANTIA ABSOLUTA DE SAÍDA DE ERRO NO FORMATO SOLICITADO
+        console.log(JSON.stringify({
+            provider: supplier ? supplier.name : "Desconhecido",
+            error: err.message
+        }));
+        process.exit(0);
     }
 }
 
