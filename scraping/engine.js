@@ -140,29 +140,7 @@ async function scrapeProduct(supplier, productName) {
 
         if (results && results.length > 0) return results;
 
-        // 4. FALLBACK MERCADO LIVRE (PARA SEGURANÇA DO USUÁRIO)
-        console.log(`[${supplier.name}] Fallback para Mercado Livre...`);
-        try {
-            await page.goto(`https://lista.mercadolivre.com.br/${encodeURIComponent(productName)}`, { waitUntil: 'domcontentloaded' });
-            const mlResults = await page.evaluate((s) => {
-                const items = Array.from(document.querySelectorAll('.ui-search-layout__item')).slice(0, 3);
-                return items.map(item => {
-                    const title = item.querySelector('h2')?.innerText || 'Peça';
-                    const fraction = item.querySelector('.andes-money-amount__fraction')?.innerText || '0';
-                    const cents = item.querySelector('.andes-money-amount__cents')?.innerText || '00';
-                    return {
-                        provider: s.name + ' (ML)',
-                        product: title,
-                        price: `${fraction}.${cents}`,
-                        link: s.url,
-                        available: true
-                    };
-                });
-            }, supplier);
-            if (mlResults.length > 0) return mlResults;
-        } catch(e) {}
-
-        return [{ provider: supplier.name, error: 'Heurística falhou em todos os níveis.' }];
+        return [{ provider: supplier.name, error: 'Não foi possível extrair preços deste portal.' }];
 
     } catch (error) {
         console.error('Erro no Scraper:', error.message);
