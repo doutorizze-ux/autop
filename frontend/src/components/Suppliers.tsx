@@ -65,7 +65,12 @@ export const Suppliers = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/suppliers`, formData);
+            const isEdit = (formData as any).id;
+            if (isEdit) {
+                await axios.put(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/suppliers/${(formData as any).id}`, formData);
+            } else {
+                await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/suppliers`, formData);
+            }
             setShowModal(false);
             setFormData({
                 name: '', url: '', type: 'Atacado',
@@ -79,7 +84,7 @@ export const Suppliers = () => {
             });
             fetchSuppliers();
         } catch (err: any) {
-            alert('Erro ao cadastrar: ' + (err.response?.data?.message || err.message));
+            alert('Erro ao salvar: ' + (err.response?.data?.message || err.message));
         }
     };
 
@@ -111,7 +116,10 @@ export const Suppliers = () => {
                                 <h3>{s.name}</h3>
                                 <span className="type-badge">{s.type}</span>
                             </div>
-                            <button className="delete-btn" onClick={() => handleDelete(s.id)}><Trash2 size={16} /></button>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button className="edit-btn" onClick={() => { setFormData({...s, password: s.password || ''} as any); setShowModal(true); }} style={{ background: 'none', border: 'none', color: 'var(--primary-color)', cursor: 'pointer', opacity: 0.6 }}><ExternalLink size={16} /></button>
+                                <button className="delete-btn" onClick={() => handleDelete(s.id)}><Trash2 size={16} /></button>
+                            </div>
                         </div>
                         <div className="supplier-body">
                             <p><Globe size={14} /> {s.url}</p>

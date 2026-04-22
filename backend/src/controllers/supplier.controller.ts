@@ -34,6 +34,29 @@ export const createSupplier = async (req: Request, res: Response): Promise<void>
     }
 };
 
+export const updateSupplier = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+        const data = req.body;
+        
+        // Remove ID from data if present to avoid prisma error
+        const { id: _, ...updateData } = data;
+
+        const supplier = await prisma.supplier.update({
+            where: { id },
+            data: {
+                ...updateData,
+                needsLogin: updateData.needsLogin === 'true' || updateData.needsLogin === true
+            }
+        });
+        
+        res.json(supplier);
+    } catch (err) {
+        console.error('Update Supplier Error:', err);
+        res.status(500).json({ message: 'Erro ao atualizar fornecedor' });
+    }
+};
+
 export const deleteSupplier = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
