@@ -13,6 +13,9 @@ interface Supplier {
   loginPassSelector?: string;
   loginSubmitSelector?: string;
   loginCredential?: string;
+  password?: string;
+  loginExtraSelector?: string;
+  loginExtraValue?: string;
   searchUrl?: string;
   searchBarSelector?: string;
   searchBtnSelector?: string;
