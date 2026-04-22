@@ -67,6 +67,17 @@ async function scrapeProduct(supplier, productName) {
                 } catch(e) {}
             }
             await page.waitForTimeout(5000);
+
+            // AUTO-DISMISS POPUPS/BANNERS
+            try {
+                const closeSelectors = ['button:has-text("Aceitar")', 'button:has-text("OK")', 'button:has-text("Fechar")', '.close', '#close', '[class*="close"]', 'button:has-text("Confirmar")'];
+                for (const sel of closeSelectors) {
+                    const btn = page.locator(sel).first();
+                    if (await btn.isVisible()) {
+                        await btn.click().catch(() => {});
+                    }
+                }
+            } catch (e) {}
         } else {
             await page.goto(supplier.url, { waitUntil: 'domcontentloaded' }).catch(() => {});
         }
@@ -95,47 +106,48 @@ async function scrapeProduct(supplier, productName) {
         // 3. EXTRACTION
         console.log(`[${supplier.name}] Extraindo dados...`);
         const results = await page.evaluate((s) => {
-            const containerSel = (s.itemContainerSelector && !s.itemContainerSelector.includes('has-text')) 
-                ? s.itemContainerSelector 
-                : '[class*="product-item"], [class*="prod-container"], .item, article, tr';
-            
-            let items = Array.from(document.querySelectorAll(containerSel));
-            
-            // Heurística de emergência se não achar itens
-            if (items.length === 0) {
-                items = Array.from(document.querySelectorAll('div, tr')).filter(el => {
-                    const text = el.innerText || '';
-                    return text.includes('R$') && text.length < 1000 && text.length > 30;
-                });
-            }
-
-            return items.slice(0, 5).map(item => {
-                let name = 'Peça Automotiva';
-                let price = '0.00';
+            try {
+                // Tenta ser o mais genérico possível na captura de blocos de produto
+                const containerSel = (s.itemContainerSelector && !s.itemContainerSelector.includes(':')) 
+                    ? s.itemContainerSelector 
+                    : '.prod-item, .product-item, .item-produto, article, tr, .product-card';
                 
-                try {
-                    // Nome
-                    const nameSel = (s.productNameSelector && !s.productNameSelector.includes('has-text')) ? s.productNameSelector : 'h1, h2, h3, h4, strong, [class*="name"], [class*="title"]';
-                    const nameEl = item.querySelector(nameSel);
-                    name = nameEl ? nameEl.innerText.split('\n')[0].trim() : (item.innerText.substring(0, 40) + '...');
-                    
-                    // Preço (Lógica de Regex é a mais robusta)
-                    const text = item.innerText || '';
-                    const match = text.match(/R\$\s?([0-9.,]+)/);
-                    if (match) {
-                        let p = match[1].replace(/\./g, '').replace(',', '.');
-                        price = parseFloat(p).toFixed(2);
-                    }
-                } catch (e) {}
+                let items = Array.from(document.querySelectorAll(containerSel));
+                
+                // Heurística de emergência: se não achou pelo seletor, procura qualquer DIV que tenha um R$
+                if (items.length === 0) {
+                    items = Array.from(document.querySelectorAll('div, tr, li')).filter(el => {
+                        const text = el.innerText || '';
+                        return text.includes('R$') && text.length < 600 && text.length > 40;
+                    });
+                }
 
-                return {
-                    provider: s.name,
-                    product: name,
-                    price: price,
-                    link: window.location.href,
-                    available: true
-                };
-            }).filter(r => parseFloat(r.price) > 0);
+                const extracted = items.map(item => {
+                    try {
+                        const text = item.innerText || '';
+                        // Regex ultra-robusto para pegar o valor após R$
+                        const match = text.match(/R\$\s?([0-9.]+[,.][0-9]{2})/);
+                        if (match) {
+                            let p = match[1].replace(/\./g, '').replace(',', '.');
+                            const val = parseFloat(p);
+                            if (val > 5) { // Ignora valores muito baixos que não são a peça
+                                return {
+                                    provider: s.name,
+                                    product: text.split('\n')[0].substring(0, 50).trim(),
+                                    price: val.toFixed(2),
+                                    available: true
+                                };
+                            }
+                        }
+                    } catch (e) {}
+                    return null;
+                }).filter(r => r !== null);
+
+                // Ordena por preço (menor primeiro) para pegar o preço mais competitivo
+                return extracted.sort((a, b) => parseFloat(a.price) - parseFloat(b.price)).slice(0, 3);
+            } catch (err) {
+                return [];
+            }
         }, supplier);
 
         if (results && results.length > 0) return results;
