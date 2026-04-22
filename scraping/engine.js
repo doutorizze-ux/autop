@@ -149,7 +149,11 @@ async function scrapeProduct(supplier, productName) {
                 // If search bar wasn't found but there's a searchURL base, just go there
                 await page.goto(supplier.searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
             }
-            await page.waitForTimeout(3000);
+            if (supplier.itemContainerSelector) {
+                await page.waitForSelector(supplier.itemContainerSelector, { timeout: 8000 }).catch(() => {});
+            } else {
+                await page.waitForTimeout(5000);
+            }
         }
 
         console.log(`[${supplier.name}] Extraindo resultados...`);
