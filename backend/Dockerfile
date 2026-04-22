@@ -33,6 +33,7 @@ COPY --from=builder /app/scraping ./scraping
 
 # Ensure playwright is ready in the final image
 RUN npx playwright install-deps chromium
+RUN npx playwright install chromium
 
 EXPOSE 5000
 
