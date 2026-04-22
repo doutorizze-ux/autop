@@ -9,6 +9,7 @@ services:
       - ./backend/sessions:/app/backend/sessions
       - ./backend/prisma/dev.db:/app/backend/prisma/dev.db
     environment:
+      - DATABASE_URL=file:/app/backend/prisma/dev.db
       - JWT_SECRET=${JWT_SECRET:-secret}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
     restart: unless-stopped
