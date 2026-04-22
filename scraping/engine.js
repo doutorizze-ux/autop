@@ -81,6 +81,20 @@ async function scrapeProduct(supplier, productName) {
             }
 
             // Try defined user selector OR heuristics
+            if (supplier.loginExtraSelector && supplier.loginExtraValue) {
+                try {
+                    const el = page.locator(supplier.loginExtraSelector).first();
+                    const tagName = await el.evaluate(e => e.tagName);
+                    if (tagName === 'SELECT') {
+                        await el.selectOption({ label: supplier.loginExtraValue });
+                    } else {
+                        await el.fill(supplier.loginExtraValue.toString());
+                    }
+                } catch (e) {
+                    console.log('Erro ao preencher campo extra:', e.message);
+                }
+            }
+
             const userSelectors = supplier.loginUserSelector 
                 ? [supplier.loginUserSelector, 'input[name="username"]', 'input[type="email"]', 'input[name*="user"]', 'input[name*="login"]', 'input[name*="email"]', 'input[type="text"]']
                 : ['input[name="username"]', 'input[type="email"]', 'input[name*="user"]', 'input[name*="login"]', 'input[type="text"]'];

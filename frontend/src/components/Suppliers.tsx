@@ -36,6 +36,8 @@ export const Suppliers = () => {
         loginSubmitSelector: '',
         loginCredential: '',
         password: '',
+        loginExtraSelector: '',
+        loginExtraValue: '',
         searchUrl: '',
         searchBarSelector: '',
         searchBtnSelector: '',
@@ -70,6 +72,7 @@ export const Suppliers = () => {
                 needsLogin: false, loginUrl: '', loginUserSelector: '',
                 loginPassSelector: '', loginSubmitSelector: '',
                 loginCredential: '', password: '',
+                loginExtraSelector: '', loginExtraValue: '',
                 searchUrl: '', searchBarSelector: '', searchBtnSelector: '',
                 itemContainerSelector: '', productNameSelector: '', priceSelector: '',
                 availableSelector: ''
@@ -192,6 +195,16 @@ export const Suppliers = () => {
                                                 <div className="form-group">
                                                     <label>Senha de Acesso</label>
                                                     <input type="password" title="Não exibimos por segurança" className="form-input" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                                <div className="form-group">
+                                                    <label>Seletor Campo Extra (CNPJ/Perfil)</label>
+                                                    <input type="text" className="form-input" value={formData.loginExtraSelector} onChange={e => setFormData({...formData, loginExtraSelector: e.target.value})} placeholder="#cnpj" />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label>Valor Campo Extra</label>
+                                                    <input type="text" className="form-input" value={formData.loginExtraValue} onChange={e => setFormData({...formData, loginExtraValue: e.target.value})} />
                                                 </div>
                                             </div>
                                         </>
