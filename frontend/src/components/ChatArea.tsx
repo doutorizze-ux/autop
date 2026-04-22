@@ -28,7 +28,7 @@ export const ChatArea = () => {
     useEffect(() => {
         const fetchClients = async () => {
             try {
-                const res = await axios.get('http://localhost:5000/api/clients');
+                const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/clients`);
                 setClients(res.data);
             } catch (err) {
                 console.error('Erro ao buscar clientes:', err);
@@ -77,7 +77,7 @@ export const ChatArea = () => {
         setInputText('');
 
         try {
-            await axios.post('http://localhost:5000/api/whatsapp/send', {
+            await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/whatsapp/send`, {
                 to: selectedClient.phone,
                 text
             });
@@ -96,7 +96,7 @@ export const ChatArea = () => {
         
         setIsAILoading(true);
         try {
-            const response = await axios.post('http://localhost:5000/api/ai/interpret', { message: lastMessage });
+            const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/ai/interpret`, { message: lastMessage });
             const parts = response.data.parts || [];
             if (parts.length > 0) {
                 const partsStr = parts.map((p: any) => p.searchQuery).join(', ');

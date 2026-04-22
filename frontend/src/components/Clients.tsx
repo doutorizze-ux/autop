@@ -22,7 +22,7 @@ export const Clients = () => {
   const fetchClients = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get('http://localhost:5000/api/clients');
+      const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/clients`);
       setClients(response.data);
     } catch (err) {
       setError('Erro ao buscar clientes');
@@ -38,7 +38,7 @@ export const Clients = () => {
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:5000/api/clients', {
+      await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/clients`, {
         name: newName,
         phone: newPhone
       });

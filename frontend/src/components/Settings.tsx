@@ -31,7 +31,7 @@ export const Settings = () => {
 
     const fetchSystemConfig = async () => {
         try {
-            const response = await axios.get('http://localhost:5000/api/config');
+            const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/config`);
             setSystemConfig(response.data);
         } catch (err) {
             console.error('Erro ao buscar configurações do sistema');
@@ -47,7 +47,7 @@ export const Settings = () => {
 
         setLoading(true);
         try {
-            await axios.post('http://localhost:5000/api/config/profile', profileData);
+            await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/config/profile`, profileData);
             setMessage({ type: 'success', text: 'Perfil atualizado com sucesso!' });
             setProfileData(prev => ({ ...prev, password: '', confirmPassword: '' }));
         } catch (err) {
@@ -61,7 +61,7 @@ export const Settings = () => {
         e.preventDefault();
         setLoading(true);
         try {
-            await axios.post('http://localhost:5000/api/config', systemConfig);
+            await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/config`, systemConfig);
             setMessage({ type: 'success', text: 'Configurações globais salvas!' });
         } catch (err) {
             setMessage({ type: 'error', text: 'Erro ao salvar configurações' });

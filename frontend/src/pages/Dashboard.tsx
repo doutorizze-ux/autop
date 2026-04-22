@@ -22,7 +22,7 @@ export const Dashboard = () => {
     });
     
     // Buscar status inicial
-    fetch('http://localhost:5000/api/whatsapp/status', {
+    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/whatsapp/status`, {
       headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
     })
     .then(r => r.json())

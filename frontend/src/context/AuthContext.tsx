@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             logout();
           } else {
             axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-            const response = await axios.get('http://localhost:5000/api/auth/me');
+            const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/me`);
             setUser(response.data);
           }
         } catch (error) {

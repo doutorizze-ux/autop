@@ -25,7 +25,7 @@ export const Quotes = () => {
 
         setIsSearching(true);
         try {
-            const response = await axios.post('http://localhost:5000/api/quotes/search', { productNames: partList });
+            const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/quotes/search`, { productNames: partList });
             setQuoteMatrix(response.data);
         } catch (err) {
             alert('Erro ao buscar preços. Verifique se os fornecedores estão configurados corretamente.');
@@ -37,7 +37,7 @@ export const Quotes = () => {
     const handleExport = async (type: 'pdf' | 'excel') => {
         try {
             const suppliers = Array.from(new Set(Object.values(quoteMatrix).flat().map(r => r.provider)));
-            const response = await axios.post(`http://localhost:5000/api/quotes/export/${type}`, {
+            const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/quotes/export/${type}`, {
                 products: partList,
                 suppliers: suppliers,
                 matrix: quoteMatrix

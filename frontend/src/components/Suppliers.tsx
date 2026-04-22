@@ -53,7 +53,7 @@ export const Suppliers = () => {
 
     const fetchSuppliers = async () => {
         try {
-            const response = await axios.get('http://localhost:5000/api/suppliers');
+            const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/suppliers`);
             setSuppliers(response.data);
         } catch (err) {
             console.error('Erro ao buscar fornecedores');
@@ -63,7 +63,7 @@ export const Suppliers = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await axios.post('http://localhost:5000/api/suppliers', formData);
+            await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/suppliers`, formData);
             setShowModal(false);
             setFormData({
                 name: '', url: '', type: 'Atacado',
@@ -83,7 +83,7 @@ export const Suppliers = () => {
     const handleDelete = async (id: string) => {
         if (!confirm('Deseja remover este fornecedor?')) return;
         try {
-            await axios.delete(`http://localhost:5000/api/suppliers/${id}`);
+            await axios.delete(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/suppliers/${id}`);
             fetchSuppliers();
         } catch (err) {
             alert('Erro ao remover');
