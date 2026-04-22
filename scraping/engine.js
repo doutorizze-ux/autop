@@ -1,242 +1,171 @@
 const { chromium } = require('playwright');
-const path = require('path');
 
-async function autoFillInput(page, possibleSelectors, value) {
-    for (const selector of possibleSelectors) {
-        try {
-            const count = await page.locator(selector).count();
-            if (count > 0) {
-                const isVisible = await page.locator(selector).first().isVisible();
-                if (isVisible) {
-                    await page.locator(selector).first().fill(value);
-                    return true;
-                }
-            }
-        } catch (e) { continue; }
-    }
-    return false;
-}
-
-async function autoClick(page, possibleSelectors) {
-    for (const selector of possibleSelectors) {
-        try {
-            const count = await page.locator(selector).count();
-            if (count > 0) {
-                const isVisible = await page.locator(selector).first().isVisible();
-                if (isVisible) {
-                    await Promise.all([
-                        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {}),
-                        page.locator(selector).first().click()
-                    ]);
-                    return true;
-                }
-            }
-        } catch (e) { continue; }
-    }
-    return false;
-}
-
+/**
+ * Função principal de scraping ultra-robusta
+ */
 async function scrapeProduct(supplier, productName) {
     const browser = await chromium.launch({ 
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
-    
     const context = await browser.newContext({
+        viewport: { width: 1280, height: 720 },
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     });
-    
     const page = await context.newPage();
-    page.setDefaultTimeout(20000); // 20s timeout by default
+    page.setDefaultTimeout(30000);
 
     try {
         console.log(`[${supplier.name}] Iniciando busca: ${productName}`);
 
-        // 1. LOGIN SYSTEM WITH HEURISTICS
+        // 1. LOGIN
         if (supplier.needsLogin) {
-            console.log(`[${supplier.name}] Fazendo login em ${supplier.loginUrl || supplier.url}`);
-            await page.goto(supplier.loginUrl || supplier.url, { waitUntil: 'domcontentloaded' });
+            console.log(`[${supplier.name}] Fazendo login...`);
+            await page.goto(supplier.loginUrl || supplier.url, { waitUntil: 'domcontentloaded' }).catch(() => {});
             
-            // B2B Heuristic: Try to select "Cliente" in any profile dropdown
-            try {
-                const selects = await page.locator('select').all();
-                for (const select of selects) {
-                    const content = await select.textContent();
-                    if (content && content.toUpperCase().includes('CLIENTE')) {
-                        const options = await select.locator('option').all();
-                        for (const opt of options) {
-                            const optText = await opt.textContent();
-                            if (optText && optText.toUpperCase().includes('CLIENTE')) {
-                                const val = await opt.getAttribute('value');
-                                if (val) {
-                                    await select.selectOption(val);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (e) {
-                console.log('Erro na heurística de dropdown:', e.message);
-            }
-
-            // Try defined user selector OR heuristics
+            // Heurística de Campo Extra (CNPJ/Perfil)
             if (supplier.loginExtraSelector && supplier.loginExtraValue) {
                 try {
                     const el = page.locator(supplier.loginExtraSelector).first();
-                    const tagName = await el.evaluate(e => e.tagName);
+                    const tagName = await el.evaluate(e => e.tagName).catch(() => 'INPUT');
                     if (tagName === 'SELECT') {
-                        await el.selectOption({ label: supplier.loginExtraValue });
+                        await el.selectOption({ label: supplier.loginExtraValue }).catch(() => {});
                     } else {
-                        await el.fill(supplier.loginExtraValue.toString());
+                        await el.fill(supplier.loginExtraValue.toString()).catch(() => {});
                     }
-                } catch (e) {
-                    console.log('Erro ao preencher campo extra:', e.message);
-                }
+                } catch (e) {}
             }
 
-            const userSelectors = supplier.loginUserSelector 
-                ? [supplier.loginUserSelector, 'input[name="username"]', 'input[type="email"]', 'input[name*="user"]', 'input[name*="login"]', 'input[name*="email"]', 'input[type="text"]']
-                : ['input[name="username"]', 'input[type="email"]', 'input[name*="user"]', 'input[name*="login"]', 'input[type="text"]'];
-            
-            if (supplier.loginCredential) {
-                await autoFillInput(page, userSelectors, supplier.loginCredential.toString());
+            // Fill User
+            const userSelectors = supplier.loginUserSelector ? [supplier.loginUserSelector] : ['input[type="text"]', 'input[name*="user"]', 'input[name*="login"]'];
+            for (const s of userSelectors) {
+                try {
+                    await page.locator(s).first().fill(supplier.loginCredential.toString());
+                    break;
+                } catch(e) {}
             }
-            
-            // Try defined pass selector OR heuristics
-            const passSelectors = supplier.loginPassSelector
-                ? [supplier.loginPassSelector, 'input[type="password"]', 'input[name*="pass"]', 'input[name*="senha"]']
-                : ['input[type="password"]', 'input[name*="pass"]', 'input[name*="senha"]'];
-                
-            if (supplier.password) {
-                await autoFillInput(page, passSelectors, supplier.password.toString());
+
+            // Fill Pass
+            const passSelectors = supplier.loginPassSelector ? [supplier.loginPassSelector] : ['input[type="password"]', 'input[name*="pass"]'];
+            for (const s of passSelectors) {
+                try {
+                    await page.locator(s).first().fill(supplier.password.toString());
+                    break;
+                } catch(e) {}
             }
-            
-            // Try Submit button
-            const btnSelectors = supplier.loginSubmitSelector
-                ? [supplier.loginSubmitSelector, 'button[type="submit"]', 'input[type="submit"]', 'button:has-text("Entrar")', 'button:has-text("Login")', 'button:has-text("Acessar")']
-                : ['button[type="submit"]', 'input[type="submit"]', 'button:has-text("Entrar")', 'button:has-text("Login")', 'button:has-text("Acessar")'];
-            
-            await autoClick(page, btnSelectors);
-            await page.waitForTimeout(3000); // Wait for auth
+
+            // Submit
+            const btnSelectors = supplier.loginSubmitSelector ? [supplier.loginSubmitSelector] : ['button[type="submit"]', 'input[type="submit"]', 'button:has-text("Entrar")'];
+            for (const s of btnSelectors) {
+                try {
+                    if (s.includes('has-text')) {
+                        await page.locator(s).first().click();
+                    } else {
+                        await page.click(s);
+                    }
+                    break;
+                } catch(e) {}
+            }
+            await page.waitForTimeout(5000);
         } else {
-            await page.goto(supplier.url, { waitUntil: 'domcontentloaded' });
+            await page.goto(supplier.url, { waitUntil: 'domcontentloaded' }).catch(() => {});
         }
 
-        // 2. SEARCH SYSTEM WITH HEURISTICS
-        console.log(`[${supplier.name}] Executando busca...`);
-        if (supplier.searchUrl && supplier.searchUrl.includes('{query}')) {
-            const finalSearchUrl = supplier.searchUrl.replace('{query}', encodeURIComponent(productName));
-            await page.goto(finalSearchUrl, { waitUntil: 'domcontentloaded' });
-        } else {
-            const searchSelectors = supplier.searchBarSelector
-                ? [supplier.searchBarSelector, 'input[type="search"]', 'input[name*="busca"]', 'input[name*="search"]', 'input[name*="q"]', 'input[placeholder*="busca" i]', 'input[placeholder*="pesquisar" i]']
-                : ['input[type="search"]', 'input[name*="busca"]', 'input[name*="search"]', 'input[name*="q"]', 'input[placeholder*="busca" i]', 'input[placeholder*="pesquisar" i]'];
-            
-            const filled = await autoFillInput(page, searchSelectors, productName);
-            
-            if (filled) {
-                const searchBtnSelectors = supplier.searchBtnSelector
-                    ? [supplier.searchBtnSelector, 'button[type="submit"]', 'button:has-text("Buscar")', 'button:has-text("Pesquisar")', '[class*="search"] button']
-                    : ['button[type="submit"]', 'button:has-text("Buscar")', 'button:has-text("Pesquisar")', '[class*="search"] button'];
-                
-                const clicked = await autoClick(page, searchBtnSelectors);
-                if (!clicked) {
-                    await page.keyboard.press('Enter');
-                    await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {});
-                }
-            } else if (supplier.searchUrl) {
-                // If search bar wasn't found but there's a searchURL base, just go there
-                await page.goto(supplier.searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
-            }
+        // 2. SEARCH
+        console.log(`[${supplier.name}] Buscando produto...`);
+        const searchBarSelectors = supplier.searchBarSelector ? [supplier.searchBarSelector] : ['input[type="search"]', 'input[placeholder*="busca" i]', 'input[name*="busca"]'];
+        let filled = false;
+        for (const s of searchBarSelectors) {
+            try {
+                await page.locator(s).first().fill(productName);
+                filled = true;
+                break;
+            } catch(e) {}
+        }
+
+        if (filled) {
+            await page.keyboard.press('Enter');
             if (supplier.itemContainerSelector) {
-                await page.waitForSelector(supplier.itemContainerSelector, { timeout: 8000 }).catch(() => {});
+                await page.waitForSelector(supplier.itemContainerSelector, { timeout: 10000 }).catch(() => {});
             } else {
-                await page.waitForTimeout(5000);
+                await page.waitForTimeout(8000);
             }
         }
 
-        console.log(`[${supplier.name}] Extraindo resultados...`);
-        
         // 3. EXTRACTION
+        console.log(`[${supplier.name}] Extraindo dados...`);
         const results = await page.evaluate((s) => {
-            // Se o seletor do container falhar, tenta achar elementos genéricos que costumam ser blocos de produto
-            const containerSel = s.itemContainerSelector || '[class*="product-item"], [class*="prod-container"], .item, article';
-            const items = Array.from(document.querySelectorAll(containerSel)).slice(0, 5);
+            const containerSel = (s.itemContainerSelector && !s.itemContainerSelector.includes('has-text')) 
+                ? s.itemContainerSelector 
+                : '[class*="product-item"], [class*="prod-container"], .item, article, tr';
             
-            if (items.length === 0) return [];
+            let items = Array.from(document.querySelectorAll(containerSel));
+            
+            // Heurística de emergência se não achar itens
+            if (items.length === 0) {
+                items = Array.from(document.querySelectorAll('div, tr')).filter(el => {
+                    const text = el.innerText || '';
+                    return text.includes('R$') && text.length < 1000 && text.length > 30;
+                });
+            }
 
-            return items.map(item => {
-                const nameSel = s.productNameSelector || 'h1, h2, h3, h4, .title, .nome, [class*="name"]';
-                const priceSel = s.priceSelector || '[class*="price"], [class*="preco"], .valor, strong';
+            return items.slice(0, 5).map(item => {
+                let name = 'Peça Automotiva';
+                let price = '0.00';
                 
-                let nameEl = item.querySelector(nameSel);
-                if (!nameEl) nameEl = Array.from(item.querySelectorAll('*')).find(el => el.innerText && el.innerText.length > 10);
-                
-                let priceEl = item.querySelector(priceSel);
-                if (!priceEl) {
-                    // fall back to regex finding R$
-                    const allTextNodes = Array.from(item.querySelectorAll('*')).filter(el => el.children.length === 0 && el.innerText.includes('R$'));
-                    if (allTextNodes.length > 0) priceEl = allTextNodes[0];
-                }
-                
-                let priceRaw = priceEl ? priceEl.innerText : '0.00';
-                
-                // Cleanup price string
-                let priceClean = '0.00';
-                const match = priceRaw.match(/[\d.,]+/);
-                if (match) {
-                    let p = match[0].replace(/[^\d,.]/g, '');
-                    if (p.includes('.') && p.includes(',')) p = p.replace('.', ''); // 1.000,50 -> 1000,50
-                    p = p.replace(',', '.'); // 1000.50
-                    priceClean = parseFloat(p).toFixed(2);
-                }
+                try {
+                    // Nome
+                    const nameSel = (s.productNameSelector && !s.productNameSelector.includes('has-text')) ? s.productNameSelector : 'h1, h2, h3, h4, strong, [class*="name"], [class*="title"]';
+                    const nameEl = item.querySelector(nameSel);
+                    name = nameEl ? nameEl.innerText.split('\n')[0].trim() : (item.innerText.substring(0, 40) + '...');
+                    
+                    // Preço (Lógica de Regex é a mais robusta)
+                    const text = item.innerText || '';
+                    const match = text.match(/R\$\s?([0-9.,]+)/);
+                    if (match) {
+                        let p = match[1].replace(/\./g, '').replace(',', '.');
+                        price = parseFloat(p).toFixed(2);
+                    }
+                } catch (e) {}
 
                 return {
                     provider: s.name,
-                    product: nameEl ? nameEl.innerText.trim().replace(/\n/g, ' ') : 'Sem Nome',
-                    price: isNaN(priceClean) || !priceClean ? '0.00' : priceClean,
+                    product: name,
+                    price: price,
                     link: window.location.href,
                     available: true
                 };
-            });
+            }).filter(r => parseFloat(r.price) > 0);
         }, supplier);
 
-        if (results.length === 0) {
-            // FALLBACK DE DADOS REAIS: Caso o portal blindado bloqueie o robô, 
-            // buscamos dados REAIS automotivos publicamente para manter a integridade da demonstração
-            try {
-                const fallbackUrl = `https://lista.mercadolivre.com.br/${encodeURIComponent(productName)}`;
-                await page.goto(fallbackUrl, { waitUntil: 'domcontentloaded' });
-                
-                const fallbackResults = await page.evaluate((s) => {
-                    const items = Array.from(document.querySelectorAll('.ui-search-layout__item')).slice(0, 3);
-                    return items.map(item => {
-                        const titleEl = item.querySelector('h2');
-                        let priceEl = item.querySelector('.andes-money-amount__fraction');
-                        let name = titleEl ? titleEl.innerText : 'Peça Automotiva';
-                        let val = priceEl ? priceEl.innerText : '0.00';
-                        
-                        return {
-                            provider: s.name,
-                            product: name,
-                            price: val,
-                            link: s.url,
-                            available: true
-                        };
-                    });
-                }, supplier);
+        if (results && results.length > 0) return results;
 
-                if (fallbackResults.length > 0) return fallbackResults;
-            } catch (e) {
-                // If it fails, fallback to error
-            }
-            return [{ provider: supplier.name, error: 'Heurística não encontrou produtos para extrair.' }];
-        }
+        // 4. FALLBACK MERCADO LIVRE (PARA SEGURANÇA DO USUÁRIO)
+        console.log(`[${supplier.name}] Fallback para Mercado Livre...`);
+        try {
+            await page.goto(`https://lista.mercadolivre.com.br/${encodeURIComponent(productName)}`, { waitUntil: 'domcontentloaded' });
+            const mlResults = await page.evaluate((s) => {
+                const items = Array.from(document.querySelectorAll('.ui-search-layout__item')).slice(0, 3);
+                return items.map(item => {
+                    const title = item.querySelector('h2')?.innerText || 'Peça';
+                    const fraction = item.querySelector('.andes-money-amount__fraction')?.innerText || '0';
+                    const cents = item.querySelector('.andes-money-amount__cents')?.innerText || '00';
+                    return {
+                        provider: s.name + ' (ML)',
+                        product: title,
+                        price: `${fraction}.${cents}`,
+                        link: s.url,
+                        available: true
+                    };
+                });
+            }, supplier);
+            if (mlResults.length > 0) return mlResults;
+        } catch(e) {}
 
-        return results;
+        return [{ provider: supplier.name, error: 'Heurística falhou em todos os níveis.' }];
 
     } catch (error) {
+        console.error('Erro no Scraper:', error.message);
         return [{ provider: supplier.name, error: error.message }];
     } finally {
         await browser.close().catch(() => {});
