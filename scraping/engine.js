@@ -83,6 +83,24 @@ async function getVisibleLocators(page, selectors, timeout = 4000) {
     return locators;
 }
 
+async function waitForPageSettle(page, selectors = [], options = {}) {
+    const timeout = options.timeout ?? 7000;
+    const settleMs = options.settleMs ?? 1500;
+    const waiters = [
+        page.waitForLoadState('domcontentloaded', { timeout }).catch(() => null),
+        page.waitForLoadState('load', { timeout }).catch(() => null),
+    ];
+
+    for (const selector of selectors) {
+        try {
+            waiters.push(page.locator(selector).first().waitFor({ state: 'visible', timeout }).catch(() => null));
+        } catch (_) {}
+    }
+
+    await Promise.race(waiters).catch(() => null);
+    await page.waitForTimeout(settleMs);
+}
+
 async function clickFirstVisible(page, selectors, options = {}) {
     const selector = await waitForAnyVisible(page, selectors, options.timeout);
     await page.locator(selector).first().click({ force: true });
@@ -463,7 +481,8 @@ async function scrapeProduct(supplier, productName) {
 
     const { context } = await createContext(browser, supplier);
     const page = await context.newPage();
-    page.setDefaultTimeout(40000);
+    page.setDefaultTimeout(20000);
+    page.setDefaultNavigationTimeout(30000);
 
     try {
         console.error(`[DEBUG] Iniciando scraping para: ${supplier.name}`);
@@ -484,8 +503,11 @@ async function scrapeProduct(supplier, productName) {
                 didLoginThisRun = true;
             }
 
-            await page.waitForLoadState('networkidle').catch(() => {});
-            await page.waitForTimeout(3000);
+            await waitForPageSettle(
+                page,
+                buildSelectorList(strategy.loginSuccessSelector, supplier.searchBarSelector, strategy.searchSelector),
+                { timeout: 10000, settleMs: 2000 }
+            );
             await dismissTransientUi(page);
             await ensureLoggedIn(page, loginUrl, supplier, strategy);
             await persistSession(context, supplier, didLoginThisRun);
@@ -510,8 +532,17 @@ async function scrapeProduct(supplier, productName) {
             }
 
             await performSearch(page, supplier, query, strategy);
-            await page.waitForLoadState('networkidle').catch(() => {});
-            await page.waitForTimeout(3000);
+            await waitForPageSettle(
+                page,
+                buildSelectorList(
+                    supplier.itemContainerSelector,
+                    supplier.productNameSelector,
+                    supplier.priceSelector,
+                    strategy.searchSelector,
+                    strategy.loginSuccessSelector
+                ),
+                { timeout: 10000, settleMs: 2000 }
+            );
             await dismissTransientUi(page);
 
             let items = [];
