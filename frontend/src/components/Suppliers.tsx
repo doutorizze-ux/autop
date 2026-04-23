@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Globe, Lock, Trash2, ExternalLink } from 'lucide-react';
+import { Plus, Globe, Lock, Trash2, ExternalLink, Play } from 'lucide-react';
 
 interface Supplier {
   id: string;
@@ -26,9 +26,22 @@ interface Supplier {
   availableSelector?: string;
 }
 
+interface SupplierTestResult {
+  provider: string;
+  product: string;
+  price: string | number;
+  available: boolean;
+  link?: string;
+  error?: string;
+}
+
 export const Suppliers = () => {
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [showModal, setShowModal] = useState(false);
+    const [testModalSupplier, setTestModalSupplier] = useState<Supplier | null>(null);
+    const [testProduct, setTestProduct] = useState('');
+    const [isTestingSupplier, setIsTestingSupplier] = useState(false);
+    const [testResult, setTestResult] = useState<SupplierTestResult | null>(null);
     const [formData, setFormData] = useState({
         name: '',
         url: '',
@@ -104,6 +117,46 @@ export const Suppliers = () => {
         }
     };
 
+    const openTestModal = (supplier: Supplier) => {
+        setTestModalSupplier(supplier);
+        setTestProduct('');
+        setTestResult(null);
+    };
+
+    const closeTestModal = () => {
+        setTestModalSupplier(null);
+        setTestProduct('');
+        setTestResult(null);
+        setIsTestingSupplier(false);
+    };
+
+    const handleTestSupplier = async () => {
+        if (!testModalSupplier || !testProduct.trim()) return;
+
+        try {
+            setIsTestingSupplier(true);
+            setTestResult(null);
+
+            const response = await axios.post(
+                `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/suppliers/${testModalSupplier.id}/test`,
+                { product: testProduct.trim() }
+            );
+
+            setTestResult(response.data);
+        } catch (err: any) {
+            setTestResult({
+                provider: testModalSupplier.name,
+                product: testProduct.trim(),
+                price: '---',
+                available: false,
+                error: err.response?.data?.message || err.message || 'Erro ao testar fornecedor.',
+                link: testModalSupplier.url,
+            });
+        } finally {
+            setIsTestingSupplier(false);
+        }
+    };
+
     return (
         <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
@@ -133,10 +186,20 @@ export const Suppliers = () => {
                             {s.sessionData && <p><Lock size={14} /> SessÃ£o manual: Configurada</p>}
                         </div>
                         <div className="supplier-footer">
-                            <a href={s.url} target="_blank" rel="noreferrer" className="visit-link">
-                                <span>Visitar Site</span>
-                                <ExternalLink size={14} />
-                            </a>
+                            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                <button
+                                    type="button"
+                                    className="test-link"
+                                    onClick={() => openTestModal(s)}
+                                >
+                                    <Play size={14} />
+                                    <span>Testar Busca</span>
+                                </button>
+                                <a href={s.url} target="_blank" rel="noreferrer" className="visit-link">
+                                    <span>Visitar Site</span>
+                                    <ExternalLink size={14} />
+                                </a>
+                            </div>
                         </div>
                     </div>
                 ))}
@@ -283,6 +346,71 @@ export const Suppliers = () => {
                 </div>
             )}
 
+            {testModalSupplier && (
+                <div className="modal-overlay">
+                    <div className="modal-content auth-card" style={{ maxWidth: '560px', width: '90%' }}>
+                        <h2 style={{ marginBottom: '0.5rem' }}>Testar Fornecedor</h2>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                            Vamos validar a integra&ccedil;&atilde;o de <strong>{testModalSupplier.name}</strong> sem depender do or&ccedil;amento completo.
+                        </p>
+
+                        <div className="form-group" style={{ marginBottom: '1rem' }}>
+                            <label>Produto para teste</label>
+                            <input
+                                type="text"
+                                className="form-input"
+                                value={testProduct}
+                                onChange={(e) => setTestProduct(e.target.value)}
+                                placeholder="Ex: pastilha hilux"
+                            />
+                        </div>
+
+                        {testResult && (
+                            <div
+                                style={{
+                                    border: `1px solid ${testResult.error ? '#ffb3b3' : 'var(--border-color)'}`,
+                                    background: testResult.error ? 'rgba(255, 77, 77, 0.08)' : 'rgba(0, 86, 179, 0.08)',
+                                    borderRadius: '8px',
+                                    padding: '1rem',
+                                    marginBottom: '1rem',
+                                }}
+                            >
+                                <p style={{ marginBottom: '0.4rem', fontWeight: 600 }}>{testResult.provider}</p>
+                                <p style={{ marginBottom: '0.4rem' }}>Produto: {testResult.product}</p>
+                                {!testResult.error && <p style={{ marginBottom: '0.4rem' }}>Preco: {testResult.price}</p>}
+                                {testResult.error && <p style={{ color: '#d92d20' }}>{testResult.error}</p>}
+                                {testResult.link && (
+                                    <a href={testResult.link} target="_blank" rel="noreferrer" className="visit-link">
+                                        <span>Abrir resultado</span>
+                                        <ExternalLink size={14} />
+                                    </a>
+                                )}
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '1rem' }}>
+                            <button
+                                type="button"
+                                className="btn-primary"
+                                onClick={handleTestSupplier}
+                                disabled={isTestingSupplier || !testProduct.trim()}
+                                style={{ flex: 2, opacity: isTestingSupplier || !testProduct.trim() ? 0.7 : 1 }}
+                            >
+                                {isTestingSupplier ? 'Testando...' : 'Executar Teste'}
+                            </button>
+                            <button
+                                type="button"
+                                className="btn-secondary"
+                                onClick={closeTestModal}
+                                style={{ flex: 1, padding: '0.85rem', background: 'var(--bg-color)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '6px', cursor: 'pointer' }}
+                            >
+                                Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
 
             <style>{`
                 .supplier-grid {
@@ -348,6 +476,22 @@ export const Suppliers = () => {
                 }
                 .visit-link:hover {
                     color: var(--primary-color);
+                }
+                .test-link {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    color: var(--primary-color);
+                    background: rgba(0, 86, 179, 0.08);
+                    border: 1px solid rgba(0, 86, 179, 0.15);
+                    border-radius: 6px;
+                    padding: 0.45rem 0.75rem;
+                    cursor: pointer;
+                    font-size: 0.9rem;
+                    font-weight: 500;
+                }
+                .test-link:hover {
+                    background: rgba(0, 86, 179, 0.14);
                 }
                 .modal-overlay {
                     position: fixed;

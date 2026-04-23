@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
+import { ScraperService } from '../services/scraper.service';
 
 const prisma = new PrismaClient();
 
@@ -64,5 +64,25 @@ export const deleteSupplier = async (req: Request, res: Response): Promise<void>
         res.json({ message: 'Fornecedor removido' });
     } catch (err) {
         res.status(500).json({ message: 'Erro ao remover fornecedor' });
+    }
+};
+
+export const testSupplier = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+        const product = String(req.body?.product || '').trim();
+
+        if (!product) {
+            res.status(400).json({ message: 'Informe um produto para testar.' });
+            return;
+        }
+
+        const result = await ScraperService.searchSupplierProduct(id, product);
+        res.json(result);
+    } catch (err) {
+        console.error('Test Supplier Error:', err);
+        res.status(500).json({
+            message: err instanceof Error ? err.message : 'Erro ao testar fornecedor',
+        });
     }
 };
