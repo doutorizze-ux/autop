@@ -86,10 +86,14 @@ async function getVisibleLocators(page, selectors, timeout = 4000) {
 async function waitForPageSettle(page, selectors = [], options = {}) {
     const timeout = options.timeout ?? 7000;
     const settleMs = options.settleMs ?? 1500;
-    const waiters = [
-        page.waitForLoadState('domcontentloaded', { timeout }).catch(() => null),
-        page.waitForLoadState('load', { timeout }).catch(() => null),
-    ];
+    const previousUrl = safeString(options.previousUrl || page.url());
+    const waiters = [];
+
+    if (previousUrl) {
+        waiters.push(
+            page.waitForURL((url) => url.toString() !== previousUrl, { timeout }).catch(() => null)
+        );
+    }
 
     for (const selector of selectors) {
         try {
@@ -99,6 +103,40 @@ async function waitForPageSettle(page, selectors = [], options = {}) {
 
     await Promise.race(waiters).catch(() => null);
     await page.waitForTimeout(settleMs);
+}
+
+async function waitForLoginCompletion(page, previousUrl, loginUrl, supplier, strategy = {}) {
+    const successSelectors = buildSelectorList(
+        strategy.loginSuccessSelector,
+        supplier.searchBarSelector,
+        strategy.searchSelector
+    );
+
+    await waitForPageSettle(page, successSelectors, {
+        timeout: strategy.loginSettleTimeout ?? 15000,
+        settleMs: strategy.loginSettleDelay ?? 2500,
+        previousUrl,
+    });
+
+    await dismissTransientUi(page);
+    await ensureLoggedIn(page, loginUrl, supplier, strategy);
+}
+
+function buildSearchQueries(productName) {
+    const baseQuery = safeString(productName);
+    const queries = [baseQuery];
+    const tokens = baseQuery
+        .split(/\s+/)
+        .map((token) => token.trim())
+        .filter((token) => token.length >= 3);
+
+    for (const token of tokens) {
+        if (!queries.includes(token)) {
+            queries.push(token);
+        }
+    }
+
+    return queries.slice(0, 4);
 }
 
 async function clickFirstVisible(page, selectors, options = {}) {
@@ -507,21 +545,18 @@ async function scrapeProduct(supplier, productName) {
             const alreadyLogged = !(await page.locator('input[type="password"]').first().isVisible().catch(() => false));
 
             if (!alreadyLogged) {
+                const preLoginUrl = page.url();
                 await runGenericLogin(page, supplier, strategy);
                 didLoginThisRun = true;
+                await waitForLoginCompletion(page, preLoginUrl, loginUrl, supplier, strategy);
+            } else {
+                await dismissTransientUi(page);
+                await ensureLoggedIn(page, loginUrl, supplier, strategy);
             }
-
-            await waitForPageSettle(
-                page,
-                buildSelectorList(strategy.loginSuccessSelector, supplier.searchBarSelector, strategy.searchSelector),
-                { timeout: 10000, settleMs: 2000 }
-            );
-            await dismissTransientUi(page);
-            await ensureLoggedIn(page, loginUrl, supplier, strategy);
             await persistSession(context, supplier, didLoginThisRun);
         }
 
-        let queries = [productName];
+        let queries = buildSearchQueries(productName);
         try {
             const parsed = JSON.parse(productName);
             if (parsed.codigo && parsed.nome) {
@@ -539,6 +574,7 @@ async function scrapeProduct(supplier, productName) {
                 await page.waitForTimeout(1000);
             }
 
+            const beforeSearchUrl = page.url();
             await performSearch(page, supplier, query, strategy);
             await waitForPageSettle(
                 page,
@@ -549,7 +585,7 @@ async function scrapeProduct(supplier, productName) {
                     strategy.searchSelector,
                     strategy.loginSuccessSelector
                 ),
-                { timeout: 10000, settleMs: 2000 }
+                { timeout: 12000, settleMs: 2000, previousUrl: beforeSearchUrl }
             );
             await dismissTransientUi(page);
 

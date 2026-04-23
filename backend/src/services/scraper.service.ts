@@ -8,7 +8,7 @@ export class ScraperService {
     static async searchMultipleProducts(productNames: string[]) {
         const suppliers = await prisma.supplier.findMany();
         const scrapingPath = path.join(__dirname, '../../../scraping');
-        const concurrency = Math.max(1, Number.parseInt(process.env.SCRAPER_CONCURRENCY || '2', 10) || 2);
+        const concurrency = Math.max(1, Number.parseInt(process.env.SCRAPER_CONCURRENCY || '1', 10) || 1);
 
         const resultsByProduct: Record<string, any[]> = {};
 
