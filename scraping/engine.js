@@ -452,6 +452,14 @@ async function createContext(browser, supplier) {
     }
 
     const context = await browser.newContext(contextOptions);
+    await context.route('**/*', (route) => {
+        const resourceType = route.request().resourceType();
+        if (['image', 'media', 'font'].includes(resourceType)) {
+            return route.abort();
+        }
+
+        return route.continue();
+    });
     return { context, sessionStatePath };
 }
 

@@ -8,18 +8,19 @@ export class ScraperService {
     static async searchMultipleProducts(productNames: string[]) {
         const suppliers = await prisma.supplier.findMany();
         const scrapingPath = path.join(__dirname, '../../../scraping');
+        const concurrency = Math.max(1, Number.parseInt(process.env.SCRAPER_CONCURRENCY || '2', 10) || 2);
 
         const resultsByProduct: Record<string, any[]> = {};
 
         for (const productName of productNames) {
             console.log(`Buscando em todos os fornecedores para: ${productName}`);
 
-            const promises = suppliers.map((supplier) => {
+            const runSupplierSearch = (supplier: any) => {
                 return new Promise((resolve) => {
                     const supplierJson = Buffer.from(JSON.stringify(supplier)).toString('base64');
                     const command = `node run-search.js --base64 "${supplierJson}" "${productName}"`;
 
-                    exec(command, { cwd: scrapingPath, timeout: 90000 }, (error, stdout, stderr) => {
+                    exec(command, { cwd: scrapingPath, timeout: 120000, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
                         let finalErrorMsg = 'Falha desconhecida no Scraper.';
                         const trimmedStdout = stdout?.trim();
                         const trimmedStderr = stderr?.trim();
@@ -92,9 +93,16 @@ export class ScraperService {
                         });
                     });
                 });
-            });
+            };
 
-            resultsByProduct[productName] = await Promise.all(promises);
+            const productResults: any[] = [];
+            for (let index = 0; index < suppliers.length; index += concurrency) {
+                const currentBatch = suppliers.slice(index, index + concurrency);
+                const batchResults = await Promise.all(currentBatch.map(runSupplierSearch));
+                productResults.push(...batchResults);
+            }
+
+            resultsByProduct[productName] = productResults;
         }
 
         await prisma.quote.create({
