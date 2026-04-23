@@ -5,5 +5,6 @@ module.exports = {
     passSelector: ['#password', 'input[type="password"]'],
     extraSelector: ['#f'],
     submitSelector: ['button.btn-primary', 'button[type="submit"]'],
+    loginSuccessSelector: ['#gsearch', 'a:has-text("Produtos")', 'text=Produtos'],
     searchSelector: ['#gsearch', 'input[placeholder*="pesquisar" i]', 'input[type="search"]'],
 };

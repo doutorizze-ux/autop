@@ -53,6 +53,36 @@ async function fillFirstVisible(page, selectors, value, options = {}) {
     return selector;
 }
 
+async function fillVisibleLocator(locator, value) {
+    await locator.click({ force: true }).catch(() => {});
+    await locator.press('Control+A').catch(() => {});
+    await locator.fill('');
+    await locator.fill(safeString(value), { force: true });
+}
+
+async function getVisibleLocators(page, selectors, timeout = 4000) {
+    const locators = [];
+
+    for (const selector of selectors) {
+        try {
+            const locator = page.locator(selector);
+            const count = await locator.count();
+
+            for (let index = 0; index < count; index += 1) {
+                const current = locator.nth(index);
+                const isVisible = await current.isVisible({ timeout }).catch(() => false);
+                const isEnabled = await current.isEnabled().catch(() => true);
+
+                if (isVisible && isEnabled) {
+                    locators.push(current);
+                }
+            }
+        } catch (_) {}
+    }
+
+    return locators;
+}
+
 async function clickFirstVisible(page, selectors, options = {}) {
     const selector = await waitForAnyVisible(page, selectors, options.timeout);
     await page.locator(selector).first().click({ force: true });
@@ -115,6 +145,18 @@ async function submitLogin(page, supplier, fallbackSelectors = []) {
 }
 
 async function runGenericLogin(page, supplier, strategy = {}) {
+    if (strategy.fillLogin) {
+        await strategy.fillLogin({
+            page,
+            supplier,
+            fillVisibleLocator,
+            getVisibleLocators: (selectors, timeout) => getVisibleLocators(page, selectors, timeout),
+            dismissTransientUi: () => dismissTransientUi(page),
+        });
+        await submitLogin(page, supplier, strategy.submitSelector);
+        return;
+    }
+
     const extraSelectors = buildSelectorList(
         supplier.loginExtraSelector,
         strategy.extraSelector,
@@ -171,7 +213,9 @@ async function runGenericLogin(page, supplier, strategy = {}) {
         throw new Error('Fornecedor sem credencial de login configurada.');
     }
 
+    await dismissTransientUi(page);
     await fillFirstVisible(page, userSelectors, loginValue);
+    await dismissTransientUi(page);
     await fillFirstVisible(page, passSelectors, supplier.password || '');
     await submitLogin(page, supplier, strategy.submitSelector);
 }
@@ -329,10 +373,41 @@ async function extractGeneric(page) {
     });
 }
 
-async function ensureLoggedIn(page, loginUrl) {
+async function isAnySelectorVisible(page, selectors, timeout = 2500) {
+    for (const selector of selectors) {
+        try {
+            const visible = await page.locator(selector).first().isVisible({ timeout }).catch(() => false);
+            if (visible) {
+                return true;
+            }
+        } catch (_) {}
+    }
+
+    return false;
+}
+
+async function ensureLoggedIn(page, loginUrl, supplier, strategy = {}) {
+    const successSelectors = buildSelectorList(
+        strategy.loginSuccessSelector,
+        supplier.searchBarSelector,
+        strategy.searchSelector,
+        [
+            'a:has-text("Sair")',
+            'a:has-text("Logout")',
+            'button:has-text("Sair")',
+            'input[type="search"]',
+        ]
+    );
+
+    if (await isAnySelectorVisible(page, successSelectors, 3000)) {
+        return;
+    }
+
     const passwordVisible = await page.locator('input[type="password"]').first().isVisible().catch(() => false);
     const currentUrl = safeString(page.url());
-    const stillOnLoginPage = currentUrl.includes('login') || currentUrl === safeString(loginUrl);
+    const normalizedLoginUrl = safeString(loginUrl).replace(/\/+$/, '');
+    const normalizedCurrentUrl = currentUrl.replace(/\/+$/, '');
+    const stillOnLoginPage = currentUrl.includes('login') || normalizedCurrentUrl === normalizedLoginUrl;
 
     if (passwordVisible && stillOnLoginPage) {
         throw new Error('Falha no login: credenciais recusadas ou bloqueio de modal.');
@@ -412,7 +487,7 @@ async function scrapeProduct(supplier, productName) {
             await page.waitForLoadState('networkidle').catch(() => {});
             await page.waitForTimeout(3000);
             await dismissTransientUi(page);
-            await ensureLoggedIn(page, loginUrl);
+            await ensureLoggedIn(page, loginUrl, supplier, strategy);
             await persistSession(context, supplier, didLoginThisRun);
         }
 
@@ -464,6 +539,7 @@ async function scrapeProduct(supplier, productName) {
 
         return finalItems;
     } catch (error) {
+        await page.screenshot({ path: path.join(__dirname, 'debug_error.png'), fullPage: true }).catch(() => {});
         console.error(`[ERROR] ${error.message}`);
         return {
             provider: supplier.name,
