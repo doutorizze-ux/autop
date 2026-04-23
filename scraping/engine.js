@@ -54,10 +54,20 @@ async function fillFirstVisible(page, selectors, value, options = {}) {
 }
 
 async function fillVisibleLocator(locator, value) {
+    const stringValue = safeString(value);
     await locator.click({ force: true }).catch(() => {});
     await locator.press('Control+A').catch(() => {});
     await locator.fill('');
-    await locator.fill(safeString(value), { force: true });
+    try {
+        await locator.type(stringValue, { delay: 35 });
+    } catch (_) {
+        await locator.fill(stringValue, { force: true });
+    }
+    await locator.evaluate((el) => {
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        el.dispatchEvent(new Event('blur', { bubbles: true }));
+    }).catch(() => {});
 }
 
 async function getVisibleLocators(page, selectors, timeout = 4000) {
@@ -106,11 +116,10 @@ async function waitForPageSettle(page, selectors = [], options = {}) {
 }
 
 async function waitForLoginCompletion(page, previousUrl, loginUrl, supplier, strategy = {}) {
-    const successSelectors = buildSelectorList(
-        strategy.loginSuccessSelector,
-        supplier.searchBarSelector,
-        strategy.searchSelector
-    );
+    const explicitSuccessSelectors = buildSelectorList(strategy.loginSuccessSelector);
+    const successSelectors = explicitSuccessSelectors.length
+        ? explicitSuccessSelectors
+        : buildSelectorList(supplier.searchBarSelector, strategy.searchSelector);
 
     await waitForPageSettle(page, successSelectors, {
         timeout: strategy.loginSettleTimeout ?? 15000,
@@ -125,6 +134,10 @@ async function waitForLoginCompletion(page, previousUrl, loginUrl, supplier, str
 function buildSearchQueries(productName) {
     const baseQuery = safeString(productName);
     const queries = [baseQuery];
+    const wildcardQuery = baseQuery.replace(/\s+/g, '%');
+    if (wildcardQuery && wildcardQuery !== baseQuery && !queries.includes(wildcardQuery)) {
+        queries.push(wildcardQuery);
+    }
     const tokens = baseQuery
         .split(/\s+/)
         .map((token) => token.trim())
@@ -451,8 +464,8 @@ async function isAnySelectorVisible(page, selectors, timeout = 2500) {
 }
 
 async function ensureLoggedIn(page, loginUrl, supplier, strategy = {}) {
-    const successSelectors = buildSelectorList(
-        strategy.loginSuccessSelector,
+    const explicitSuccessSelectors = buildSelectorList(strategy.loginSuccessSelector);
+    const fallbackSuccessSelectors = buildSelectorList(
         supplier.searchBarSelector,
         strategy.searchSelector,
         [
@@ -462,6 +475,7 @@ async function ensureLoggedIn(page, loginUrl, supplier, strategy = {}) {
             'input[type="search"]',
         ]
     );
+    const successSelectors = explicitSuccessSelectors.length ? explicitSuccessSelectors : fallbackSuccessSelectors;
 
     if (await isAnySelectorVisible(page, successSelectors, 3000)) {
         return;
