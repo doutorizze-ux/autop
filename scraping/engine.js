@@ -32,6 +32,67 @@ function getSessionStatePath(supplier) {
     return path.join(sessionsDir, `${fileName || 'supplier'}.json`);
 }
 
+function normalizeCookie(cookie) {
+    if (!cookie || !cookie.name || cookie.value === undefined) {
+        return null;
+    }
+
+    const normalized = {
+        name: String(cookie.name),
+        value: String(cookie.value),
+        domain: String(cookie.domain || ''),
+        path: String(cookie.path || '/'),
+        httpOnly: Boolean(cookie.httpOnly),
+        secure: Boolean(cookie.secure),
+    };
+
+    if (cookie.url) {
+        normalized.url = String(cookie.url);
+    }
+
+    if (cookie.expires !== undefined && cookie.expires !== null) {
+        normalized.expires = Number(cookie.expires);
+    } else if (cookie.expirationDate !== undefined && cookie.expirationDate !== null) {
+        normalized.expires = Number(cookie.expirationDate);
+    }
+
+    if (cookie.sameSite) {
+        const sameSite = String(cookie.sameSite).toLowerCase();
+        if (sameSite === 'lax') normalized.sameSite = 'Lax';
+        if (sameSite === 'strict') normalized.sameSite = 'Strict';
+        if (sameSite === 'none' || sameSite === 'no_restriction') normalized.sameSite = 'None';
+    }
+
+    return normalized;
+}
+
+function parseSupplierSessionData(supplier) {
+    const raw = safeString(supplier.sessionData);
+    if (!raw) {
+        return null;
+    }
+
+    try {
+        const parsed = JSON.parse(raw);
+
+        if (Array.isArray(parsed)) {
+            const cookies = parsed.map(normalizeCookie).filter(Boolean);
+            return cookies.length ? { cookies, origins: [] } : null;
+        }
+
+        if (parsed && Array.isArray(parsed.cookies)) {
+            return {
+                cookies: parsed.cookies.map(normalizeCookie).filter(Boolean),
+                origins: Array.isArray(parsed.origins) ? parsed.origins : [],
+            };
+        }
+    } catch (error) {
+        console.error(`[WARN] sessionData invalido para ${supplier.name}: ${error.message}`);
+    }
+
+    return null;
+}
+
 async function waitForAnyVisible(page, selectors, timeout = 15000) {
     let lastError;
 
@@ -500,6 +561,7 @@ async function resetForNextSearch(page, supplier) {
 
 async function createContext(browser, supplier) {
     const sessionStatePath = getSessionStatePath(supplier);
+    const supplierSessionState = parseSupplierSessionData(supplier);
     const contextOptions = {
         viewport: { width: 1920, height: 1080 },
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
@@ -507,7 +569,11 @@ async function createContext(browser, supplier) {
         ignoreHTTPSErrors: true,
     };
 
-    if (fs.existsSync(sessionStatePath)) {
+    if (supplierSessionState) {
+        console.error(`[DEBUG] Reutilizando sessionData para: ${supplier.name}`);
+        contextOptions.storageState = supplierSessionState;
+    } else if (fs.existsSync(sessionStatePath)) {
+        console.error(`[DEBUG] Reutilizando sessao salva em arquivo para: ${supplier.name}`);
         contextOptions.storageState = sessionStatePath;
     }
 
@@ -537,7 +603,11 @@ async function createContext(browser, supplier) {
 
         return route.continue();
     });
-    return { context, sessionStatePath };
+    return {
+        context,
+        sessionStatePath,
+        hasPreloadedSession: Boolean(supplierSessionState || fs.existsSync(sessionStatePath)),
+    };
 }
 
 async function persistSession(context, supplier, shouldPersist) {
@@ -565,7 +635,7 @@ async function scrapeProduct(supplier, productName) {
         ],
     });
 
-    const { context } = await createContext(browser, supplier);
+    const { context, hasPreloadedSession } = await createContext(browser, supplier);
     const page = await context.newPage();
     page.setDefaultTimeout(20000);
     page.setDefaultNavigationTimeout(30000);
@@ -575,7 +645,11 @@ async function scrapeProduct(supplier, productName) {
         const strategy = resolveStrategy(supplier.name);
 
         const loginUrl = supplier.loginUrl || supplier.url;
-        await page.goto(loginUrl, { waitUntil: 'domcontentloaded' });
+        const initialUrl = hasPreloadedSession
+            ? (supplier.searchUrl || supplier.url || loginUrl)
+            : loginUrl;
+
+        await page.goto(initialUrl, { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(2000);
         await dismissTransientUi(page);
 
@@ -655,10 +729,20 @@ async function scrapeProduct(supplier, productName) {
         return finalItems;
     } catch (error) {
         await page.screenshot({ path: path.join(__dirname, 'debug_error.png'), fullPage: true }).catch(() => {});
-        console.error(`[ERROR] ${error.message}`);
+        let errorMessage = error.message;
+
+        if (
+            supplier.needsLogin &&
+            errorMessage.includes('Falha no login') &&
+            !safeString(supplier.sessionData)
+        ) {
+            errorMessage = `${errorMessage} Dica: preencha "Sessao/Cookies JSON" no cadastro do fornecedor para reutilizar uma sessao autenticada.`;
+        }
+
+        console.error(`[ERROR] ${errorMessage}`);
         return {
             provider: supplier.name,
-            error: error.message,
+            error: errorMessage,
         };
     } finally {
         await context.close().catch(() => {});

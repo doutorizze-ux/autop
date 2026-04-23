@@ -27,37 +27,37 @@ model Client {
 }
 
 model Supplier {
-  id        String   @id @default(uuid())
-  name      String
-  url       String
-  type      String?  // Ex: "Atacado", "Varejo"
-  
-  // Configurações de Login
-  needsLogin       Boolean @default(false)
-  loginUrl         String?
-  loginUserSelector String?
-  loginPassSelector String?
-  loginSubmitSelector String?
-  loginCredential   String? // Documento/Email
-  password          String? // Senha (criptografada)
-  loginExtraSelector String? // Para campos como "Perfil"
-  loginExtraValue    String? // Valor para o campo extra
+  id                    String   @id @default(uuid())
+  name                  String
+  url                   String
+  type                  String?  // Ex: "Atacado", "Varejo"
 
-  // Configurações de Busca
-  searchUrl         String? // Alguns sites permitem busca via URL: site.com/busca?q=peca
-  searchBarSelector String? // Input de busca
-  searchBtnSelector String? // Botão de lupa/busca
+  // Configuracoes de Login
+  needsLogin            Boolean  @default(false)
+  loginUrl              String?
+  loginUserSelector     String?
+  loginPassSelector     String?
+  loginSubmitSelector   String?
+  loginCredential       String? // Documento/Email
+  password              String? // Senha
+  loginExtraSelector    String? // Para campos como "Perfil"
+  loginExtraValue       String? // Valor para o campo extra
+  sessionData           String? // JSON de cookies/storageState para reutilizar sessao autenticada
 
-  // Configurações de Resultado
+  // Configuracoes de Busca
+  searchUrl             String? // Alguns sites permitem busca via URL
+  searchBarSelector     String? // Input de busca
+  searchBtnSelector     String? // Botao de lupa/busca
+
+  // Configuracoes de Resultado
   itemContainerSelector String? // O "quadrado" do produto
   productNameSelector   String? // Onde fica o nome dentro do quadrado
-  priceSelector         String? // Onde fica o preço dentro do quadrado
+  priceSelector         String? // Onde fica o preco dentro do quadrado
   availableSelector     String? // Seletor para verificar estoque (opcional)
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
 
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
 
 model Quote {
   id        String   @id @default(uuid())
@@ -67,9 +67,8 @@ model Quote {
 }
 
 model SystemConfig {
-  id        String   @id @default("system_settings")
-  aiKey     String?
-  whatsappMode String @default("baileys")
-  updatedAt DateTime @updatedAt
+  id           String   @id @default("system_settings")
+  aiKey        String?
+  whatsappMode String   @default("baileys")
+  updatedAt    DateTime @updatedAt
 }
-

@@ -16,6 +16,7 @@ interface Supplier {
   password?: string;
   loginExtraSelector?: string;
   loginExtraValue?: string;
+  sessionData?: string;
   searchUrl?: string;
   searchBarSelector?: string;
   searchBtnSelector?: string;
@@ -41,6 +42,7 @@ export const Suppliers = () => {
         password: '',
         loginExtraSelector: '',
         loginExtraValue: '',
+        sessionData: '',
         searchUrl: '',
         searchBarSelector: '',
         searchBtnSelector: '',
@@ -81,6 +83,7 @@ export const Suppliers = () => {
                 loginPassSelector: '', loginSubmitSelector: '',
                 loginCredential: '', password: '',
                 loginExtraSelector: '', loginExtraValue: '',
+                sessionData: '',
                 searchUrl: '', searchBarSelector: '', searchBtnSelector: '',
                 itemContainerSelector: '', productNameSelector: '', priceSelector: '',
                 availableSelector: ''
@@ -127,6 +130,7 @@ export const Suppliers = () => {
                         <div className="supplier-body">
                             <p><Globe size={14} /> {s.url}</p>
                             <p><Lock size={14} /> Login: {s.needsLogin ? 'Ativado' : 'Desativado'}</p>
+                            {s.sessionData && <p><Lock size={14} /> SessÃ£o manual: Configurada</p>}
                         </div>
                         <div className="supplier-footer">
                             <a href={s.url} target="_blank" rel="noreferrer" className="visit-link">
@@ -217,6 +221,23 @@ export const Suppliers = () => {
                                                     <label>Valor Campo Extra</label>
                                                     <input type="text" className="form-input" value={formData.loginExtraValue} onChange={e => setFormData({...formData, loginExtraValue: e.target.value})} />
                                                 </div>
+                                            </div>
+                                            <div className="form-group">
+                                                <label>Sessão/Cookies JSON (opcional)</label>
+                                                <textarea
+                                                    className="form-input"
+                                                    value={formData.sessionData}
+                                                    onChange={e => setFormData({...formData, sessionData: e.target.value})}
+                                                    placeholder='Cole aqui um JSON de cookies ou storageState para reutilizar uma sessão autenticada'
+                                                    rows={6}
+                                                    style={{ resize: 'vertical', minHeight: '140px' }}
+                                                />
+                                                <small style={{ color: 'var(--text-muted)' }}>
+                                                    Use este campo quando o portal bloquear login automático. Pode ser um array de cookies exportado do navegador ou um storageState do Playwright.
+                                                </small>
+                                                <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '0.35rem' }}>
+                                                    Exemplo: faÃ§a login manual no portal, exporte os cookies com Cookie-Editor ou copie um storageState e cole aqui.
+                                                </small>
                                             </div>
                                         </>
                                     )}
