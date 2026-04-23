@@ -6,4 +6,5 @@ module.exports = {
     loginSuccessSelector: ['input[placeholder*="descrição" i]', 'input[placeholder*="descricao" i]', 'input[placeholder*="marca" i]', 'input[placeholder*="veículo" i]'],
     searchSelector: ['input[value="CAR80"]', 'input[placeholder*="código" i]', 'input[placeholder*="codigo" i]', 'input[placeholder*="descrição" i]', 'input[placeholder*="descricao" i]', 'input.busca'],
     searchButtonSelector: ['button:has(.fa-search)', 'button[type="submit"]'],
+    buildSearchUrl: (query) => `https://loja.rmp.com.br/catalogsearch/result/?q=${encodeURIComponent(String(query))}&code=${encodeURIComponent(String(query))}`,
 };

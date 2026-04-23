@@ -7,6 +7,7 @@ module.exports = {
     loginSuccessSelector: ['input[type="search"]', 'button:has-text("MENU DEPARTAMENTOS")', 'a:has-text("Meu histórico")'],
     searchSelector: ['input[type="search"]', 'input[placeholder*="nome" i]', 'input[placeholder*="marca" i]', '.search-input'],
     searchButtonSelector: ['button[type="submit"]', 'button .fa-search', '.fa-search', '.icon-search'],
+    buildSearchUrl: (query) => `https://portalcomdip.com.br/comdip/compras/pesquisa/termo-busca/${encodeURIComponent(String(query).toLowerCase())}/1`,
     beforeLogin: async ({ dismissTransientUi, setCheckboxState }) => {
         await dismissTransientUi();
         await setCheckboxState(['input[type="checkbox"]'], true);

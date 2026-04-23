@@ -277,6 +277,14 @@ async function runGenericLogin(page, supplier, strategy = {}) {
 }
 
 async function performSearch(page, supplier, query, strategy = {}) {
+    if (strategy.buildSearchUrl) {
+        const directUrl = strategy.buildSearchUrl(query, supplier);
+        if (directUrl) {
+            await page.goto(directUrl, { waitUntil: 'domcontentloaded' });
+            return;
+        }
+    }
+
     const searchSelectors = buildSelectorList(
         supplier.searchBarSelector,
         strategy.searchSelector,
@@ -490,6 +498,23 @@ async function createContext(browser, supplier) {
     }
 
     const context = await browser.newContext(contextOptions);
+    await context.addInitScript(() => {
+        Object.defineProperty(navigator, 'webdriver', {
+            get: () => undefined,
+        });
+
+        Object.defineProperty(navigator, 'language', {
+            get: () => 'pt-BR',
+        });
+
+        Object.defineProperty(navigator, 'languages', {
+            get: () => ['pt-BR', 'pt', 'en-US', 'en'],
+        });
+
+        Object.defineProperty(navigator, 'platform', {
+            get: () => 'Win32',
+        });
+    });
     await context.route('**/*', (route) => {
         const resourceType = route.request().resourceType();
         if (['image', 'media', 'font'].includes(resourceType)) {
@@ -519,6 +544,7 @@ async function scrapeProduct(supplier, productName) {
             '--disable-dev-shm-usage',
             '--disable-accelerated-2d-canvas',
             '--disable-gpu',
+            '--disable-blink-features=AutomationControlled',
             '--no-first-run',
             '--no-zygote',
             '--window-size=1920,1080',
