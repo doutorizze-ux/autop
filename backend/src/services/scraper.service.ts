@@ -21,11 +21,12 @@ export class ScraperService {
 
                     exec(command, { cwd: scrapingPath, timeout: 90000 }, (error, stdout, stderr) => {
                         let finalErrorMsg = 'Falha desconhecida no Scraper.';
+                        const trimmedStdout = stdout?.trim();
+                        const trimmedStderr = stderr?.trim();
 
-                        if (stdout) {
+                        if (trimmedStdout) {
                             try {
-                                const trimmed = stdout.trim();
-                                const jsonMatch = trimmed.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
+                                const jsonMatch = trimmedStdout.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
 
                                 if (jsonMatch) {
                                     const data = JSON.parse(jsonMatch[0]);
@@ -61,17 +62,23 @@ export class ScraperService {
                                     }
                                 }
                             } catch (parseError) {
-                                console.log('[ScraperService] JSON parse error:', parseError, 'STDOUT:', stdout);
+                                console.log('[ScraperService] JSON parse error:', parseError, 'STDOUT:', trimmedStdout);
                                 finalErrorMsg = 'Erro de comunicação com o robô.';
                             }
                         }
 
-                        if (stderr?.trim()) {
-                            console.error(`[Scraper STDERR] ${supplier.name}: ${stderr.trim()}`);
+                        if (trimmedStderr) {
+                            console.error(`[Scraper STDERR] ${supplier.name}: ${trimmedStderr}`);
+                        }
+
+                        if (error && trimmedStdout) {
+                            console.error(`[Scraper STDOUT] ${supplier.name}: ${trimmedStdout}`);
                         }
 
                         if (error) {
-                            console.error(`[Scraper Warning] Falha na execução para ${supplier.name}: `, error.message);
+                            console.error(
+                                `[Scraper Warning] Falha na execução para ${supplier.name}: code=${error.code ?? 'n/a'} signal=${error.signal ?? 'n/a'} message=${error.message}`
+                            );
                             finalErrorMsg = `Timeout ou Erro Crítico. ${finalErrorMsg}`;
                         }
 

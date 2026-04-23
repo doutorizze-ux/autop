@@ -1,5 +1,27 @@
 const { scrapeProduct } = require('./engine');
 
+let currentSupplier = null;
+
+function emitJsonError(error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const payload = {
+        provider: currentSupplier ? currentSupplier.name : 'Desconhecido',
+        error: message,
+    };
+
+    console.error(`[FATAL] ${message}`);
+    console.log(JSON.stringify(payload));
+    process.exit(0);
+}
+
+process.on('unhandledRejection', (reason) => {
+    emitJsonError(reason);
+});
+
+process.on('uncaughtException', (error) => {
+    emitJsonError(error);
+});
+
 async function main() {
     const args = process.argv.slice(2);
     if (args.length < 2) {
@@ -18,16 +40,16 @@ async function main() {
         productName = args[1];
     }
 
+    currentSupplier = supplier;
+
     try {
         const results = await scrapeProduct(supplier, productName);
-        // GARANTIA ABSOLUTA DE SAÍDA JSON NO FORMATO SOLICITADO
         console.log(JSON.stringify(results));
         process.exit(0);
-    } catch (err) {
-        // GARANTIA ABSOLUTA DE SAÍDA DE ERRO NO FORMATO SOLICITADO
+    } catch (error) {
         console.log(JSON.stringify({
-            provider: supplier ? supplier.name : "Desconhecido",
-            error: err.message
+            provider: supplier ? supplier.name : 'Desconhecido',
+            error: error.message,
         }));
         process.exit(0);
     }
