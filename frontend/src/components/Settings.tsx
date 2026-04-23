@@ -29,6 +29,14 @@ export const Settings = () => {
         }
     }, [user]);
 
+    useEffect(() => {
+        setProfileData(prev => ({
+            ...prev,
+            name: user?.name || '',
+            email: user?.email || '',
+        }));
+    }, [user?.name, user?.email]);
+
     const fetchSystemConfig = async () => {
         try {
             const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/config`);

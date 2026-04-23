@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { useState, useEffect } from 'react';
 import { socket } from '../services/socket';
 import { CheckCircle2, RefreshCcw, WifiOff } from 'lucide-react';
@@ -7,13 +8,24 @@ export const WhatsAppConnect = () => {
     const [qrCode, setQrCode] = useState<string | null>(null);
 
     useEffect(() => {
-        socket.on('whatsapp_status', (data: { status: any, qr?: string }) => {
+        const fetchInitialStatus = async () => {
+            try {
+                const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/whatsapp/status`);
+                setStatus(response.data.status);
+                setQrCode(response.data.qr || null);
+            } catch {
+                setStatus('disconnected');
+                setQrCode(null);
+            }
+        };
+
+        fetchInitialStatus();
+
+        socket.on('whatsapp_status', (data: { status: 'connecting' | 'connected' | 'disconnected' | 'qr'; qr?: string }) => {
             setStatus(data.status);
-            if (data.qr) setQrCode(data.qr);
+            setQrCode(data.qr || null);
         });
 
-        // Solicitar status inicial se necessário (ou o backend emitirá ao conectar)
-        
         return () => {
             socket.off('whatsapp_status');
         };
@@ -38,7 +50,7 @@ export const WhatsAppConnect = () => {
                     <div style={{ textAlign: 'center', color: '#10b981' }}>
                         <CheckCircle2 size={64} style={{ marginBottom: '1rem' }} />
                         <h3>WhatsApp Conectado!</h3>
-                        <p style={{ color: 'var(--text-muted)' }}>O sistema está pronto para receber e enviar mensagens.</p>
+                        <p style={{ color: 'var(--text-muted)' }}>O sistema estÃ¡ pronto para receber e enviar mensagens.</p>
                     </div>
                 );
             case 'connecting':

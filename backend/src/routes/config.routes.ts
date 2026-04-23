@@ -32,7 +32,7 @@ router.post('/', async (req, res) => {
 router.post('/profile', async (req, res) => {
     try {
         const { name, email, password } = req.body;
-        const userId = (req as any).user.id;
+        const userId = (req as any).user.userId;
         const user = await ConfigService.updateProfile(userId, { name, email, password });
         res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
     } catch (err) {

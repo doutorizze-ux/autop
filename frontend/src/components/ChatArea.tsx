@@ -16,6 +16,8 @@ interface Message {
   timestamp: number;
 }
 
+const normalizeContactKey = (value: string) => value.replace(/@s\.whatsapp\.net$/, '');
+
 export const ChatArea = () => {
     const [clients, setClients] = useState<Client[]>([]);
     const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -37,9 +39,10 @@ export const ChatArea = () => {
         fetchClients();
 
         socket.on('incoming_message', (data: any) => {
+            const contactKey = normalizeContactKey(data.from);
             setMessages(prev => ({
                 ...prev,
-                [data.from]: [...(prev[data.from] || []), {
+                [contactKey]: [...(prev[contactKey] || []), {
                     text: data.text,
                     fromMe: false,
                     timestamp: data.timestamp
@@ -48,9 +51,10 @@ export const ChatArea = () => {
         });
 
         socket.on('message_sent', (data: any) => {
+            const contactKey = normalizeContactKey(data.to);
             setMessages(prev => ({
                 ...prev,
-                [data.to]: [...(prev[data.to] || []), {
+                [contactKey]: [...(prev[contactKey] || []), {
                     text: data.text,
                     fromMe: true,
                     timestamp: data.timestamp
@@ -89,7 +93,7 @@ export const ChatArea = () => {
 
     const handleAIInterpret = async () => {
         if (!selectedClient) return;
-        const clientMessages = messages[selectedClient.phone] || [];
+        const clientMessages = messages[normalizeContactKey(selectedClient.phone)] || [];
         if (clientMessages.length === 0) return;
 
         const lastMessage = clientMessages[clientMessages.length - 1].text;
@@ -180,7 +184,7 @@ export const ChatArea = () => {
 
 
                         <div className="messages-area">
-                            {(messages[selectedClient.phone] || []).map((msg, idx) => (
+                            {(messages[normalizeContactKey(selectedClient.phone)] || []).map((msg, idx) => (
                                 <div key={idx} className={`message-wrapper ${msg.fromMe ? 'sent' : 'received'}`}>
                                     <div className="message-bubble">
                                         <p>{msg.text}</p>

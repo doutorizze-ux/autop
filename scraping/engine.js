@@ -1,354 +1,476 @@
+const fs = require('fs');
+const path = require('path');
 const { chromium } = require('playwright');
+const { resolveStrategy } = require('./suppliers');
+const { safeString, buildSelectorList } = require('./suppliers/shared');
 
-// Função auxiliar para conversão de preço
 function parsePrice(priceStr) {
     if (!priceStr) return 0;
-    const match = priceStr.match(/([0-9.,]+)/);
+    const match = String(priceStr).match(/([0-9.,]+)/);
     if (!match) return 0;
-    let clean = match[1].replace(/\./g, '').replace(',', '.');
+    const clean = match[1].replace(/\./g, '').replace(',', '.');
     return parseFloat(clean) || 0;
 }
 
-// Estratégias específicas por fornecedor
-const strategies = {
-    comdip: {
-        login: async (page, supplier) => {
-            console.error(`[DEBUG] Login COMDIP (CNPJ + Senha)`);
-            const cnpjSel = supplier.loginUserSelector || 'input[name*="cnpj"], input[placeholder*="cnpj" i], #Cnpj, #Login';
-            const passSel = supplier.loginPassSelector || 'input[type="password"]';
-            const submitSel = supplier.loginSubmitSelector || 'button:has-text("Entrar"), button:has-text("Login")';
+function ensureDirectory(dirPath) {
+    if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+    }
+}
 
-            await page.waitForSelector(cnpjSel, { state: 'visible' });
-            await page.locator(cnpjSel).first().fill(supplier.loginCredential.toString(), { force: true });
-            await page.locator(passSel).first().fill(supplier.password.toString(), { force: true });
-            await page.locator(submitSel).first().click({ force: true });
-        },
-        search: async (page, query) => {
-            const searchSel = 'input[type="search"], input[placeholder*="busca" i], .search-input';
-            await page.waitForSelector(searchSel, { state: 'visible' });
-            await page.locator(searchSel).first().fill(query);
-            await page.keyboard.press('Enter');
-        },
-        extract: async (page) => {
-            return await page.evaluate(() => {
-                const results = [];
-                // Resultados em grade
-                document.querySelectorAll('.product-card, .item-produto, .grid-item, article').forEach(el => {
-                    const text = el.innerText;
-                    if (!text.includes('R$')) return;
-                    
-                    const name = el.querySelector('.name, .title, h2, h3')?.innerText || text.split('\n')[0];
-                    const priceRaw = el.querySelector('.price, .valor, span:contains("R$")')?.innerText || text.match(/R\$\s?([0-9.,]+)/)?.[0];
-                    const code = el.querySelector('.code, .codigo, [data-code]')?.innerText || text.match(/(?:Cód|Código|Ref)[:\s]*([a-zA-Z0-9-]+)/i)?.[1] || "";
-                    const brand = el.querySelector('.brand, .marca')?.innerText || text.match(/(?:Marca)[:\s]*([a-zA-Z0-9]+)/i)?.[1] || "";
+function getSessionStatePath(supplier) {
+    const sessionsDir = path.join(__dirname, 'sessions');
+    ensureDirectory(sessionsDir);
 
-                    if (priceRaw) results.push({ nome: name.trim(), codigo: code.trim(), marca: brand.trim(), preco: priceRaw, estoque: 0 });
-                });
-                return results;
-            });
-        }
-    },
-    kaizen: {
-        login: async (page, supplier) => {
-            console.error(`[DEBUG] Login KAIZEN (CNPJ + Senha)`);
-            const cnpjSel = supplier.loginUserSelector || 'input[name*="cnpj"], input[placeholder*="cnpj" i]';
-            const passSel = supplier.loginPassSelector || 'input[type="password"]';
-            const submitSel = supplier.loginSubmitSelector || 'button:has-text("Entrar")';
+    const fileName = safeString(supplier.name)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
 
-            await page.waitForSelector(cnpjSel, { state: 'visible' });
-            await page.locator(cnpjSel).first().fill(supplier.loginCredential.toString());
-            await page.locator(passSel).first().fill(supplier.password.toString());
-            await page.locator(submitSel).first().click();
-        },
-        search: async (page, query) => {
-            const searchSel = 'input[placeholder*="código" i], input[placeholder*="descrição" i], input[type="text"]';
-            await page.waitForSelector(searchSel, { state: 'visible' });
-            await page.locator(searchSel).first().fill(query);
-            await page.keyboard.press('Enter');
-        },
-        extract: async (page) => {
-            return await page.evaluate(() => {
-                const results = [];
-                // Resultado em bloco
-                document.querySelectorAll('.bloco-produto, .product-block, .item').forEach(el => {
-                    const text = el.innerText;
-                    if (!text.includes('R$')) return;
-                    
-                    const name = el.querySelector('.nome, .descricao')?.innerText || text.split('\n')[0];
-                    const priceRaw = el.querySelector('.preco, .valor')?.innerText || text.match(/R\$\s?([0-9.,]+)/)?.[0];
-                    const code = text.match(/(?:Código|Cód)[:\s]*([a-zA-Z0-9-]+)/i)?.[1] || "";
-                    const brand = text.match(/(?:Marca)[:\s]*([a-zA-Z0-9]+)/i)?.[1] || "";
-                    const app = text.match(/(?:Aplicação)[:\s]*([^\n]+)/i)?.[1] || "";
+    return path.join(sessionsDir, `${fileName || 'supplier'}.json`);
+}
 
-                    if (priceRaw) results.push({ nome: name.trim(), codigo: code.trim(), marca: brand.trim(), aplicacao: app.trim(), preco: priceRaw, estoque: 0 });
-                });
-                return results;
-            });
-        }
-    },
-    rmp: {
-        login: async (page, supplier) => {
-            console.error(`[DEBUG] Login RMP (Usuário + Senha)`);
-            const userSel = supplier.loginUserSelector || 'input[name*="user"], input[name*="login"]';
-            const passSel = supplier.loginPassSelector || 'input[type="password"]';
-            
-            await page.waitForSelector(userSel, { state: 'visible' });
-            await page.locator(userSel).first().fill(supplier.loginCredential.toString());
-            await page.locator(passSel).first().fill(supplier.password.toString());
-            await page.keyboard.press('Enter');
-        },
-        search: async (page, query) => {
-            const searchSel = 'input[placeholder*="código" i], input[placeholder*="descrição" i], input.busca';
-            await page.waitForSelector(searchSel, { state: 'visible' });
-            await page.locator(searchSel).first().fill(query);
-            await page.keyboard.press('Enter');
-        },
-        extract: async (page) => {
-            return await page.evaluate(() => {
-                const results = [];
-                // Layout em lista com filtros laterais
-                document.querySelectorAll('.lista-item, tr, .product-list-item').forEach(el => {
-                    const text = el.innerText;
-                    if (!text.includes('R$')) return;
-                    
-                    const name = el.querySelector('.nome, h2')?.innerText || text.split('\n')[0];
-                    const priceRaw = el.querySelector('.preco, td.price')?.innerText || text.match(/R\$\s?([0-9.,]+)/)?.[0];
-                    const code = el.querySelector('.codigo')?.innerText || text.match(/(?:Código|Cód)[:\s]*([a-zA-Z0-9-]+)/i)?.[1] || "";
-                    const brand = el.querySelector('.marca')?.innerText || text.match(/(?:Marca)[:\s]*([a-zA-Z0-9]+)/i)?.[1] || "";
-                    const app = el.querySelector('.aplicacao')?.innerText || text.match(/(?:Aplicação)[:\s]*([^\n]+)/i)?.[1] || "";
+async function waitForAnyVisible(page, selectors, timeout = 15000) {
+    let lastError;
 
-                    if (priceRaw) results.push({ nome: name.trim(), codigo: code.trim(), marca: brand.trim(), aplicacao: app.trim(), preco: priceRaw, estoque: 0 });
-                });
-                return results;
-            });
-        }
-    },
-    sav: {
-        login: async (page, supplier) => {
-            console.error(`[DEBUG] Login SAV/FURAÇÃO (Usuário + Senha)`);
-            const userSel = supplier.loginUserSelector || '#username';
-            const passSel = supplier.loginPassSelector || '#password';
-            const extraSel = supplier.loginExtraSelector || '#f'; // Select de perfil
-            
-            await page.waitForSelector(userSel, { state: 'visible' });
-            if (supplier.loginExtraValue) {
-                try {
-                    await page.selectOption(extraSel, supplier.loginExtraValue.toString());
-                } catch(e) {}
-            }
-            await page.locator(userSel).first().fill(supplier.loginCredential.toString());
-            await page.locator(passSel).first().fill(supplier.password.toString());
-            await page.locator(supplier.loginSubmitSelector || 'button.btn-primary').first().click();
-        },
-        search: async (page, query) => {
-            const searchSel = '#gsearch, input[type="search"]';
-            await page.waitForSelector(searchSel, { state: 'visible' });
-            await page.locator(searchSel).first().fill(query);
-            await page.keyboard.press('Enter');
-        },
-        extract: async (page) => {
-            return await page.evaluate(() => {
-                const results = [];
-                // Resultados em cards
-                document.querySelectorAll('.product-box, .card').forEach(el => {
-                    const text = el.innerText;
-                    if (!text.includes('R$')) return;
-                    
-                    const name = el.querySelector('.product-title, .nome')?.innerText || text.split('\n')[0];
-                    const priceRaw = el.querySelector('.product-price, .preco')?.innerText || text.match(/R\$\s?([0-9.,]+)/)?.[0];
-                    const code = el.querySelector('.product-code')?.innerText || text.match(/(?:Código)[:\s]*([a-zA-Z0-9-]+)/i)?.[1] || "";
-                    const brand = el.querySelector('.product-brand')?.innerText || text.match(/(?:Marca)[:\s]*([a-zA-Z0-9]+)/i)?.[1] || "";
-                    const stock = text.match(/(?:Estoque|Qtd)[:\s]*([0-9]+)/i)?.[1] || "0";
-
-                    if (priceRaw) results.push({ nome: name.trim(), codigo: code.trim(), marca: brand.trim(), preco: priceRaw, estoque: parseInt(stock) });
-                });
-                return results;
-            });
-        }
-    },
-    sky: {
-        login: async (page, supplier) => {
-            console.error(`[DEBUG] Login SKY PEÇAS (CNPJ + Usuário + Senha)`);
-            const cnpjSel = supplier.loginExtraSelector || 'input[name*="cnpj"], input[placeholder*="cnpj" i]';
-            const userSel = supplier.loginUserSelector || 'input[name*="user"], input[name*="login"]';
-            const passSel = supplier.loginPassSelector || 'input[type="password"]';
-            
-            await page.waitForSelector(cnpjSel, { state: 'visible' });
-            await page.locator(cnpjSel).first().fill(supplier.loginExtraValue ? supplier.loginExtraValue.toString() : '');
-            await page.locator(userSel).first().fill(supplier.loginCredential.toString());
-            await page.locator(passSel).first().fill(supplier.password.toString());
-            await page.keyboard.press('Enter');
-        },
-        search: async (page, query) => {
-            const searchSel = 'input[placeholder*="código" i], input[placeholder*="descrição" i], input[placeholder*="veículo" i]';
-            await page.waitForSelector(searchSel, { state: 'visible' });
-            await page.locator(searchSel).first().fill(query);
-            await page.keyboard.press('Enter');
-        },
-        extract: async (page) => {
-            return await page.evaluate(() => {
-                const results = [];
-                // Resultados em lista horizontal
-                document.querySelectorAll('tr, .list-row, .horizontal-item').forEach(el => {
-                    const text = el.innerText;
-                    if (!text.includes('R$')) return;
-                    
-                    const name = el.querySelector('.nome, .descricao')?.innerText || text.split('\n')[0];
-                    const priceRaw = el.querySelector('.preco, .valor')?.innerText || text.match(/R\$\s?([0-9.,]+)/)?.[0];
-                    const code = el.querySelector('.codigo, .cod-fab')?.innerText || text.match(/(?:Cód\. Fáb|Código)[:\s]*([a-zA-Z0-9-]+)/i)?.[1] || "";
-                    const brand = el.querySelector('.marca')?.innerText || text.match(/(?:Marca)[:\s]*([a-zA-Z0-9]+)/i)?.[1] || "";
-                    const stock = text.match(/(?:Estoque|Disponível)[:\s]*([0-9]+)/i)?.[1] || "0";
-
-                    if (priceRaw) results.push({ nome: name.trim(), codigo: code.trim(), marca: brand.trim(), preco: priceRaw, estoque: parseInt(stock) });
-                });
-                return results;
-            });
+    for (const selector of selectors) {
+        try {
+            await page.locator(selector).first().waitFor({ state: 'visible', timeout });
+            return selector;
+        } catch (error) {
+            lastError = error;
         }
     }
-};
+
+    throw new Error(`Nenhum seletor visível encontrado. Tentados: ${selectors.join(' | ')}. ${lastError ? `Último erro: ${lastError.message}` : ''}`);
+}
+
+async function fillFirstVisible(page, selectors, value, options = {}) {
+    const selector = await waitForAnyVisible(page, selectors, options.timeout);
+    await page.locator(selector).first().fill(safeString(value), { force: true });
+    return selector;
+}
+
+async function clickFirstVisible(page, selectors, options = {}) {
+    const selector = await waitForAnyVisible(page, selectors, options.timeout);
+    await page.locator(selector).first().click({ force: true });
+    return selector;
+}
+
+async function dismissTransientUi(page) {
+    const dismissSelectors = [
+        'button:has-text("Aceitar")',
+        'button:has-text("Agora não")',
+        'button:has-text("Agora nao")',
+        'button:has-text("Permitir Cookies")',
+        'button:has-text("Fechar")',
+        '[aria-label="Close"]',
+        '.modal button.close',
+    ];
+
+    for (const selector of dismissSelectors) {
+        try {
+            const locator = page.locator(selector).first();
+            if (await locator.isVisible({ timeout: 1000 }).catch(() => false)) {
+                await locator.click({ force: true, timeout: 1000 }).catch(() => {});
+            }
+        } catch (_) {}
+    }
+}
+
+async function setCheckboxState(page, selectors, checked) {
+    for (const selector of selectors) {
+        try {
+            const locator = page.locator(selector).first();
+            await locator.waitFor({ state: 'visible', timeout: 2000 });
+            const current = await locator.isChecked().catch(() => null);
+            if (current !== null && current !== checked) {
+                await locator.click({ force: true });
+            }
+            return true;
+        } catch (_) {}
+    }
+    return false;
+}
+
+async function submitLogin(page, supplier, fallbackSelectors = []) {
+    const selectors = buildSelectorList(
+        supplier.loginSubmitSelector,
+        fallbackSelectors,
+        [
+            'button[type="submit"]',
+            'input[type="submit"]',
+            'button:has-text("Entrar")',
+            'button:has-text("Login")',
+        ]
+    );
+
+    try {
+        await clickFirstVisible(page, selectors, { timeout: 8000 });
+    } catch (_) {
+        await page.keyboard.press('Enter');
+    }
+}
+
+async function runGenericLogin(page, supplier, strategy = {}) {
+    const extraSelectors = buildSelectorList(
+        supplier.loginExtraSelector,
+        strategy.extraSelector,
+        ['select', 'input[name*="cnpj" i]', 'input[placeholder*="cnpj" i]']
+    );
+    const userSelectors = buildSelectorList(
+        supplier.loginUserSelector,
+        strategy.userSelector,
+        [
+            'input[type="email"]',
+            'input[name*="user" i]',
+            'input[name*="login" i]',
+            'input[name*="cnpj" i]',
+            'input[placeholder*="email" i]',
+            'input[placeholder*="usu" i]',
+            'input[placeholder*="cnpj" i]',
+            'input:not([type="hidden"]):not([type="password"])',
+        ]
+    );
+    const passSelectors = buildSelectorList(
+        supplier.loginPassSelector,
+        strategy.passSelector,
+        ['input[type="password"]']
+    );
+
+    if (supplier.loginExtraValue) {
+        for (const selector of extraSelectors) {
+            try {
+                const locator = page.locator(selector).first();
+                await locator.waitFor({ state: 'visible', timeout: 4000 });
+
+                const tagName = await locator.evaluate((el) => el.tagName.toLowerCase());
+                if (tagName === 'select') {
+                    await locator.selectOption(safeString(supplier.loginExtraValue));
+                } else {
+                    await locator.fill(safeString(supplier.loginExtraValue), { force: true });
+                }
+                break;
+            } catch (_) {}
+        }
+    }
+
+    if (strategy.beforeLogin) {
+        await strategy.beforeLogin({
+            page,
+            supplier,
+            dismissTransientUi: () => dismissTransientUi(page),
+            setCheckboxState: (selectors, checked) => setCheckboxState(page, selectors, checked),
+        });
+    }
+
+    const loginValue = supplier.loginCredential || supplier.loginExtraValue;
+    if (!loginValue) {
+        throw new Error('Fornecedor sem credencial de login configurada.');
+    }
+
+    await fillFirstVisible(page, userSelectors, loginValue);
+    await fillFirstVisible(page, passSelectors, supplier.password || '');
+    await submitLogin(page, supplier, strategy.submitSelector);
+}
+
+async function performSearch(page, supplier, query, strategy = {}) {
+    const searchSelectors = buildSelectorList(
+        supplier.searchBarSelector,
+        strategy.searchSelector,
+        [
+            'input[type="search"]',
+            'input[placeholder*="busca" i]',
+            'input[placeholder*="código" i]',
+            'input[placeholder*="codigo" i]',
+            'input[placeholder*="descrição" i]',
+            'input[placeholder*="descricao" i]',
+            'input[placeholder*="produto" i]',
+            'input[placeholder*="peça" i]',
+            'input[placeholder*="peca" i]',
+            'input:not([type="hidden"]):not([type="password"])',
+        ]
+    );
+    const searchButtonSelectors = buildSelectorList(
+        supplier.searchBtnSelector,
+        strategy.searchButtonSelector,
+        [
+            'button[type="submit"]',
+            'button:has-text("Buscar")',
+            'button:has-text("Pesquisar")',
+            '.search-btn',
+        ]
+    );
+
+    const selector = await waitForAnyVisible(page, searchSelectors, 15000);
+    const input = page.locator(selector).first();
+    await input.click({ force: true }).catch(() => {});
+    await input.press('Control+A').catch(() => {});
+    await input.fill('');
+    await input.fill(query, { force: true });
+
+    try {
+        await clickFirstVisible(page, searchButtonSelectors, { timeout: 3000 });
+    } catch (_) {
+        await input.press('Enter');
+    }
+}
+
+function buildBrowserPayload(items, supplier) {
+    return items.map((item) => ({
+        provider: supplier.name,
+        product: safeString(item.nome || item.name || item.product),
+        price: parsePrice(item.preco || item.price),
+        available: true,
+        link: safeString(item.link || supplier.url),
+        code: safeString(item.codigo || item.code),
+        brand: safeString(item.marca || item.brand),
+        application: safeString(item.aplicacao || item.application),
+        stock: parseInt(item.estoque || item.stock || 0, 10) || 0,
+    })).filter((item) => item.price > 0);
+}
+
+async function extractWithConfiguredSelectors(page, supplier) {
+    const selectors = buildSelectorList(
+        supplier.itemContainerSelector,
+        ['.product-card', '.produto', '.item', 'article', 'tr']
+    );
+    const nameSelectors = buildSelectorList(
+        supplier.productNameSelector,
+        ['.name', '.nome', '.title', '.titulo', 'h2', 'h3', 'td']
+    );
+    const priceSelectors = buildSelectorList(
+        supplier.priceSelector,
+        ['.price', '.preco', '.valor', '[class*="price"]', '[class*="preco"]', '[class*="valor"]']
+    );
+    const stockSelectors = buildSelectorList(
+        supplier.availableSelector,
+        ['.stock', '.estoque', '.available', '.disponivel']
+    );
+
+    return page.evaluate(({ selectors, nameSelectors, priceSelectors, stockSelectors }) => {
+        const tryText = (root, candidates) => {
+            for (const candidate of candidates) {
+                try {
+                    const node = root.querySelector(candidate);
+                    if (node && node.textContent) {
+                        const text = node.textContent.trim();
+                        if (text) return text;
+                    }
+                } catch (_) {}
+            }
+            return '';
+        };
+
+        const elements = [];
+        for (const selector of selectors) {
+            try {
+                const found = Array.from(document.querySelectorAll(selector));
+                if (found.length) {
+                    elements.push(...found);
+                    break;
+                }
+            } catch (_) {}
+        }
+
+        const uniqueElements = Array.from(new Set(elements));
+        return uniqueElements.map((el) => {
+            const text = (el.textContent || '').trim();
+            const nome = tryText(el, nameSelectors) || text.split('\n')[0] || '';
+            const preco = tryText(el, priceSelectors) || (text.match(/R\$\s?[0-9.,]+/) || [''])[0];
+            const estoqueTexto = tryText(el, stockSelectors) || '';
+            const codigo = (text.match(/(?:Cód(?:igo)?|Cod(?:igo)?|Ref)[:\s]*([A-Za-z0-9.-]+)/i) || [null, ''])[1];
+            const marca = (text.match(/(?:Marca)[:\s]*([^\n]+)/i) || [null, ''])[1];
+            const aplicacao = (text.match(/(?:Aplicação|Aplicacao)[:\s]*([^\n]+)/i) || [null, ''])[1];
+            const estoque = (estoqueTexto.match(/[0-9]+/) || ['0'])[0];
+            const linkNode = el.querySelector('a[href]');
+            const link = linkNode ? linkNode.href : '';
+
+            return {
+                nome,
+                preco,
+                codigo,
+                marca,
+                aplicacao,
+                estoque,
+                link,
+            };
+        }).filter((item) => item.preco);
+    }, { selectors, nameSelectors, priceSelectors, stockSelectors });
+}
+
+async function extractGeneric(page) {
+    return page.evaluate(() => {
+        const results = [];
+        const elements = Array.from(document.querySelectorAll('tr, .product-card, .produto, .item, article, .card'));
+
+        for (const el of elements) {
+            const text = (el.textContent || '').trim();
+            const priceMatch = text.match(/R\$\s?[0-9.,]+/);
+            if (!priceMatch) continue;
+
+            const firstLine = text.split('\n').map((line) => line.trim()).find(Boolean) || '';
+            const linkNode = el.querySelector('a[href]');
+
+            results.push({
+                nome: firstLine,
+                preco: priceMatch[0],
+                codigo: (text.match(/(?:Cód(?:igo)?|Cod(?:igo)?|Ref)[:\s]*([A-Za-z0-9.-]+)/i) || [null, ''])[1],
+                marca: (text.match(/(?:Marca)[:\s]*([^\n]+)/i) || [null, ''])[1],
+                aplicacao: (text.match(/(?:Aplicação|Aplicacao)[:\s]*([^\n]+)/i) || [null, ''])[1],
+                estoque: (text.match(/(?:Estoque|Qtd|Disponível|Disponivel)[:\s]*([0-9]+)/i) || [null, '0'])[1],
+                link: linkNode ? linkNode.href : '',
+            });
+        }
+
+        return results;
+    });
+}
+
+async function ensureLoggedIn(page, loginUrl) {
+    const passwordVisible = await page.locator('input[type="password"]').first().isVisible().catch(() => false);
+    const currentUrl = safeString(page.url());
+    const stillOnLoginPage = currentUrl.includes('login') || currentUrl === safeString(loginUrl);
+
+    if (passwordVisible && stillOnLoginPage) {
+        throw new Error('Falha no login: credenciais recusadas ou bloqueio de modal.');
+    }
+}
+
+async function resetForNextSearch(page, supplier) {
+    const targetUrl = supplier.searchUrl || supplier.url;
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+    await page.waitForTimeout(1500);
+}
+
+async function createContext(browser, supplier) {
+    const sessionStatePath = getSessionStatePath(supplier);
+    const contextOptions = {
+        viewport: { width: 1920, height: 1080 },
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        locale: 'pt-BR',
+        ignoreHTTPSErrors: true,
+    };
+
+    if (fs.existsSync(sessionStatePath)) {
+        contextOptions.storageState = sessionStatePath;
+    }
+
+    const context = await browser.newContext(contextOptions);
+    return { context, sessionStatePath };
+}
+
+async function persistSession(context, supplier, shouldPersist) {
+    if (!shouldPersist || !supplier.needsLogin) {
+        return;
+    }
+
+    const sessionStatePath = getSessionStatePath(supplier);
+    await context.storageState({ path: sessionStatePath });
+}
 
 async function scrapeProduct(supplier, productName) {
     const browser = await chromium.launch({
         headless: process.env.HEADLESS !== 'false',
         args: [
-            '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas', '--disable-gpu', '--no-first-run',
-            '--no-zygote', '--single-process', '--window-size=1920,1080'
-        ]
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--disable-gpu',
+            '--no-first-run',
+            '--no-zygote',
+            '--window-size=1920,1080',
+        ],
     });
 
-    const context = await browser.newContext({
-        viewport: { width: 1920, height: 1080 },
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-        locale: 'pt-BR'
-    });
-
+    const { context } = await createContext(browser, supplier);
     const page = await context.newPage();
-    page.setDefaultTimeout(40000); 
+    page.setDefaultTimeout(40000);
 
     try {
         console.error(`[DEBUG] Iniciando scraping para: ${supplier.name}`);
-        
-        const sName = supplier.name.toLowerCase();
-        let strategyKey = null;
-        if (sName.includes('comdip')) strategyKey = 'comdip';
-        else if (sName.includes('kaizen')) strategyKey = 'kaizen';
-        else if (sName.includes('rmp')) strategyKey = 'rmp';
-        else if (sName.includes('furacao') || sName.includes('sav')) strategyKey = 'sav';
-        else if (sName.includes('sky')) strategyKey = 'sky';
+        const strategy = resolveStrategy(supplier.name);
 
-        // 1. NAVEGAÇÃO E LOGIN
         const loginUrl = supplier.loginUrl || supplier.url;
         await page.goto(loginUrl, { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(2000);
+        await dismissTransientUi(page);
+
+        let didLoginThisRun = false;
 
         if (supplier.needsLogin) {
-            if (strategyKey && strategies[strategyKey].login) {
-                await strategies[strategyKey].login(page, supplier);
-            } else {
-                // Fallback de login
-                const userSel = supplier.loginUserSelector || 'input[type="email"], input[name*="user"], input[name*="login"]';
-                const passSel = supplier.loginPassSelector || 'input[type="password"]';
-                await page.waitForSelector(userSel, { state: 'visible' });
-                await page.locator(userSel).first().fill(supplier.loginCredential.toString());
-                await page.locator(passSel).first().fill(supplier.password.toString());
-                await page.keyboard.press('Enter');
+            const alreadyLogged = !(await page.locator('input[type="password"]').first().isVisible().catch(() => false));
+
+            if (!alreadyLogged) {
+                await runGenericLogin(page, supplier, strategy);
+                didLoginThisRun = true;
             }
 
             await page.waitForLoadState('networkidle').catch(() => {});
             await page.waitForTimeout(3000);
-            
-            if (page.url().includes('login') || page.url() === loginUrl) {
-                const passVisible = await page.isVisible('input[type="password"]').catch(()=>false);
-                if (passVisible) throw new Error("Falha no login: credenciais recusadas ou bloqueio de modal.");
-            }
+            await dismissTransientUi(page);
+            await ensureLoggedIn(page, loginUrl);
+            await persistSession(context, supplier, didLoginThisRun);
         }
 
-        // Determinar queries de busca: tentar Código e depois Nome
-        // O backend passa productName que pode ser o código ou nome. Tentaremos a query diretamente.
-        // Se a query falhar ou retornar zero, tentamos uma variação caso seja JSON (ex: {code, name})
         let queries = [productName];
         try {
             const parsed = JSON.parse(productName);
             if (parsed.codigo && parsed.nome) {
                 queries = [parsed.codigo, parsed.nome];
             }
-        } catch(e) {}
+        } catch (_) {}
 
         let finalItems = [];
 
         for (const query of queries) {
             console.error(`[DEBUG] Buscando por: ${query}`);
-            
-            // 2. BUSCA
-            if (strategyKey && strategies[strategyKey].search) {
-                await strategies[strategyKey].search(page, query);
-            } else {
-                // Fallback busca
-                const searchSel = supplier.searchBarSelector || 'input[type="search"], input[type="text"]';
-                await page.waitForSelector(searchSel, { state: 'visible' });
-                await page.locator(searchSel).first().fill(query);
-                await page.keyboard.press('Enter');
+
+            if (supplier.searchUrl) {
+                await page.goto(supplier.searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+                await page.waitForTimeout(1000);
             }
 
-            await page.waitForLoadState('networkidle');
-            await page.waitForTimeout(3000); // Aguarda renderização DOM
+            await performSearch(page, supplier, query, strategy);
+            await page.waitForLoadState('networkidle').catch(() => {});
+            await page.waitForTimeout(3000);
+            await dismissTransientUi(page);
 
-            // 3. EXTRAÇÃO
-            console.error(`[DEBUG] Extraindo itens...`);
             let items = [];
-            if (strategyKey && strategies[strategyKey].extract) {
-                items = await strategies[strategyKey].extract(page);
-            } else {
-                // Fallback extração genérica
-                items = await page.evaluate(() => {
-                    const res = [];
-                    document.querySelectorAll('tr, .product-card, .item').forEach(el => {
-                        const t = el.innerText;
-                        if (!t.includes('R$')) return;
-                        const match = t.match(/R\$\s?([0-9.,]+)/);
-                        if (match) res.push({ nome: t.split('\n')[0], preco: match[0], codigo: "", marca: "", estoque: 0 });
-                    });
-                    return res;
-                });
+            if (supplier.itemContainerSelector || supplier.productNameSelector || supplier.priceSelector) {
+                items = await extractWithConfiguredSelectors(page, supplier);
             }
 
-            // Converter precos e limpar
-            items = items.map(i => {
-                return {
-                    fornecedor: supplier.name,
-                    nome: i.nome,
-                    codigo: i.codigo || "",
-                    marca: i.marca || "",
-                    preco: parsePrice(i.preco),
-                    estoque: parseInt(i.estoque) || 0,
-                    aplicacao: i.aplicacao || ""
-                };
-            }).filter(i => i.preco > 0);
-
-            if (items.length > 0) {
-                finalItems = items;
-                break; // Achou pelo código, não precisa tentar o nome
-            } else {
-                console.error(`[DEBUG] Nenhum resultado para "${query}". Tentando próxima query se houver.`);
-                // Limpar busca antes de tentar a próxima
-                await page.goto(supplier.searchUrl || page.url(), { waitUntil: 'domcontentloaded' }).catch(()=>{});
+            if (!items.length) {
+                items = await extractGeneric(page);
             }
+
+            finalItems = buildBrowserPayload(items, supplier);
+
+            if (finalItems.length > 0) {
+                break;
+            }
+
+            console.error(`[DEBUG] Nenhum resultado para "${query}". Tentando próxima query se houver.`);
+            await resetForNextSearch(page, supplier);
         }
 
-        if (finalItems.length === 0) {
-            throw new Error("Nenhum produto encontrado.");
+        if (!finalItems.length) {
+            throw new Error('Nenhum produto encontrado.');
         }
 
         return finalItems;
-
     } catch (error) {
         console.error(`[ERROR] ${error.message}`);
         return {
-            fornecedor: supplier.name,
-            error: error.message
+            provider: supplier.name,
+            error: error.message,
         };
     } finally {
+        await context.close().catch(() => {});
         await browser.close().catch(() => {});
     }
 }
