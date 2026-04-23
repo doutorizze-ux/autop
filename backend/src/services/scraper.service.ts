@@ -19,7 +19,7 @@ export class ScraperService {
                     const supplierJson = Buffer.from(JSON.stringify(supplier)).toString('base64');
                     const command = `node run-search.js --base64 "${supplierJson}" "${productName}"`;
 
-                    exec(command, { cwd: scrapingPath, timeout: 90000 }, (error, stdout) => {
+                    exec(command, { cwd: scrapingPath, timeout: 90000 }, (error, stdout, stderr) => {
                         let finalErrorMsg = 'Falha desconhecida no Scraper.';
 
                         if (stdout) {
@@ -64,6 +64,10 @@ export class ScraperService {
                                 console.log('[ScraperService] JSON parse error:', parseError, 'STDOUT:', stdout);
                                 finalErrorMsg = 'Erro de comunicação com o robô.';
                             }
+                        }
+
+                        if (stderr?.trim()) {
+                            console.error(`[Scraper STDERR] ${supplier.name}: ${stderr.trim()}`);
                         }
 
                         if (error) {
