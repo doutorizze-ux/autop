@@ -360,6 +360,17 @@ async function runGenericLogin(page, supplier, strategy = {}) {
 }
 
 async function performSearch(page, supplier, query, strategy = {}) {
+    if (strategy.performSearch) {
+        await strategy.performSearch({
+            page,
+            supplier,
+            query,
+            fillVisibleLocator,
+            dismissTransientUi: () => dismissTransientUi(page),
+        });
+        return;
+    }
+
     if (strategy.buildSearchUrl) {
         const directUrl = strategy.buildSearchUrl(query, supplier);
         if (directUrl) {
@@ -786,11 +797,15 @@ async function scrapeProduct(supplier, productName) {
             await dismissTransientUi(page);
 
             let items = [];
+            if (strategy.extractItems) {
+                items = await strategy.extractItems({ page, supplier });
+            }
+
             if (
                 supplier.itemContainerSelector || supplier.productNameSelector || supplier.priceSelector
                 || strategy.itemContainerSelector || strategy.productNameSelector || strategy.priceSelector
             ) {
-                items = await extractWithConfiguredSelectors(page, supplier, strategy);
+                items = items.length ? items : await extractWithConfiguredSelectors(page, supplier, strategy);
             }
 
             if (!items.length) {
