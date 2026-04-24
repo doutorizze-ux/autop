@@ -1,6 +1,7 @@
 module.exports = {
     key: 'sky',
     matches: (supplierName) => supplierName.includes('sky'),
+    authenticatedUrl: 'https://cliente.skypecas.com.br/',
     extraSelector: ['input[name*="cnpj" i]', 'input[placeholder*="cnpj" i]'],
     userSelector: ['input[name*="user" i]', 'input[name*="login" i]', 'input[placeholder*="e-mail" i]', 'input[placeholder*="email" i]', 'input[type="text"]'],
     passSelector: ['input[type="password"]'],

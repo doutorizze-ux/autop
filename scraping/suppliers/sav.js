@@ -1,6 +1,7 @@
 module.exports = {
     key: 'sav',
     matches: (supplierName) => supplierName.includes('furacao') || supplierName.includes('furação') || supplierName.includes('sav'),
+    authenticatedUrl: 'https://vendas.furacao.com.br/vendas/sav/produtos',
     userSelector: ['#username', 'input[name*="user" i]'],
     passSelector: ['#password', 'input[type="password"]'],
     extraSelector: ['#f'],

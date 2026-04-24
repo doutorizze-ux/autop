@@ -524,6 +524,14 @@ async function isAnySelectorVisible(page, selectors, timeout = 2500) {
     return false;
 }
 
+function resolveAuthenticatedUrl(strategy = {}, supplier, loginUrl) {
+    if (typeof strategy.authenticatedUrl === 'function') {
+        return safeString(strategy.authenticatedUrl(supplier, loginUrl));
+    }
+
+    return safeString(strategy.authenticatedUrl || supplier.searchUrl || supplier.url || loginUrl);
+}
+
 async function ensureLoggedIn(page, loginUrl, supplier, strategy = {}) {
     const explicitSuccessSelectors = buildSelectorList(strategy.loginSuccessSelector);
     const fallbackSuccessSelectors = buildSelectorList(
@@ -549,6 +557,10 @@ async function ensureLoggedIn(page, loginUrl, supplier, strategy = {}) {
     const stillOnLoginPage = currentUrl.includes('login') || normalizedCurrentUrl === normalizedLoginUrl;
 
     if (passwordVisible && stillOnLoginPage) {
+        if (safeString(supplier.sessionData)) {
+            throw new Error('Sessao manual invalida ou expirada. Gere novos cookies na area ja autenticada do portal.');
+        }
+
         throw new Error('Falha no login: credenciais recusadas ou bloqueio de modal.');
     }
 }
@@ -646,7 +658,7 @@ async function scrapeProduct(supplier, productName) {
 
         const loginUrl = supplier.loginUrl || supplier.url;
         const initialUrl = hasPreloadedSession
-            ? (supplier.searchUrl || supplier.url || loginUrl)
+            ? resolveAuthenticatedUrl(strategy, supplier, loginUrl)
             : loginUrl;
 
         await page.goto(initialUrl, { waitUntil: 'domcontentloaded' });
@@ -656,9 +668,21 @@ async function scrapeProduct(supplier, productName) {
         let didLoginThisRun = false;
 
         if (supplier.needsLogin) {
-            const alreadyLogged = !(await page.locator('input[type="password"]').first().isVisible().catch(() => false));
+            const alreadyLogged = await isAnySelectorVisible(
+                page,
+                buildSelectorList(
+                    strategy.loginSuccessSelector,
+                    supplier.searchBarSelector,
+                    strategy.searchSelector
+                ),
+                3000
+            );
 
             if (!alreadyLogged) {
+                if (hasPreloadedSession) {
+                    throw new Error('Sessao manual invalida ou expirada. Gere novos cookies na area ja autenticada do portal.');
+                }
+
                 const preLoginUrl = page.url();
                 await runGenericLogin(page, supplier, strategy);
                 didLoginThisRun = true;

@@ -1,6 +1,7 @@
 module.exports = {
     key: 'comdip',
     matches: (supplierName) => supplierName.includes('comdip'),
+    authenticatedUrl: 'https://portalcomdip.com.br/comdip/compras',
     userSelector: ['input[name*="cnpj" i]', 'input[placeholder*="cnpj" i]', '#Cnpj', '#Login'],
     passSelector: ['input[id="pass"]', 'input[type="password"]'],
     submitSelector: ['button:has-text("Entrar")', 'button:has-text("Login")', 'button.btn-success'],

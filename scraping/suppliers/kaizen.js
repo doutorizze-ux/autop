@@ -1,6 +1,7 @@
 module.exports = {
     key: 'kaizen',
     matches: (supplierName) => supplierName.includes('kaizen'),
+    authenticatedUrl: 'https://portal.kaizenautopecas.com.br/principal',
     userSelector: ['input[name*="cnpj" i]', 'input[placeholder*="cnpj" i]'],
     passSelector: ['input[type="password"]'],
     submitSelector: ['button:has-text("Entrar")', 'button[type="submit"]'],
