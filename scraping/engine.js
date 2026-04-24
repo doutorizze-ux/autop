@@ -747,6 +747,37 @@ async function scrapeProduct(supplier, productName) {
             await persistSession(context, supplier, didLoginThisRun);
         }
 
+        const authenticatedTargetUrl = resolveAuthenticatedUrl(strategy, supplier, loginUrl);
+        const normalizedAuthenticatedTarget = safeString(authenticatedTargetUrl).replace(/\/+$/, '');
+        const normalizedCurrentUrl = safeString(page.url()).replace(/\/+$/, '');
+        const searchReadySelectors = buildSelectorList(strategy.searchSelector, supplier.searchBarSelector);
+        const searchReady = searchReadySelectors.length
+            ? await isAnySelectorVisible(page, searchReadySelectors, 1500)
+            : false;
+
+        if (
+            supplier.needsLogin
+            && normalizedAuthenticatedTarget
+            && (
+                strategy.navigateToAuthenticatedAfterLogin
+                || !searchReady
+            )
+            && normalizedCurrentUrl !== normalizedAuthenticatedTarget
+        ) {
+            await page.goto(authenticatedTargetUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+            await waitForPageSettle(
+                page,
+                buildSelectorList(
+                    strategy.searchSelector,
+                    supplier.searchBarSelector,
+                    strategy.itemContainerSelector,
+                    strategy.loginSuccessSelector
+                ),
+                { timeout: 12000, settleMs: 1500, previousUrl: normalizedCurrentUrl }
+            );
+            await dismissTransientUi(page);
+        }
+
         let queries = buildSearchQueries(productName);
         try {
             const parsed = JSON.parse(productName);

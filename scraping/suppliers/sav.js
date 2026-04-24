@@ -14,6 +14,7 @@ module.exports = {
     availableSelector: ['.estoque'],
     preferStrategySelectors: true,
     submitSearchWithEnter: true,
+    navigateToAuthenticatedAfterLogin: true,
     waitForResultsOnly: true,
     emptyResultSelector: ['text=Nenhum registro'],
     performSearch: async ({ page, query, fillVisibleLocator, dismissTransientUi }) => {
