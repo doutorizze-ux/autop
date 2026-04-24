@@ -11,7 +11,7 @@ module.exports = {
     fillLogin: async ({ page, supplier, fillVisibleLocator, dismissTransientUi }) => {
         await dismissTransientUi();
 
-        const desiredProfile = String(supplier.loginExtraValue || 'Cliente').trim().toLowerCase();
+        const desiredProfile = String(supplier.loginExtraValue || 'Cliente').trim();
         const profileSelect = page.locator('#f, select').first();
         const profileVisible = await profileSelect.isVisible().catch(() => false);
 
@@ -47,27 +47,35 @@ module.exports = {
             }, desiredProfile).catch(() => '');
 
             if (selectedValue) {
+                await profileSelect.selectOption(selectedValue).catch(() => {});
                 await page.waitForTimeout(300);
             }
         }
 
-        const textInputs = page.locator('input:not([type="hidden"]):not([type="password"])');
-        const passwordField = page.locator('input[type="password"]').first();
-        const textCount = await textInputs.count();
+        const usernameCandidates = [
+            page.locator('#username').first(),
+            page.locator('input[name*="user" i]').first(),
+            page.locator('input:not([type="hidden"]):not([type="password"])').first(),
+        ];
+        const passwordCandidates = [
+            page.locator('#password').first(),
+            page.locator('input[type="password"]').first(),
+        ];
 
-        for (let index = 0; index < textCount; index += 1) {
-            const current = textInputs.nth(index);
+        for (const current of usernameCandidates) {
             const isVisible = await current.isVisible().catch(() => false);
-            if (!isVisible) {
-                continue;
+            if (isVisible) {
+                await fillVisibleLocator(current, supplier.loginCredential || '');
+                break;
             }
-
-            await fillVisibleLocator(current, supplier.loginCredential || supplier.loginExtraValue || '');
-            break;
         }
 
-        if (await passwordField.isVisible().catch(() => false)) {
-            await fillVisibleLocator(passwordField, supplier.password || '');
+        for (const current of passwordCandidates) {
+            const isVisible = await current.isVisible().catch(() => false);
+            if (isVisible) {
+                await fillVisibleLocator(current, supplier.password || '');
+                break;
+            }
         }
     },
 };
