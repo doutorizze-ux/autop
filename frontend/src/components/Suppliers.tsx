@@ -33,6 +33,11 @@ interface SupplierTestResult {
   available: boolean;
   link?: string;
   error?: string;
+  debug?: {
+    finalUrl?: string;
+    pageTitle?: string;
+    bodySnippet?: string;
+  };
 }
 
 export const Suppliers = () => {
@@ -379,6 +384,36 @@ export const Suppliers = () => {
                                 <p style={{ marginBottom: '0.4rem' }}>Produto: {testResult.product}</p>
                                 {!testResult.error && <p style={{ marginBottom: '0.4rem' }}>Preco: {testResult.price}</p>}
                                 {testResult.error && <p style={{ color: '#d92d20' }}>{testResult.error}</p>}
+                                {testResult.debug?.finalUrl && (
+                                    <p style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>
+                                        <strong>URL final:</strong> {testResult.debug.finalUrl}
+                                    </p>
+                                )}
+                                {testResult.debug?.pageTitle && (
+                                    <p style={{ marginTop: '0.3rem', fontSize: '0.85rem' }}>
+                                        <strong>Titulo:</strong> {testResult.debug.pageTitle}
+                                    </p>
+                                )}
+                                {testResult.debug?.bodySnippet && (
+                                    <div style={{ marginTop: '0.6rem' }}>
+                                        <p style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.35rem' }}>Texto visivel:</p>
+                                        <div
+                                            style={{
+                                                fontSize: '0.8rem',
+                                                lineHeight: 1.45,
+                                                color: 'var(--text-muted)',
+                                                background: 'rgba(0, 0, 0, 0.03)',
+                                                borderRadius: '6px',
+                                                padding: '0.65rem',
+                                                maxHeight: '120px',
+                                                overflowY: 'auto',
+                                                whiteSpace: 'pre-wrap',
+                                            }}
+                                        >
+                                            {testResult.debug.bodySnippet}
+                                        </div>
+                                    </div>
+                                )}
                                 {testResult.link && (
                                     <a href={testResult.link} target="_blank" rel="noreferrer" className="visit-link">
                                         <span>Abrir resultado</span>

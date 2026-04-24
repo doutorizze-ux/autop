@@ -12,6 +12,7 @@ function runSupplierSearch(supplier: any, productName: string) {
 
         exec(command, { cwd: scrapingPath, timeout: 120000, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
             let finalErrorMsg = 'Falha desconhecida no Scraper.';
+            let debugData: any = null;
             const trimmedStdout = stdout?.trim();
             const trimmedStderr = stderr?.trim();
 
@@ -48,6 +49,7 @@ function runSupplierSearch(supplier: any, productName: string) {
 
                         if (data.error) {
                             finalErrorMsg = `Erro do Bot: ${data.error}`;
+                            debugData = data.debug || null;
                         } else {
                             finalErrorMsg = 'Nenhum produto encontrado.';
                         }
@@ -80,6 +82,7 @@ function runSupplierSearch(supplier: any, productName: string) {
                 error: finalErrorMsg,
                 link: supplier.url,
                 available: false,
+                debug: debugData,
             });
         });
     });

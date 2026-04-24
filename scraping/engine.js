@@ -643,6 +643,20 @@ async function persistSession(context, supplier, shouldPersist) {
     await context.storageState({ path: sessionStatePath });
 }
 
+async function captureDebugState(page) {
+    const finalUrl = safeString(page.url());
+    const pageTitle = safeString(await page.title().catch(() => ''));
+    const bodyText = safeString(
+        await page.locator('body').innerText().catch(() => '')
+    ).replace(/\s+/g, ' ');
+
+    return {
+        finalUrl,
+        pageTitle,
+        bodySnippet: bodyText.slice(0, 1000),
+    };
+}
+
 async function scrapeProduct(supplier, productName) {
     const browser = await chromium.launch({
         headless: process.env.HEADLESS !== 'false',
@@ -770,6 +784,11 @@ async function scrapeProduct(supplier, productName) {
         return finalItems;
     } catch (error) {
         await page.screenshot({ path: path.join(__dirname, 'debug_error.png'), fullPage: true }).catch(() => {});
+        const debug = await captureDebugState(page).catch(() => ({
+            finalUrl: safeString(page.url()),
+            pageTitle: '',
+            bodySnippet: '',
+        }));
         let errorMessage = error.message;
 
         if (
@@ -787,9 +806,13 @@ async function scrapeProduct(supplier, productName) {
         }
 
         console.error(`[ERROR] ${errorMessage}`);
+        if (debug.finalUrl || debug.pageTitle || debug.bodySnippet) {
+            console.error(`[DEBUG PAGE] url=${debug.finalUrl} title=${debug.pageTitle} snippet=${debug.bodySnippet}`);
+        }
         return {
             provider: supplier.name,
             error: errorMessage,
+            debug,
         };
     } finally {
         await context.close().catch(() => {});
