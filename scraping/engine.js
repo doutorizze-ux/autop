@@ -185,7 +185,7 @@ async function waitForPageSettle(page, selectors = [], options = {}) {
     await page.waitForTimeout(settleMs);
 }
 
-async function waitForLoginCompletion(page, previousUrl, loginUrl, supplier, strategy = {}) {
+async function waitForLoginCompletion(page, previousUrl, loginUrl, supplier, strategy = {}, options = {}) {
     const explicitSuccessSelectors = buildSelectorList(strategy.loginSuccessSelector);
     const successSelectors = explicitSuccessSelectors.length
         ? explicitSuccessSelectors
@@ -198,7 +198,7 @@ async function waitForLoginCompletion(page, previousUrl, loginUrl, supplier, str
     });
 
     await dismissTransientUi(page);
-    await ensureLoggedIn(page, loginUrl, supplier, strategy);
+    await ensureLoggedIn(page, loginUrl, supplier, strategy, options);
 }
 
 function buildSearchQueries(productName) {
@@ -541,7 +541,7 @@ function resolveAuthenticatedUrl(strategy = {}, supplier, loginUrl) {
     return safeString(strategy.authenticatedUrl || supplier.searchUrl || supplier.url || loginUrl);
 }
 
-async function ensureLoggedIn(page, loginUrl, supplier, strategy = {}) {
+async function ensureLoggedIn(page, loginUrl, supplier, strategy = {}, options = {}) {
     const explicitSuccessSelectors = buildSelectorList(strategy.loginSuccessSelector);
     const fallbackSuccessSelectors = buildSelectorList(
         supplier.searchBarSelector,
@@ -566,7 +566,7 @@ async function ensureLoggedIn(page, loginUrl, supplier, strategy = {}) {
     const stillOnLoginPage = currentUrl.includes('login') || normalizedCurrentUrl === normalizedLoginUrl;
 
     if (passwordVisible && stillOnLoginPage) {
-        if (safeString(supplier.sessionData)) {
+        if (safeString(supplier.sessionData) && !options.ignoreSessionDataHint) {
             throw new Error('Sessao manual invalida ou expirada. Gere novos cookies na area ja autenticada do portal.');
         }
 
@@ -692,13 +692,18 @@ async function scrapeProduct(supplier, productName) {
 
             if (!alreadyLogged) {
                 if (hasPreloadedSession) {
-                    throw new Error('Sessao manual invalida ou expirada. Gere novos cookies na area ja autenticada do portal.');
+                    console.error(`[WARN] Sessao pre-carregada nao autenticou ${supplier.name}. Tentando login automatico como fallback.`);
+                    await page.goto(loginUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+                    await page.waitForTimeout(1500);
+                    await dismissTransientUi(page);
                 }
 
                 const preLoginUrl = page.url();
                 await runGenericLogin(page, supplier, strategy);
                 didLoginThisRun = true;
-                await waitForLoginCompletion(page, preLoginUrl, loginUrl, supplier, strategy);
+                await waitForLoginCompletion(page, preLoginUrl, loginUrl, supplier, strategy, {
+                    ignoreSessionDataHint: hasPreloadedSession,
+                });
             } else {
                 await dismissTransientUi(page);
                 await ensureLoggedIn(page, loginUrl, supplier, strategy);
@@ -773,6 +778,12 @@ async function scrapeProduct(supplier, productName) {
             !safeString(supplier.sessionData)
         ) {
             errorMessage = `${errorMessage} Dica: preencha "Sessao/Cookies JSON" no cadastro do fornecedor para reutilizar uma sessao autenticada.`;
+        } else if (
+            supplier.needsLogin &&
+            errorMessage.includes('Falha no login') &&
+            safeString(supplier.sessionData)
+        ) {
+            errorMessage = `${errorMessage} A sessao manual tambem nao foi suficiente ou expirou.`;
         }
 
         console.error(`[ERROR] ${errorMessage}`);
