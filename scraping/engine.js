@@ -39,23 +39,23 @@ function normalizeCookie(cookie) {
 
     const pathValue = String(cookie.path || '/');
     const secureValue = Boolean(cookie.secure);
-    const domainValue = String(cookie.domain || '').replace(/^\./, '');
-    const hostOnly = Boolean(cookie.hostOnly);
+    const rawDomainValue = String(cookie.domain || '');
 
     const normalized = {
         name: String(cookie.name),
         value: String(cookie.value),
-        path: pathValue,
         httpOnly: Boolean(cookie.httpOnly),
         secure: secureValue,
     };
 
-    if (cookie.url) {
+    if (rawDomainValue) {
+        normalized.domain = rawDomainValue;
+        normalized.path = pathValue;
+    } else if (cookie.url) {
         normalized.url = String(cookie.url);
-    } else if (hostOnly && domainValue) {
-        normalized.url = `${secureValue ? 'https' : 'http'}://${domainValue}${pathValue}`;
-    } else if (domainValue) {
-        normalized.domain = String(cookie.domain || '');
+    } else {
+        console.error(`[WARN] Cookie ignorado por falta de domain/url: ${cookie.name}`);
+        return null;
     }
 
     if (cookie.expires !== undefined && cookie.expires !== null) {
