@@ -37,17 +37,25 @@ function normalizeCookie(cookie) {
         return null;
     }
 
+    const pathValue = String(cookie.path || '/');
+    const secureValue = Boolean(cookie.secure);
+    const domainValue = String(cookie.domain || '').replace(/^\./, '');
+    const hostOnly = Boolean(cookie.hostOnly);
+
     const normalized = {
         name: String(cookie.name),
         value: String(cookie.value),
-        domain: String(cookie.domain || ''),
-        path: String(cookie.path || '/'),
+        path: pathValue,
         httpOnly: Boolean(cookie.httpOnly),
-        secure: Boolean(cookie.secure),
+        secure: secureValue,
     };
 
     if (cookie.url) {
         normalized.url = String(cookie.url);
+    } else if (hostOnly && domainValue) {
+        normalized.url = `${secureValue ? 'https' : 'http'}://${domainValue}${pathValue}`;
+    } else if (domainValue) {
+        normalized.domain = String(cookie.domain || '');
     }
 
     if (cookie.expires !== undefined && cookie.expires !== null) {
@@ -77,13 +85,14 @@ function parseSupplierSessionData(supplier) {
 
         if (Array.isArray(parsed)) {
             const cookies = parsed.map(normalizeCookie).filter(Boolean);
-            return cookies.length ? { cookies, origins: [] } : null;
+            return cookies.length ? { cookies, origins: [], cookieCount: cookies.length } : null;
         }
 
         if (parsed && Array.isArray(parsed.cookies)) {
             return {
                 cookies: parsed.cookies.map(normalizeCookie).filter(Boolean),
                 origins: Array.isArray(parsed.origins) ? parsed.origins : [],
+                cookieCount: Array.isArray(parsed.cookies) ? parsed.cookies.length : 0,
             };
         }
     } catch (error) {
@@ -582,8 +591,11 @@ async function createContext(browser, supplier) {
     };
 
     if (supplierSessionState) {
-        console.error(`[DEBUG] Reutilizando sessionData para: ${supplier.name}`);
-        contextOptions.storageState = supplierSessionState;
+        console.error(`[DEBUG] Reutilizando sessionData para: ${supplier.name} (${supplierSessionState.cookieCount || 0} cookies)`);
+        contextOptions.storageState = {
+            cookies: supplierSessionState.cookies || [],
+            origins: supplierSessionState.origins || [],
+        };
     } else if (fs.existsSync(sessionStatePath)) {
         console.error(`[DEBUG] Reutilizando sessao salva em arquivo para: ${supplier.name}`);
         contextOptions.storageState = sessionStatePath;
