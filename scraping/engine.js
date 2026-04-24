@@ -756,9 +756,17 @@ async function scrapeProduct(supplier, productName) {
 
             const beforeSearchUrl = page.url();
             await performSearch(page, supplier, query, strategy);
-            await waitForPageSettle(
-                page,
-                buildSelectorList(
+            const postSearchSelectors = strategy.waitForResultsOnly
+                ? buildSelectorList(
+                    strategy.preferStrategySelectors ? strategy.itemContainerSelector : supplier.itemContainerSelector,
+                    strategy.preferStrategySelectors ? strategy.productNameSelector : supplier.productNameSelector,
+                    strategy.preferStrategySelectors ? strategy.priceSelector : supplier.priceSelector,
+                    strategy.preferStrategySelectors ? supplier.itemContainerSelector : strategy.itemContainerSelector,
+                    strategy.preferStrategySelectors ? supplier.productNameSelector : strategy.productNameSelector,
+                    strategy.preferStrategySelectors ? supplier.priceSelector : strategy.priceSelector,
+                    strategy.emptyResultSelector
+                )
+                : buildSelectorList(
                     strategy.preferStrategySelectors ? strategy.itemContainerSelector : supplier.itemContainerSelector,
                     strategy.preferStrategySelectors ? strategy.productNameSelector : supplier.productNameSelector,
                     strategy.preferStrategySelectors ? strategy.priceSelector : supplier.priceSelector,
@@ -768,7 +776,11 @@ async function scrapeProduct(supplier, productName) {
                     strategy.searchSelector,
                     strategy.loginSuccessSelector,
                     supplier.searchBarSelector
-                ),
+                );
+
+            await waitForPageSettle(
+                page,
+                postSearchSelectors,
                 { timeout: 12000, settleMs: 2000, previousUrl: beforeSearchUrl }
             );
             await dismissTransientUi(page);
