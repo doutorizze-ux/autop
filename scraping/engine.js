@@ -368,9 +368,10 @@ async function performSearch(page, supplier, query, strategy = {}) {
         }
     }
 
+    const preferStrategySelectors = Boolean(strategy.preferStrategySelectors);
     const searchSelectors = buildSelectorList(
-        supplier.searchBarSelector,
-        strategy.searchSelector,
+        preferStrategySelectors ? strategy.searchSelector : supplier.searchBarSelector,
+        preferStrategySelectors ? supplier.searchBarSelector : strategy.searchSelector,
         [
             'input[type="search"]',
             'input[placeholder*="busca" i]',
@@ -385,8 +386,8 @@ async function performSearch(page, supplier, query, strategy = {}) {
         ]
     );
     const searchButtonSelectors = buildSelectorList(
-        supplier.searchBtnSelector,
-        strategy.searchButtonSelector,
+        preferStrategySelectors ? strategy.searchButtonSelector : supplier.searchBtnSelector,
+        preferStrategySelectors ? supplier.searchBtnSelector : strategy.searchButtonSelector,
         [
             'button[type="submit"]',
             'button:has-text("Buscar")',
@@ -401,6 +402,11 @@ async function performSearch(page, supplier, query, strategy = {}) {
     await input.press('Control+A').catch(() => {});
     await input.fill('');
     await input.fill(query, { force: true });
+
+    if (strategy.submitSearchWithEnter) {
+        await input.press('Enter');
+        return;
+    }
 
     try {
         await clickFirstVisible(page, searchButtonSelectors, { timeout: 3000 });
@@ -423,21 +429,26 @@ function buildBrowserPayload(items, supplier) {
     })).filter((item) => item.price > 0);
 }
 
-async function extractWithConfiguredSelectors(page, supplier) {
+async function extractWithConfiguredSelectors(page, supplier, strategy = {}) {
+    const preferStrategySelectors = Boolean(strategy.preferStrategySelectors);
     const selectors = buildSelectorList(
-        supplier.itemContainerSelector,
+        preferStrategySelectors ? strategy.itemContainerSelector : supplier.itemContainerSelector,
+        preferStrategySelectors ? supplier.itemContainerSelector : strategy.itemContainerSelector,
         ['.product-card', '.produto', '.item', 'article', 'tr']
     );
     const nameSelectors = buildSelectorList(
-        supplier.productNameSelector,
+        preferStrategySelectors ? strategy.productNameSelector : supplier.productNameSelector,
+        preferStrategySelectors ? supplier.productNameSelector : strategy.productNameSelector,
         ['.name', '.nome', '.title', '.titulo', 'h2', 'h3', 'td']
     );
     const priceSelectors = buildSelectorList(
-        supplier.priceSelector,
+        preferStrategySelectors ? strategy.priceSelector : supplier.priceSelector,
+        preferStrategySelectors ? supplier.priceSelector : strategy.priceSelector,
         ['.price', '.preco', '.valor', '[class*="price"]', '[class*="preco"]', '[class*="valor"]']
     );
     const stockSelectors = buildSelectorList(
-        supplier.availableSelector,
+        preferStrategySelectors ? strategy.availableSelector : supplier.availableSelector,
+        preferStrategySelectors ? supplier.availableSelector : strategy.availableSelector,
         ['.stock', '.estoque', '.available', '.disponivel']
     );
 
@@ -748,19 +759,26 @@ async function scrapeProduct(supplier, productName) {
             await waitForPageSettle(
                 page,
                 buildSelectorList(
-                    supplier.itemContainerSelector,
-                    supplier.productNameSelector,
-                    supplier.priceSelector,
+                    strategy.preferStrategySelectors ? strategy.itemContainerSelector : supplier.itemContainerSelector,
+                    strategy.preferStrategySelectors ? strategy.productNameSelector : supplier.productNameSelector,
+                    strategy.preferStrategySelectors ? strategy.priceSelector : supplier.priceSelector,
+                    strategy.preferStrategySelectors ? supplier.itemContainerSelector : strategy.itemContainerSelector,
+                    strategy.preferStrategySelectors ? supplier.productNameSelector : strategy.productNameSelector,
+                    strategy.preferStrategySelectors ? supplier.priceSelector : strategy.priceSelector,
                     strategy.searchSelector,
-                    strategy.loginSuccessSelector
+                    strategy.loginSuccessSelector,
+                    supplier.searchBarSelector
                 ),
                 { timeout: 12000, settleMs: 2000, previousUrl: beforeSearchUrl }
             );
             await dismissTransientUi(page);
 
             let items = [];
-            if (supplier.itemContainerSelector || supplier.productNameSelector || supplier.priceSelector) {
-                items = await extractWithConfiguredSelectors(page, supplier);
+            if (
+                supplier.itemContainerSelector || supplier.productNameSelector || supplier.priceSelector
+                || strategy.itemContainerSelector || strategy.productNameSelector || strategy.priceSelector
+            ) {
+                items = await extractWithConfiguredSelectors(page, supplier, strategy);
             }
 
             if (!items.length) {

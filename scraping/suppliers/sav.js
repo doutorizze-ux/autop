@@ -8,6 +8,12 @@ module.exports = {
     submitSelector: ['button.btn-primary', 'button[type="submit"]'],
     loginSuccessSelector: ['#gsearch', 'a:has-text("Produtos")', 'text=Produtos'],
     searchSelector: ['#gsearch', 'input[placeholder*="pesquisar" i]', 'input[type="search"]'],
+    itemContainerSelector: ['.product-box', '.card', '.produto'],
+    productNameSelector: ['.product-title', '.nome', 'h3'],
+    priceSelector: ['.product-price', '.preco', '.valor'],
+    availableSelector: ['.estoque', '.stock'],
+    preferStrategySelectors: true,
+    submitSearchWithEnter: true,
     fillLogin: async ({ page, supplier, fillVisibleLocator, dismissTransientUi }) => {
         await dismissTransientUi();
 
