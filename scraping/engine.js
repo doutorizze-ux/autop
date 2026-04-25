@@ -102,13 +102,25 @@ function parseSupplierSessionData(supplier) {
     return null;
 }
 
-async function waitForAnyVisible(page, selectors, timeout = 15000) {
+async function findFirstVisibleLocator(page, selectors, timeout = 15000) {
     let lastError;
 
     for (const selector of selectors) {
         try {
-            await page.locator(selector).first().waitFor({ state: 'visible', timeout });
-            return selector;
+            const locator = page.locator(selector);
+            const count = await locator.count();
+
+            for (let index = 0; index < count; index += 1) {
+                const current = locator.nth(index);
+                const isVisible = await current.isVisible({ timeout }).catch(() => false);
+                const isEnabled = await current.isEnabled().catch(() => true);
+
+                if (isVisible && isEnabled) {
+                    return { locator: current, selector, index };
+                }
+            }
+
+            lastError = new Error(`Nenhum elemento visivel e habilitado em ${selector}`);
         } catch (error) {
             lastError = error;
         }
@@ -117,10 +129,15 @@ async function waitForAnyVisible(page, selectors, timeout = 15000) {
     throw new Error(`Nenhum seletor visível encontrado. Tentados: ${selectors.join(' | ')}. ${lastError ? `Último erro: ${lastError.message}` : ''}`);
 }
 
+async function waitForAnyVisible(page, selectors, timeout = 15000) {
+    const match = await findFirstVisibleLocator(page, selectors, timeout);
+    return match.selector;
+}
+
 async function fillFirstVisible(page, selectors, value, options = {}) {
-    const selector = await waitForAnyVisible(page, selectors, options.timeout);
-    await page.locator(selector).first().fill(safeString(value), { force: true });
-    return selector;
+    const match = await findFirstVisibleLocator(page, selectors, options.timeout);
+    await fillVisibleLocator(match.locator, value);
+    return match.selector;
 }
 
 async function fillVisibleLocator(locator, value) {
@@ -223,9 +240,9 @@ function buildSearchQueries(productName) {
 }
 
 async function clickFirstVisible(page, selectors, options = {}) {
-    const selector = await waitForAnyVisible(page, selectors, options.timeout);
-    await page.locator(selector).first().click({ force: true });
-    return selector;
+    const match = await findFirstVisibleLocator(page, selectors, options.timeout);
+    await match.locator.click({ force: true });
+    return match.selector;
 }
 
 async function dismissTransientUi(page) {
@@ -407,8 +424,9 @@ async function performSearch(page, supplier, query, strategy = {}) {
         ]
     );
 
-    const selector = await waitForAnyVisible(page, searchSelectors, 15000);
-    const input = page.locator(selector).first();
+    const match = await findFirstVisibleLocator(page, searchSelectors, 15000);
+    const selector = match.selector;
+    const input = match.locator;
     await input.click({ force: true }).catch(() => {});
     await input.press('Control+A').catch(() => {});
     await input.fill('');
@@ -581,7 +599,7 @@ async function ensureLoggedIn(page, loginUrl, supplier, strategy = {}, options =
         return;
     }
 
-    const passwordVisible = await page.locator('input[type="password"]').first().isVisible().catch(() => false);
+    const passwordVisible = await isAnySelectorVisible(page, ['input[type="password"]'], 1000);
     const currentUrl = safeString(page.url());
     const normalizedLoginUrl = safeString(loginUrl).replace(/\/+$/, '');
     const normalizedCurrentUrl = currentUrl.replace(/\/+$/, '');

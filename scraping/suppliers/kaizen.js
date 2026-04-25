@@ -8,4 +8,48 @@ module.exports = {
     loginSuccessSelector: ['button:has-text("Busca por Código")', 'button:has-text("Busca por Veículo")', 'input[placeholder*="LB55" i]'],
     searchSelector: ['input[placeholder*="LB55" i]', 'input[placeholder*="W0120" i]', 'input[placeholder*="código" i]', 'input[placeholder*="codigo" i]', 'input[placeholder*="descrição" i]', 'input[placeholder*="descricao" i]'],
     searchButtonSelector: ['button:has(svg)', 'button:has(.fa-search)', 'button[type="submit"]'],
+    fillLogin: async ({ page, supplier, fillVisibleLocator, dismissTransientUi }) => {
+        await dismissTransientUi();
+
+        const forms = page.locator('form');
+        const formCount = await forms.count().catch(() => 0);
+        let loginScope = page;
+
+        for (let index = 0; index < formCount; index += 1) {
+            const currentForm = forms.nth(index);
+            const hasPassword = await currentForm.locator('input[type="password"]').count().catch(() => 0);
+            const isVisible = await currentForm.isVisible().catch(() => false);
+
+            if (hasPassword && isVisible) {
+                loginScope = currentForm;
+                break;
+            }
+        }
+
+        const textInputs = loginScope.locator('input:not([type="hidden"]):not([type="password"])');
+        const textCount = await textInputs.count().catch(() => 0);
+        let firstVisibleTextInput = null;
+
+        for (let index = 0; index < textCount; index += 1) {
+            const current = textInputs.nth(index);
+            const isVisible = await current.isVisible().catch(() => false);
+            const isEnabled = await current.isEnabled().catch(() => true);
+
+            if (isVisible && isEnabled) {
+                firstVisibleTextInput = current;
+                break;
+            }
+        }
+
+        const passwordField = loginScope.locator('input[type="password"]').first();
+        const loginValue = String(supplier.loginCredential || '').replace(/\D/g, '') || String(supplier.loginCredential || '');
+
+        if (firstVisibleTextInput) {
+            await fillVisibleLocator(firstVisibleTextInput, loginValue);
+        }
+
+        if (await passwordField.isVisible().catch(() => false)) {
+            await fillVisibleLocator(passwordField, supplier.password || '');
+        }
+    },
 };

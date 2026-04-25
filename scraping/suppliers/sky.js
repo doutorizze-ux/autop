@@ -16,9 +16,24 @@ module.exports = {
     fillLogin: async ({ page, supplier, fillVisibleLocator, dismissTransientUi }) => {
         await dismissTransientUi();
 
+        const forms = page.locator('form');
+        const formCount = await forms.count().catch(() => 0);
+        let loginScope = page;
+
+        for (let index = 0; index < formCount; index += 1) {
+            const currentForm = forms.nth(index);
+            const hasPassword = await currentForm.locator('input[type="password"]').count().catch(() => 0);
+            const isVisible = await currentForm.isVisible().catch(() => false);
+
+            if (hasPassword && isVisible) {
+                loginScope = currentForm;
+                break;
+            }
+        }
+
         const visibleTextInputs = [];
-        const textInputs = page.locator('input:not([type="hidden"]):not([type="password"])');
-        const textCount = await textInputs.count();
+        const textInputs = loginScope.locator('input:not([type="hidden"]):not([type="password"])');
+        const textCount = await textInputs.count().catch(() => 0);
 
         for (let index = 0; index < textCount; index += 1) {
             const current = textInputs.nth(index);
@@ -30,7 +45,7 @@ module.exports = {
             }
         }
 
-        const passwordField = page.locator('input[type="password"]').first();
+        const passwordField = loginScope.locator('input[type="password"]').first();
 
         if (supplier.loginExtraValue && visibleTextInputs[0]) {
             await fillVisibleLocator(visibleTextInputs[0], supplier.loginExtraValue);

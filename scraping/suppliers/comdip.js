@@ -15,6 +15,49 @@ module.exports = {
     productNameSelector: ['h2', 'h3', 'h4', 'a', 'strong', 'span'],
     priceSelector: ['.price', '.valor', '[class*="price"]', '[class*="valor"]'],
     buildSearchUrl: (query) => `https://portalcomdip.com.br/comdip/compras/pesquisa/termo-busca/${encodeURIComponent(String(query).toLowerCase())}/1`,
+    fillLogin: async ({ page, supplier, fillVisibleLocator, dismissTransientUi }) => {
+        await dismissTransientUi();
+
+        const forms = page.locator('form');
+        const formCount = await forms.count().catch(() => 0);
+        let loginScope = page;
+
+        for (let index = 0; index < formCount; index += 1) {
+            const currentForm = forms.nth(index);
+            const hasPassword = await currentForm.locator('input[type="password"]').count().catch(() => 0);
+            const isVisible = await currentForm.isVisible().catch(() => false);
+
+            if (hasPassword && isVisible) {
+                loginScope = currentForm;
+                break;
+            }
+        }
+
+        const textInputs = loginScope.locator('input:not([type="hidden"]):not([type="password"])');
+        const textCount = await textInputs.count().catch(() => 0);
+        let firstVisibleTextInput = null;
+
+        for (let index = 0; index < textCount; index += 1) {
+            const current = textInputs.nth(index);
+            const isVisible = await current.isVisible().catch(() => false);
+            const isEnabled = await current.isEnabled().catch(() => true);
+
+            if (isVisible && isEnabled) {
+                firstVisibleTextInput = current;
+                break;
+            }
+        }
+
+        const passwordField = loginScope.locator('input[type="password"]').first();
+
+        if (firstVisibleTextInput) {
+            await fillVisibleLocator(firstVisibleTextInput, supplier.loginCredential || '');
+        }
+
+        if (await passwordField.isVisible().catch(() => false)) {
+            await fillVisibleLocator(passwordField, supplier.password || '');
+        }
+    },
     extractItems: async ({ page }) => {
         return page.evaluate(() => {
             const candidates = Array.from(document.querySelectorAll('[class*="produto"], [class*="item"], [class*="card"], article, li')).slice(0, 300);
