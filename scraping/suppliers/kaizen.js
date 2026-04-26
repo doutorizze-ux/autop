@@ -41,14 +41,28 @@ module.exports = {
             }
         }
 
-        const passwordField = loginScope.locator('input[type="password"]').first();
+        const passwordInputs = loginScope.locator('input[type="password"]');
+        const passwordCount = await passwordInputs.count().catch(() => 0);
+        let passwordField = null;
+
+        for (let index = 0; index < passwordCount; index += 1) {
+            const current = passwordInputs.nth(index);
+            const isVisible = await current.isVisible().catch(() => false);
+            const isEnabled = await current.isEnabled().catch(() => true);
+
+            if (isVisible && isEnabled) {
+                passwordField = current;
+                break;
+            }
+        }
+
         const loginValue = String(supplier.loginCredential || '').replace(/\D/g, '') || String(supplier.loginCredential || '');
 
         if (firstVisibleTextInput) {
             await fillVisibleLocator(firstVisibleTextInput, loginValue);
         }
 
-        if (await passwordField.isVisible().catch(() => false)) {
+        if (passwordField && await passwordField.isVisible().catch(() => false)) {
             await fillVisibleLocator(passwordField, supplier.password || '');
         }
     },
