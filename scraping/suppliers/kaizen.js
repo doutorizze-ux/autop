@@ -60,6 +60,8 @@ module.exports = {
 
         if (firstVisibleTextInput) {
             await fillVisibleLocator(firstVisibleTextInput, loginValue);
+            await page.waitForTimeout(800);
+            await page.locator('text=/CNPJ válido/i').first().waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
         }
 
         if (passwordField && await passwordField.isVisible().catch(() => false)) {

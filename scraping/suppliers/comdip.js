@@ -63,7 +63,7 @@ module.exports = {
             }
         }
 
-        const loginValue = String(supplier.loginCredential || '').replace(/\D/g, '') || String(supplier.loginCredential || '');
+        const loginValue = String(supplier.loginCredential || '').trim();
 
         if (firstVisibleTextInput) {
             await fillVisibleLocator(firstVisibleTextInput, loginValue);
@@ -111,8 +111,23 @@ module.exports = {
             return items.slice(0, 24);
         });
     },
-    beforeLogin: async ({ dismissTransientUi, setCheckboxState }) => {
+    beforeLogin: async ({ page, dismissTransientUi, setCheckboxState }) => {
         await dismissTransientUi();
+
+        const checkboxes = page.locator('input[type="checkbox"]');
+        const count = await checkboxes.count().catch(() => 0);
+
+        for (let index = 0; index < count; index += 1) {
+            const current = checkboxes.nth(index);
+            const isVisible = await current.isVisible().catch(() => false);
+            const isEnabled = await current.isEnabled().catch(() => true);
+            const isChecked = await current.isChecked().catch(() => false);
+
+            if (isVisible && isEnabled && !isChecked) {
+                await current.click({ force: true }).catch(() => {});
+            }
+        }
+
         await setCheckboxState(['input[type="checkbox"]'], true);
     },
 };

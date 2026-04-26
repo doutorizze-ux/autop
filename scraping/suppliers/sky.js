@@ -60,7 +60,7 @@ module.exports = {
             }
         }
 
-        const extraValue = String(supplier.loginExtraValue || '').replace(/\D/g, '') || String(supplier.loginExtraValue || '');
+        const extraValue = String(supplier.loginExtraValue || '').trim();
 
         if (supplier.loginExtraValue && visibleTextInputs[0]) {
             await fillVisibleLocator(visibleTextInputs[0], extraValue);
