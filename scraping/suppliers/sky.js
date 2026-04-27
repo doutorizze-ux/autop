@@ -17,10 +17,10 @@ module.exports = {
     waitForResultsOnly: true,
     searchSelector: ['#inpCodigo', 'input[name="codigo"]'],
     searchButtonSelector: ['#btnBusca', 'button[name="btnSub"]'],
-    itemContainerSelector: ['tr'],
-    productNameSelector: ['td'],
-    priceSelector: ['td'],
-    availableSelector: ['td'],
+    itemContainerSelector: ['#tb_produto .bx_produto', '.bx_produto'],
+    productNameSelector: ['.nome'],
+    priceSelector: ['.preco_final'],
+    availableSelector: ['.lkEstoqueProduto'],
     fillLogin: async ({ page, supplier, fillVisibleLocator, dismissTransientUi }) => {
         await dismissTransientUi();
 
@@ -90,20 +90,74 @@ module.exports = {
         const searchForm = page.locator('#frmBusca').first();
         const codeField = searchForm.locator('#inpCodigo, input[name="codigo"]').first();
         const barcodeField = searchForm.locator('#inpCodigoBarras, input[name="codigo_barras"]').first();
+        const descriptionField = searchForm.locator('input[placeholder*="Descri" i]').first();
         const searchButton = searchForm.locator('#btnBusca, button[name="btnSub"]').first();
 
         if (await codeField.isVisible().catch(() => false)) {
             await fillVisibleLocator(codeField, query);
         }
 
+        if (await descriptionField.isVisible().catch(() => false)) {
+            await descriptionField.fill('').catch(() => {});
+        }
+
         if (await barcodeField.isVisible().catch(() => false)) {
             await barcodeField.fill('').catch(() => {});
         }
+
+        const responsePromise = page
+            .waitForResponse(
+                (response) =>
+                    response.url().includes('/site/buscar') &&
+                    response.request().method() === 'POST',
+                { timeout: 15000 }
+            )
+            .catch(() => null);
 
         if (await searchButton.isVisible().catch(() => false)) {
             await searchButton.click({ force: true }).catch(() => {});
         } else if (await codeField.isVisible().catch(() => false)) {
             await codeField.press('Enter').catch(() => {});
         }
+
+        const response = await responsePromise;
+        if (response) {
+            await response.json().catch(() => null);
+        }
+
+        await page
+            .waitForSelector('#tb_produto .bx_produto, .bx_produto', { timeout: 15000 })
+            .catch(() => {});
+        await page.waitForTimeout(800).catch(() => {});
+    },
+    extractItems: async ({ page }) => {
+        return page.evaluate(() => {
+            const cards = Array.from(document.querySelectorAll('#tb_produto .bx_produto, .bx_produto'));
+
+            return cards
+                .map((card) => {
+                    const name = card.querySelector('.nome')?.textContent?.trim() || '';
+                    const price = card.querySelector('.preco_final')?.textContent?.trim() || '';
+                    const code = card.querySelector('.codfab strong')?.textContent?.trim() || '';
+                    const brand = card.querySelector('.fornecedor')?.textContent?.trim() || '';
+                    const stockText = card.querySelector('.lkEstoqueProduto')?.textContent?.trim() || '';
+                    const stockMatch = stockText.match(/\d+/);
+                    const link =
+                        card.querySelector('.lkAplicacao')?.getAttribute('href') ||
+                        card.querySelector('.lkAdicionar')?.getAttribute('href') ||
+                        card.querySelector('a[href]')?.getAttribute('href') ||
+                        '';
+
+                    return {
+                        nome: name,
+                        preco: price ? `R$ ${price}` : '',
+                        codigo: code,
+                        marca: brand,
+                        estoque: stockMatch ? stockMatch[0] : '',
+                        link,
+                    };
+                })
+                .filter((item) => item.nome && item.preco);
+        });
     },
 };
