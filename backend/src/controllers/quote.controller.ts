@@ -21,6 +21,12 @@ type StoredQuotePayload = {
     matrix: QuoteMatrix;
 };
 
+type ParsedStoredQuote = {
+    items: QuoteItem[];
+    suppliers: string[];
+    matrix: QuoteMatrix;
+};
+
 function buildItemLabel(query: string, description?: string) {
     const cleanDescription = String(description || '').trim();
     return cleanDescription ? `${query} - ${cleanDescription}` : query;
@@ -99,7 +105,7 @@ function normalizeExportData(body: any) {
     return { items: normalizedItems, suppliers, matrix };
 }
 
-function parseStoredQuote(quote: { product: string; results: string; createdAt: Date }) {
+function parseStoredQuote(quote: { product: string; results: string; createdAt: Date }): ParsedStoredQuote {
     try {
         const parsed = JSON.parse(quote.results);
 
