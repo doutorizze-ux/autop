@@ -350,10 +350,10 @@ export const listQuoteHistory = async (_req: Request, res: Response) => {
 };
 
 export const getQuoteHistoryById = async (req: Request, res: Response) => {
-    try {
-        const quote = await prisma.quote.findUnique({
-            where: { id: req.params.id },
-        });
+  try {
+    const quote = await prisma.quote.findUnique({
+      where: { id: req.params.id },
+    });
 
         if (!quote) {
             return res.status(404).json({ message: 'Cotacao nao encontrada' });
@@ -371,7 +371,29 @@ export const getQuoteHistoryById = async (req: Request, res: Response) => {
     } catch (err) {
         console.error('Get Quote History Error:', err);
         res.status(500).json({ message: 'Erro ao carregar cotacao salva' });
+  }
+};
+
+export const deleteQuoteHistory = async (req: Request, res: Response) => {
+  try {
+    const existingQuote = await prisma.quote.findUnique({
+      where: { id: req.params.id },
+      select: { id: true },
+    });
+
+    if (!existingQuote) {
+      return res.status(404).json({ error: 'Cotacao nao encontrada.' });
     }
+
+    await prisma.quote.delete({
+      where: { id: req.params.id },
+    });
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Erro ao excluir cotacao do historico:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
 };
 
 export const exportPDF = async (req: Request, res: Response) => {
