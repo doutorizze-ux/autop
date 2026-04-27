@@ -229,6 +229,26 @@ export const Quotes = () => {
         }
     };
 
+    const handleDeleteHistory = async (quoteId: string) => {
+        const confirmed = window.confirm('Tem certeza que deseja excluir esta cotacao salva?');
+        if (!confirmed) return;
+
+        try {
+            await axios.delete(`${apiBase}/api/quotes/history/${quoteId}`);
+
+            if (activeHistoryId === quoteId) {
+                setActiveHistoryId('');
+                setCurrentQuoteId('');
+                setCurrentCreatedAt('');
+            }
+
+            await loadHistory();
+        } catch (error) {
+            console.error('Delete Saved Quote Error:', error);
+            alert('Nao foi possivel excluir a cotacao salva.');
+        }
+    };
+
     const hasResults = partList.length > 0 && suppliers.length > 0;
 
     const bestPriceByQuery = useMemo(() => {
@@ -481,6 +501,13 @@ export const Quotes = () => {
                                     <button type="button" onClick={() => void handleExportSaved(entry.id, 'excel')}>
                                         <Download size={15} /> Excel
                                     </button>
+                                    <button
+                                        type="button"
+                                        className="delete-history-button"
+                                        onClick={() => void handleDeleteHistory(entry.id)}
+                                    >
+                                        <Trash2 size={15} /> Excluir
+                                    </button>
                                 </div>
                             </div>
                         ))}
@@ -635,6 +662,13 @@ export const Quotes = () => {
                     background: var(--panel-bg);
                     color: var(--text-main);
                     border: 1px solid var(--border-color);
+                }
+                .history-card-actions .delete-history-button {
+                    color: #dc2626;
+                    border-color: rgba(220, 38, 38, 0.18);
+                }
+                .history-card-actions .delete-history-button:hover {
+                    background: rgba(220, 38, 38, 0.08);
                 }
                 .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
                 .matrix-table { width: 100%; border-collapse: collapse; text-align: left; }
