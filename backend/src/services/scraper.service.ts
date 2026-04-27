@@ -1,8 +1,9 @@
 import { exec } from 'child_process';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
-const scrapingPath = path.join(__dirname, '../../../scraping');
+
 const prisma = new PrismaClient();
+const scrapingPath = path.join(__dirname, '../../../scraping');
 
 function runSupplierSearch(supplier: any, productName: string) {
     return new Promise<any>((resolve) => {
@@ -117,6 +118,13 @@ export class ScraperService {
 
             resultsByProduct[productName] = productResults;
         }
+
+        await prisma.quote.create({
+            data: {
+                product: productNames.join(', '),
+                results: JSON.stringify(resultsByProduct),
+            },
+        });
 
         return resultsByProduct;
     }
