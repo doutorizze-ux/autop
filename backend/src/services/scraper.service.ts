@@ -4,24 +4,12 @@ import { PrismaClient } from '@prisma/client';
 const scrapingPath = path.join(__dirname, '../../../scraping');
 const prisma = new PrismaClient();
 
-function readPositiveIntEnv(name: string, fallback: number, minimum = 1) {
-    const rawValue = process.env[name];
-    const parsedValue = Number.parseInt(rawValue || '', 10);
-
-    if (!Number.isFinite(parsedValue) || parsedValue < minimum) {
-        return fallback;
-    }
-
-    return parsedValue;
-}
-
 function runSupplierSearch(supplier: any, productName: string) {
     return new Promise<any>((resolve) => {
         const supplierJson = Buffer.from(JSON.stringify(supplier)).toString('base64');
         const command = `node run-search.js --base64 "${supplierJson}" "${productName}"`;
-        const timeoutMs = readPositiveIntEnv('SCRAPER_TIMEOUT_MS', 45000, 15000);
 
-        exec(command, { cwd: scrapingPath, timeout: timeoutMs, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+        exec(command, { cwd: scrapingPath, timeout: 120000, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
             let finalErrorMsg = 'Falha desconhecida no Scraper.';
             let debugData: any = null;
             const trimmedStdout = stdout?.trim();
@@ -81,7 +69,7 @@ function runSupplierSearch(supplier: any, productName: string) {
 
             if (error) {
                 console.error(
-                    `[Scraper Warning] Falha na execucao para ${supplier.name}: timeout=${timeoutMs} code=${error.code ?? 'n/a'} signal=${error.signal ?? 'n/a'} message=${error.message}`
+                    `[Scraper Warning] Falha na execucao para ${supplier.name}: code=${error.code ?? 'n/a'} signal=${error.signal ?? 'n/a'} message=${error.message}`
                 );
                 finalErrorMsg = `Timeout ou Erro Critico. ${finalErrorMsg}`;
             }
@@ -114,7 +102,7 @@ export class ScraperService {
 
     static async searchMultipleProducts(productNames: string[]) {
         const suppliers = await prisma.supplier.findMany();
-        const concurrency = readPositiveIntEnv('SCRAPER_CONCURRENCY', 2, 1);
+        const concurrency = Math.max(1, Number.parseInt(process.env.SCRAPER_CONCURRENCY || '1', 10) || 1);
         const resultsByProduct: Record<string, any[]> = {};
 
         for (const productName of productNames) {
