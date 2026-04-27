@@ -1,9 +1,8 @@
 import { exec } from 'child_process';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
 const scrapingPath = path.join(__dirname, '../../../scraping');
+const prisma = new PrismaClient();
 
 function readPositiveIntEnv(name: string, fallback: number, minimum = 1) {
     const rawValue = process.env[name];
@@ -130,13 +129,6 @@ export class ScraperService {
 
             resultsByProduct[productName] = productResults;
         }
-
-        await prisma.quote.create({
-            data: {
-                product: productNames.join(', '),
-                results: JSON.stringify(resultsByProduct),
-            },
-        });
 
         return resultsByProduct;
     }
