@@ -6,13 +6,21 @@ module.exports = {
     userSelector: ['input[name*="user" i]', 'input[name*="login" i]', 'input[placeholder*="e-mail" i]', 'input[placeholder*="email" i]', 'input[type="text"]'],
     passSelector: ['input[type="password"]'],
     loginSuccessSelector: [
+        '#frmBusca',
+        '#inpCodigo',
+        '#btnBusca',
         'button:has-text("Buscar")',
-        'input[placeholder*="Descrição da Peça" i]',
-        'input[placeholder*="Descricao da Peca" i]',
-        'select',
+        'input[placeholder*="CÃ³digo da PeÃ§a" i]',
+        'input[placeholder*="Codigo da Peca" i]',
     ],
-    searchSelector: ['input[placeholder*="descrição da peça" i]', 'input[placeholder*="descricao da peça" i]', 'input[placeholder*="código da peça" i]', 'input[placeholder*="codigo da peca" i]', 'input[placeholder*="código" i]', 'input[placeholder*="codigo" i]'],
-    searchButtonSelector: ['button:has-text("Buscar")', 'button[type="submit"]'],
+    preferStrategySelectors: true,
+    waitForResultsOnly: true,
+    searchSelector: ['#inpCodigo', 'input[name="codigo"]'],
+    searchButtonSelector: ['#btnBusca', 'button[name="btnSub"]'],
+    itemContainerSelector: ['tr'],
+    productNameSelector: ['td'],
+    priceSelector: ['td'],
+    availableSelector: ['td'],
     fillLogin: async ({ page, supplier, fillVisibleLocator, dismissTransientUi }) => {
         await dismissTransientUi();
 
@@ -74,6 +82,28 @@ module.exports = {
 
         if (passwordField && await passwordField.isVisible().catch(() => false)) {
             await fillVisibleLocator(passwordField, supplier.password || '');
+        }
+    },
+    performSearch: async ({ page, query, fillVisibleLocator, dismissTransientUi }) => {
+        await dismissTransientUi();
+
+        const searchForm = page.locator('#frmBusca').first();
+        const codeField = searchForm.locator('#inpCodigo, input[name="codigo"]').first();
+        const barcodeField = searchForm.locator('#inpCodigoBarras, input[name="codigo_barras"]').first();
+        const searchButton = searchForm.locator('#btnBusca, button[name="btnSub"]').first();
+
+        if (await codeField.isVisible().catch(() => false)) {
+            await fillVisibleLocator(codeField, query);
+        }
+
+        if (await barcodeField.isVisible().catch(() => false)) {
+            await barcodeField.fill('').catch(() => {});
+        }
+
+        if (await searchButton.isVisible().catch(() => false)) {
+            await searchButton.click({ force: true }).catch(() => {});
+        } else if (await codeField.isVisible().catch(() => false)) {
+            await codeField.press('Enter').catch(() => {});
         }
     },
 };
