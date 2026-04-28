@@ -5,7 +5,9 @@ const rmp = require('./rmp');
 const sav = require('./sav');
 const sky = require('./sky');
 
-const suppliers = [comdip, kaizen, rmp, sav, sky];
+const dpk = require('./dpk');
+
+const suppliers = [comdip, kaizen, rmp, sav, sky, dpk];
 
 function resolveStrategy(supplierName) {
     const normalizedName = safeString(supplierName).toLowerCase();
