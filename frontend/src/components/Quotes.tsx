@@ -627,7 +627,7 @@ export const Quotes = () => {
                     align-items: center;
                     gap: 0.8rem;
                 }
-                .results-panel { overflow: hidden; }
+                .results-panel { overflow: hidden; min-width: 0; width: 100%; }
                 .results-header, .history-panel-header {
                     display: flex;
                     justify-content: space-between;
@@ -670,7 +670,26 @@ export const Quotes = () => {
                 .history-card-actions .delete-history-button:hover {
                     background: rgba(220, 38, 38, 0.08);
                 }
-                .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+                .table-responsive { 
+                    overflow-x: auto; 
+                    -webkit-overflow-scrolling: touch; 
+                    width: 100%;
+                    padding-bottom: 0.5rem;
+                }
+                .table-responsive::-webkit-scrollbar {
+                    height: 8px;
+                }
+                .table-responsive::-webkit-scrollbar-track {
+                    background: var(--bg-color);
+                    border-radius: 4px;
+                }
+                .table-responsive::-webkit-scrollbar-thumb {
+                    background: var(--border-color);
+                    border-radius: 4px;
+                }
+                .table-responsive::-webkit-scrollbar-thumb:hover {
+                    background: var(--text-muted);
+                }
                 .matrix-table { width: 100%; border-collapse: collapse; text-align: left; }
                 .matrix-table th {
                     padding: 1rem 1.5rem;
