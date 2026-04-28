@@ -295,7 +295,7 @@ export const searchQuote = async (req: Request, res: Response) => {
         }
 
         const productNames = items.map((item) => item.query);
-        const matrix = await ScraperService.searchMultipleProducts(productNames);
+        const matrix = await ScraperService.searchMultipleProducts(productNames, req.body.socketId);
         const suppliers = extractSuppliersFromMatrix(matrix);
 
         const payload: StoredQuotePayload = {

@@ -1,5 +1,6 @@
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
+import { io } from '../index';
 
 const prisma = new PrismaClient();
 const enginePath = path.resolve(__dirname, '../../../scraping/engine.js');
@@ -81,7 +82,7 @@ export class ScraperService {
         return runSupplierSearch(supplier, productName);
     }
 
-    static async searchMultipleProducts(productNames: string[]) {
+    static async searchMultipleProducts(productNames: string[], socketId?: string) {
         const suppliers = await prisma.supplier.findMany();
         const concurrency = Math.max(1, Number.parseInt(process.env.SCRAPER_CONCURRENCY || '1', 10) || 1);
         const resultsByProduct: Record<string, any[]> = {};
@@ -92,7 +93,17 @@ export class ScraperService {
             const productResults: any[] = [];
             for (let index = 0; index < suppliers.length; index += concurrency) {
                 const currentBatch = suppliers.slice(index, index + concurrency);
-                const batchResults = await Promise.all(currentBatch.map((supplier) => runSupplierSearch(supplier, productName)));
+                const batchResults = await Promise.all(currentBatch.map(async (supplier) => {
+                    const result = await runSupplierSearch(supplier, productName);
+                    if (socketId) {
+                        io.to(socketId).emit('quote_progress', {
+                            supplier: supplier.name,
+                            productName,
+                            result
+                        });
+                    }
+                    return result;
+                }));
                 productResults.push(...batchResults);
             }
 

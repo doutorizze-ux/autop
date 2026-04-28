@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { socket } from '../services/socket';
 import {
     Search,
     Plus,
@@ -103,6 +104,36 @@ export const Quotes = () => {
         void loadHistory();
     }, []);
 
+    useEffect(() => {
+        const handleProgress = (data: { supplier: string; productName: string; result: any }) => {
+            setQuoteMatrix((prev) => {
+                const next = { ...prev };
+                if (!next[data.productName]) {
+                    next[data.productName] = [];
+                }
+                const exists = next[data.productName].findIndex(r => r.provider === data.supplier);
+                if (exists !== -1) {
+                    next[data.productName][exists] = data.result;
+                } else {
+                    next[data.productName].push(data.result);
+                }
+                return next;
+            });
+            setSuppliers((prev) => {
+                if (!prev.includes(data.supplier)) {
+                    return [...prev, data.supplier];
+                }
+                return prev;
+            });
+        };
+
+        socket.on('quote_progress', handleProgress);
+
+        return () => {
+            socket.off('quote_progress', handleProgress);
+        };
+    }, []);
+
     const handleAddPart = (event?: React.FormEvent) => {
         if (event) event.preventDefault();
 
@@ -140,12 +171,16 @@ export const Quotes = () => {
         if (partList.length === 0) return;
 
         setIsSearching(true);
+        setQuoteMatrix({});
+        setSuppliers([]);
+
         try {
             const response = await axios.post<QuoteSearchResponse>(`${apiBase}/api/quotes/search`, {
                 items: partList.map((item) => ({
                     query: item.query,
                     description: item.description,
                 })),
+                socketId: socket.id
             });
 
             setPartList(
