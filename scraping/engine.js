@@ -679,21 +679,31 @@ async function captureDebugState(page) {
     };
 }
 
+let globalBrowser = null;
+
+async function getBrowser() {
+    if (!globalBrowser) {
+        console.error("[Playwright] Inicializando Browser Global pela primeira vez...");
+        globalBrowser = await chromium.launch({
+            headless: process.env.HEADLESS !== 'false',
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--disable-gpu',
+                '--disable-blink-features=AutomationControlled',
+                '--no-first-run',
+                '--no-zygote',
+                '--window-size=1920,1080',
+            ],
+        });
+    }
+    return globalBrowser;
+}
+
 async function scrapeProduct(supplier, productName) {
-    const browser = await chromium.launch({
-        headless: process.env.HEADLESS !== 'false',
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--disable-gpu',
-            '--disable-blink-features=AutomationControlled',
-            '--no-first-run',
-            '--no-zygote',
-            '--window-size=1920,1080',
-        ],
-    });
+    const browser = await getBrowser();
 
     const { context, hasPreloadedSession } = await createContext(browser, supplier);
     const page = await context.newPage();
@@ -892,7 +902,7 @@ async function scrapeProduct(supplier, productName) {
         };
     } finally {
         await context.close().catch(() => {});
-        await browser.close().catch(() => {});
+        // O browser.close() foi removido para manter a instancia global viva
     }
 }
 

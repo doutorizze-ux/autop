@@ -1,91 +1,71 @@
-import { exec } from 'child_process';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
-const scrapingPath = path.join(__dirname, '../../../scraping');
+const enginePath = path.resolve(__dirname, '../../../scraping/engine.js');
+const { scrapeProduct } = require(enginePath);
 
-function runSupplierSearch(supplier: any, productName: string) {
-    return new Promise<any>((resolve) => {
-        const supplierJson = Buffer.from(JSON.stringify(supplier)).toString('base64');
-        const command = `node run-search.js --base64 "${supplierJson}" "${productName}"`;
+async function runSupplierSearch(supplier: any, productName: string) {
+    try {
+        const data = await scrapeProduct(supplier, productName);
 
-        exec(command, { cwd: scrapingPath, timeout: 120000, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
-            let finalErrorMsg = 'Falha desconhecida no Scraper.';
-            let debugData: any = null;
-            const trimmedStdout = stdout?.trim();
-            const trimmedStderr = stderr?.trim();
+        if (Array.isArray(data) && data.length > 0) {
+            const bestItem = data[0];
+            return {
+                provider: bestItem.provider || supplier.name,
+                product: bestItem.product || productName,
+                price: bestItem.price,
+                available: true,
+                link: bestItem.link || supplier.url,
+            };
+        }
 
-            if (trimmedStdout) {
-                try {
-                    const jsonMatch = trimmedStdout.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
+        if (data && data.items && data.items.length > 0) {
+            const bestItem = data.items[0];
+            return {
+                provider: data.provider || supplier.name,
+                product: bestItem.product || bestItem.name || productName,
+                price: bestItem.price,
+                available: true,
+                link: bestItem.link || supplier.url,
+            };
+        }
 
-                    if (jsonMatch) {
-                        const data = JSON.parse(jsonMatch[0]);
-
-                        if (Array.isArray(data) && data.length > 0) {
-                            const bestItem = data[0];
-                            resolve({
-                                provider: bestItem.provider || supplier.name,
-                                product: bestItem.product || productName,
-                                price: bestItem.price,
-                                available: true,
-                                link: bestItem.link || supplier.url,
-                            });
-                            return;
-                        }
-
-                        if (data.items && data.items.length > 0) {
-                            const bestItem = data.items[0];
-                            resolve({
-                                provider: data.provider || supplier.name,
-                                product: bestItem.product || bestItem.name || productName,
-                                price: bestItem.price,
-                                available: true,
-                                link: bestItem.link || supplier.url,
-                            });
-                            return;
-                        }
-
-                        if (data.error) {
-                            finalErrorMsg = `Erro do Bot: ${data.error}`;
-                            debugData = data.debug || null;
-                        } else {
-                            finalErrorMsg = 'Nenhum produto encontrado.';
-                        }
-                    }
-                } catch (parseError) {
-                    console.log('[ScraperService] JSON parse error:', parseError, 'STDOUT:', trimmedStdout);
-                    finalErrorMsg = 'Erro de comunicacao com o robo.';
-                }
-            }
-
-            if (trimmedStderr) {
-                console.error(`[Scraper STDERR] ${supplier.name}: ${trimmedStderr}`);
-            }
-
-            if (error && trimmedStdout) {
-                console.error(`[Scraper STDOUT] ${supplier.name}: ${trimmedStdout}`);
-            }
-
-            if (error) {
-                console.error(
-                    `[Scraper Warning] Falha na execucao para ${supplier.name}: code=${error.code ?? 'n/a'} signal=${error.signal ?? 'n/a'} message=${error.message}`
-                );
-                finalErrorMsg = `Timeout ou Erro Critico. ${finalErrorMsg}`;
-            }
-
-            resolve({
+        if (data && data.error) {
+            return {
                 provider: supplier.name,
                 product: productName,
                 price: '---',
-                error: finalErrorMsg,
+                error: `Erro do Bot: ${data.error}`,
                 link: supplier.url,
                 available: false,
-                debug: debugData,
-            });
-        });
-    });
+                debug: data.debug || null,
+            };
+        }
+
+        return {
+            provider: supplier.name,
+            product: productName,
+            price: '---',
+            error: 'Nenhum produto encontrado.',
+            link: supplier.url,
+            available: false,
+            debug: null,
+        };
+
+    } catch (error: any) {
+        console.error(`[Scraper Warning] Falha na execucao para ${supplier.name}: message=${error.message}`);
+        
+        return {
+            provider: supplier.name,
+            product: productName,
+            price: '---',
+            error: `Erro Critico. ${error.message || 'Falha desconhecida.'}`,
+            link: supplier.url,
+            available: false,
+            debug: null,
+        };
+    }
 }
 
 export class ScraperService {
