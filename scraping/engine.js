@@ -102,7 +102,7 @@ function parseSupplierSessionData(supplier) {
     return null;
 }
 
-async function waitForAnyVisible(page, selectors, timeout = 15000) {
+async function waitForAnyVisible(page, selectors, timeout = 8000) {
     let lastError;
 
     for (const selector of selectors) {
@@ -192,7 +192,7 @@ async function waitForLoginCompletion(page, previousUrl, loginUrl, supplier, str
         : buildSelectorList(supplier.searchBarSelector, strategy.searchSelector);
 
     await waitForPageSettle(page, successSelectors, {
-        timeout: strategy.loginSettleTimeout ?? 15000,
+        timeout: strategy.loginSettleTimeout ?? 8000,
         settleMs: strategy.loginSettleDelay ?? 2500,
         previousUrl,
     });
@@ -219,7 +219,7 @@ function buildSearchQueries(productName) {
         }
     }
 
-    return queries.slice(0, 4);
+    return queries.slice(0, 2);
 }
 
 async function clickFirstVisible(page, selectors, options = {}) {
