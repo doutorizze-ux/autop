@@ -33,11 +33,18 @@ async function runSupplierSearch(supplier: any, productName: string) {
         }
 
         if (data && data.error) {
+            let errorMsg = data.error;
+            if (errorMsg.includes('Nenhum produto encontrado') || errorMsg.includes('Nenhum item')) {
+                errorMsg = 'Nao ha este produto no estoque';
+            } else if (!errorMsg.startsWith('Erro do Bot')) {
+                errorMsg = `Erro do Bot: ${data.error}`;
+            }
+
             return {
                 provider: supplier.name,
                 product: productName,
                 price: '---',
-                error: `Erro do Bot: ${data.error}`,
+                error: errorMsg,
                 link: supplier.url,
                 available: false,
                 debug: data.debug || null,
@@ -48,7 +55,7 @@ async function runSupplierSearch(supplier: any, productName: string) {
             provider: supplier.name,
             product: productName,
             price: '---',
-            error: 'Nenhum produto encontrado.',
+            error: 'Nao ha este produto no estoque',
             link: supplier.url,
             available: false,
             debug: null,
