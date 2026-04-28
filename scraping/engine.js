@@ -165,7 +165,7 @@ async function getVisibleLocators(page, selectors, timeout = 4000) {
 
 async function waitForPageSettle(page, selectors = [], options = {}) {
     const timeout = options.timeout ?? 7000;
-    const settleMs = options.settleMs ?? 1500;
+    const settleMs = options.settleMs ?? 500;
     const previousUrl = safeString(options.previousUrl || page.url());
     const waiters = [];
 
@@ -679,12 +679,12 @@ async function captureDebugState(page) {
     };
 }
 
-let globalBrowser = null;
+let globalBrowserPromise = null;
 
-async function getBrowser() {
-    if (!globalBrowser) {
+function getBrowser() {
+    if (!globalBrowserPromise) {
         console.error("[Playwright] Inicializando Browser Global pela primeira vez...");
-        globalBrowser = await chromium.launch({
+        globalBrowserPromise = chromium.launch({
             headless: process.env.HEADLESS !== 'false',
             args: [
                 '--no-sandbox',
@@ -699,7 +699,7 @@ async function getBrowser() {
             ],
         });
     }
-    return globalBrowser;
+    return globalBrowserPromise;
 }
 
 async function scrapeProduct(supplier, productName) {
@@ -720,7 +720,7 @@ async function scrapeProduct(supplier, productName) {
             : loginUrl;
 
         await page.goto(initialUrl, { waitUntil: 'domcontentloaded' });
-        await page.waitForTimeout(2000);
+        await page.waitForTimeout(500);
         await dismissTransientUi(page);
 
         let didLoginThisRun = false;
@@ -803,7 +803,7 @@ async function scrapeProduct(supplier, productName) {
 
             if (supplier.searchUrl) {
                 await page.goto(supplier.searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
-                await page.waitForTimeout(1000);
+                await page.waitForTimeout(200);
             }
 
             const beforeSearchUrl = page.url();
@@ -833,7 +833,7 @@ async function scrapeProduct(supplier, productName) {
             await waitForPageSettle(
                 page,
                 postSearchSelectors,
-                { timeout: 12000, settleMs: 2000, previousUrl: beforeSearchUrl }
+                { timeout: 12000, settleMs: 500, previousUrl: beforeSearchUrl }
             );
             await dismissTransientUi(page);
 
