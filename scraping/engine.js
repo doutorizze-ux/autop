@@ -647,8 +647,16 @@ async function createContext(browser, supplier) {
             get: () => undefined,
         });
 
-        Object.defineProperty(navigator, 'language', {
-            get: () => 'pt-BR',
+        // Evasão profunda para CloudFront
+        window.chrome = {
+            runtime: {},
+            loadTimes: function() {},
+            csi: function() {},
+            app: {}
+        };
+
+        Object.defineProperty(navigator, 'plugins', {
+            get: () => [1, 2, 3, 4, 5],
         });
 
         Object.defineProperty(navigator, 'languages', {
