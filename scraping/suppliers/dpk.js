@@ -9,6 +9,7 @@ module.exports = {
     buildSearchUrl: (query) => {
         return `https://www.dpk.com.br/busca-produto?termo=${encodeURIComponent(query)}`;
     },
+    needsLogin: false, // Tentar sem login primeiro para evitar o bloqueio da página de login
 
     performSearch: async ({ page, query }) => {
         // Atraso aleatório para enganar o CloudFront
