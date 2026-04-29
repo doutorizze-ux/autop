@@ -7,6 +7,7 @@ const enginePath = path.resolve(__dirname, '../../../scraping/engine.js');
 const { scrapeProduct } = require(enginePath);
 
 async function runSupplierSearch(supplier: any, productName: string) {
+    console.error(`[BACKEND_VERSION] Executing scraper engine v3 (branch: main) for: ${supplier.name}`);
     try {
         const data = await scrapeProduct(supplier, productName);
 
