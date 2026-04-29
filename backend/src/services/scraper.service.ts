@@ -34,6 +34,19 @@ async function runSupplierSearch(supplier: any, productName: string) {
 
         if (data && data.error) {
             let errorMsg = data.error;
+            const debugTitle = String(data.debug?.pageTitle || '');
+            const debugSnippet = String(data.debug?.bodySnippet || '');
+            const debugUrl = String(data.debug?.finalUrl || '');
+            const debugContext = `${debugTitle}\n${debugSnippet}\n${debugUrl}`.toLowerCase();
+
+            if (
+                debugContext.includes('request could not be satisfied') ||
+                debugContext.includes('403 error') ||
+                debugContext.includes('cloudfront') ||
+                debugContext.includes('request blocked')
+            ) {
+                errorMsg = 'Erro do Bot: Acesso bloqueado pelo site (CloudFront/403).';
+            } else
             if (errorMsg.includes('Nenhum produto encontrado') || errorMsg.includes('Nenhum item')) {
                 errorMsg = 'Nao ha este produto no estoque';
             } else if (!errorMsg.startsWith('Erro do Bot')) {
@@ -55,7 +68,7 @@ async function runSupplierSearch(supplier: any, productName: string) {
             provider: supplier.name,
             product: productName,
             price: '---',
-            error: 'Nao ha este produto no estoque',
+            error: 'Erro do Bot: Nenhum retorno valido do fornecedor.',
             link: supplier.url,
             available: false,
             debug: null,
