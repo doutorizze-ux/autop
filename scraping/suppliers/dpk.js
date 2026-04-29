@@ -12,28 +12,15 @@ module.exports = {
     needsLogin: false, // Tentar sem login primeiro para evitar o bloqueio da página de login
 
     performSearch: async ({ page, query }) => {
-        const proxyKey = process.env.SCRAPERAPI_KEY;
-        console.error(`[DEBUG DPK] Chave ScraperAPI detectada: ${proxyKey ? 'SIM' : 'NÃO'}`);
+        const targetUrl = `https://www.dpk.com.br/#/busca-produto?termo=${encodeURIComponent(query)}`;
+        console.error(`[DEBUG DPK] Acessando DPK via Proxy: ${targetUrl}`);
         
-        if (proxyKey) {
-            const targetUrl = `https://www.dpk.com.br/#/busca-produto?termo=${encodeURIComponent(query)}`;
-            const tunnelUrl = `http://api.scraperapi.com?api_key=${proxyKey}&url=${encodeURIComponent(targetUrl)}&render=true`;
-            console.error(`[DEBUG DPK] Usando túnel ScraperAPI para: ${targetUrl}`);
-            await page.goto(tunnelUrl, { waitUntil: 'networkidle', timeout: 60000 }).catch((e) => {
-                console.error(`[DEBUG DPK] Erro no túnel ScraperAPI: ${e.message}`);
-            });
-            // Espera estendida para o Angular renderizar os cards
-            await page.waitForTimeout(8000);
-            await page.waitForSelector('mat-card, .product-item, .card-produto', { timeout: 15000 }).catch(() => {
-                console.error('[DEBUG DPK] Timeout esperando cards de produto no ScraperAPI');
-            });
-            const targetHash = `#/busca-produto?termo=${encodeURIComponent(query)}`;
-            const fullUrl = `https://www.dpk.com.br/${targetHash}`;
-            console.error(`[DEBUG DPK] Tentando acesso direto (sem proxy): ${fullUrl}`);
-            await page.goto(fullUrl, { waitUntil: 'networkidle' }).catch(() => {});
-        }
+        await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 60000 }).catch((e) => {
+            console.error(`[DEBUG DPK] Erro ao carregar DPK: ${e.message}`);
+        });
 
-        await page.waitForTimeout(3000);
+        // Espera o Angular renderizar
+        await page.waitForTimeout(5000);
     },
 
 
