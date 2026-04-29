@@ -12,20 +12,26 @@ module.exports = {
     needsLogin: false, // Tentar sem login primeiro para evitar o bloqueio da página de login
 
     performSearch: async ({ page, query }) => {
-        // Se houver uma chave de proxy agressivo, usa ela, senão tenta o fluxo normal
         const proxyKey = process.env.SCRAPERAPI_KEY;
+        console.error(`[DEBUG DPK] Chave ScraperAPI detectada: ${proxyKey ? 'SIM' : 'NÃO'}`);
+        
         if (proxyKey) {
             const targetUrl = `https://www.dpk.com.br/#/busca-produto?termo=${encodeURIComponent(query)}`;
             const tunnelUrl = `http://api.scraperapi.com?api_key=${proxyKey}&url=${encodeURIComponent(targetUrl)}&render=true`;
-            await page.goto(tunnelUrl, { waitUntil: 'networkidle' }).catch(() => {});
+            console.error(`[DEBUG DPK] Usando túnel ScraperAPI para: ${targetUrl}`);
+            await page.goto(tunnelUrl, { waitUntil: 'networkidle', timeout: 60000 }).catch((e) => {
+                console.error(`[DEBUG DPK] Erro no túnel ScraperAPI: ${e.message}`);
+            });
         } else {
             const targetHash = `#/busca-produto?termo=${encodeURIComponent(query)}`;
             const fullUrl = `https://www.dpk.com.br/${targetHash}`;
+            console.error(`[DEBUG DPK] Tentando acesso direto (sem proxy): ${fullUrl}`);
             await page.goto(fullUrl, { waitUntil: 'networkidle' }).catch(() => {});
         }
 
         await page.waitForTimeout(3000);
     },
+
 
 
     extractItems: async ({ page }) => {
