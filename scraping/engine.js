@@ -737,8 +737,8 @@ async function scrapeProduct(supplier, productName) {
 
     const { context, hasPreloadedSession } = await createContext(browser, supplier);
     const page = await context.newPage();
-    page.setDefaultTimeout(20000);
-    page.setDefaultNavigationTimeout(30000);
+    page.setDefaultTimeout(120000);
+    page.setDefaultNavigationTimeout(120000);
 
     try {
         console.error(`[DEBUG] Iniciando scraping para: ${supplier.name}`);
