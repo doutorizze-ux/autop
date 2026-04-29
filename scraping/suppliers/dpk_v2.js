@@ -1,6 +1,7 @@
 
 const dpkStrategy = {
     name: 'dpk',
+    matches: (name) => name.toLowerCase().includes('dpk'),
     url: 'https://dpk.com.br/',
     searchSelector: ['input[formcontrolname="descricao"]', 'input[role="search"]'],
     searchButtonSelector: ['button.btn-buscar', '.btn-buscar'],
