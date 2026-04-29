@@ -11,7 +11,11 @@ module.exports = {
     },
 
     performSearch: async ({ page, query }) => {
+        // Atraso aleatório para enganar o CloudFront
+        await page.waitForTimeout(Math.floor(Math.random() * 3000) + 1000);
+        
         const targetHash = `#/busca-produto?termo=${encodeURIComponent(query)}`;
+
         const fullUrl = `https://www.dpk.com.br/${targetHash}`;
         
         await page.goto(fullUrl, { waitUntil: 'networkidle' }).catch(() => {});
