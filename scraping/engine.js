@@ -699,6 +699,7 @@ function getBrowser() {
                 '--disable-accelerated-2d-canvas',
                 '--disable-gpu',
                 '--disable-blink-features=AutomationControlled',
+                '--disable-features=IsolateOrigins,site-per-process',
                 '--no-first-run',
                 '--no-zygote',
                 '--window-size=1920,1080',
