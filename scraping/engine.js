@@ -171,19 +171,23 @@ async function waitForPageSettle(page, selectors = [], options = {}) {
 
     if (previousUrl) {
         waiters.push(
-            page.waitForURL((url) => url.toString() !== previousUrl, { timeout }).catch(() => null)
+            page.waitForURL((url) => {
+                const current = url.toString();
+                return current !== previousUrl && !current.includes(previousUrl) && !previousUrl.includes(current);
+            }, { timeout }).catch(() => null)
         );
     }
 
     for (const selector of selectors) {
         try {
-            waiters.push(page.locator(selector).first().waitFor({ state: 'visible', timeout }).catch(() => null));
+            waiters.push(page.locator(selector).first().waitFor({ state: 'attached', timeout }).catch(() => null));
         } catch (_) {}
     }
 
     await Promise.race(waiters).catch(() => null);
     await page.waitForTimeout(settleMs);
 }
+
 
 async function waitForLoginCompletion(page, previousUrl, loginUrl, supplier, strategy = {}, options = {}) {
     const explicitSuccessSelectors = buildSelectorList(strategy.loginSuccessSelector);
@@ -374,7 +378,7 @@ async function performSearch(page, supplier, query, strategy = {}) {
     if (strategy.buildSearchUrl) {
         const directUrl = strategy.buildSearchUrl(query, supplier);
         if (directUrl) {
-            await page.goto(directUrl, { waitUntil: 'domcontentloaded' });
+            await page.goto(directUrl, { waitUntil: 'networkidle' }).catch(() => {});
             return;
         }
     }
@@ -462,8 +466,10 @@ async function extractWithConfiguredSelectors(page, supplier, strategy = {}) {
         preferStrategySelectors ? supplier.availableSelector : strategy.availableSelector,
         ['.stock', '.estoque', '.available', '.disponivel']
     );
+    const codeSelectors = buildSelectorList(strategy.codeSelector);
+    const brandSelectors = buildSelectorList(strategy.brandSelector);
 
-    return page.evaluate(({ selectors, nameSelectors, priceSelectors, stockSelectors }) => {
+    return page.evaluate(({ selectors, nameSelectors, priceSelectors, stockSelectors, codeSelectors, brandSelectors }) => {
         const tryText = (root, candidates) => {
             for (const candidate of candidates) {
                 try {
@@ -504,14 +510,14 @@ async function extractWithConfiguredSelectors(page, supplier, strategy = {}) {
             return {
                 nome,
                 preco,
-                codigo,
-                marca,
+                codigo: tryText(el, codeSelectors) || codigo,
+                marca: tryText(el, brandSelectors) || marca,
                 aplicacao,
                 estoque,
                 link,
             };
         }).filter((item) => item.preco);
-    }, { selectors, nameSelectors, priceSelectors, stockSelectors });
+    }, { selectors, nameSelectors, priceSelectors, stockSelectors, codeSelectors, brandSelectors });
 }
 
 async function extractGeneric(page) {
@@ -607,7 +613,7 @@ async function createContext(browser, supplier) {
     const supplierSessionState = parseSupplierSessionData(supplier);
     const contextOptions = {
         viewport: { width: 1920, height: 1080 },
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         locale: 'pt-BR',
         ignoreHTTPSErrors: true,
     };
