@@ -12,16 +12,26 @@ module.exports = {
     needsLogin: false, // Tentar sem login primeiro para evitar o bloqueio da página de login
 
     performSearch: async ({ page, query }) => {
-        const targetUrl = `https://www.dpk.com.br/#/busca-produto?termo=${encodeURIComponent(query)}`;
-        console.error(`[DEBUG DPK] Acessando DPK via Proxy: ${targetUrl}`);
+        const proxyKey = process.env.SCRAPERAPI_KEY;
+        const targetUrl = `https://dpk.com.br/#/busca-produto?termo=${encodeURIComponent(query)}`;
         
-        await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 60000 }).catch((e) => {
-            console.error(`[DEBUG DPK] Erro ao carregar DPK: ${e.message}`);
-        });
+        if (proxyKey) {
+            console.error(`[DEBUG DPK] Usando ScraperAPI de Alta Performance para: ${targetUrl}`);
+            const tunnelUrl = `http://api.scraperapi.com?api_key=${proxyKey}&url=${encodeURIComponent(targetUrl)}&render=true&country_code=br`;
+            
+            // Pula a navegação padrão do Playwright que o CloudFront bloqueia
+            await page.goto(tunnelUrl, { waitUntil: 'networkidle', timeout: 90000 }).catch(async (e) => {
+                console.error(`[DEBUG DPK] Erro no túnel: ${e.message}. Tentando fallback...`);
+                await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 60000 }).catch(() => {});
+            });
+        } else {
+            console.error(`[DEBUG DPK] Sem chave ScraperAPI. Tentando acesso direto.`);
+            await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 60000 }).catch(() => {});
+        }
 
-        // Espera o Angular renderizar
         await page.waitForTimeout(5000);
     },
+
 
 
 
