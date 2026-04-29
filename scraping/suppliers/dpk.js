@@ -12,24 +12,18 @@ module.exports = {
     needsLogin: false, // Tentar sem login primeiro para evitar o bloqueio da página de login
 
     performSearch: async ({ page, query }) => {
-        // Atraso aleatório para enganar o CloudFront
-        await page.waitForTimeout(Math.floor(Math.random() * 3000) + 1000);
-        
-        const targetHash = `#/busca-produto?termo=${encodeURIComponent(query)}`;
+        // Se houver uma chave de proxy agressivo, usa ela, senão tenta o fluxo normal
+        const proxyKey = process.env.SCRAPERAPI_KEY;
+        if (proxyKey) {
+            const targetUrl = `https://www.dpk.com.br/#/busca-produto?termo=${encodeURIComponent(query)}`;
+            const tunnelUrl = `http://api.scraperapi.com?api_key=${proxyKey}&url=${encodeURIComponent(targetUrl)}&render=true`;
+            await page.goto(tunnelUrl, { waitUntil: 'networkidle' }).catch(() => {});
+        } else {
+            const targetHash = `#/busca-produto?termo=${encodeURIComponent(query)}`;
+            const fullUrl = `https://www.dpk.com.br/${targetHash}`;
+            await page.goto(fullUrl, { waitUntil: 'networkidle' }).catch(() => {});
+        }
 
-        const fullUrl = `https://www.dpk.com.br/${targetHash}`;
-        
-        await page.goto(fullUrl, { waitUntil: 'networkidle' }).catch(() => {});
-        
-        // Em SPAs com hash, às vezes o goto não dispara se já estamos na página. 
-        // Forçamos a mudança se necessário via evaluate.
-        await page.evaluate((hash) => {
-            if (window.location.hash !== hash) {
-                window.location.hash = hash;
-            }
-        }, targetHash);
-
-        // Espera crucial para o Angular/SPA processar a rota e os resultados
         await page.waitForTimeout(3000);
     },
 
