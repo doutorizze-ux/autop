@@ -7,7 +7,7 @@ module.exports = {
     searchSelector: ['input[formcontrolname="descricao"]', 'input[role="search"]', 'input[placeholder*="código ou descrição" i]'],
     searchButtonSelector: ['button.btn-buscar', 'button:has-text("Buscar")', '.btn-buscar'],
     buildSearchUrl: (query) => {
-        return `https://www.dpk.com.br/busca-produto?termo=${encodeURIComponent(query)}`;
+        return `https://dpk.com.br/#/busca-produto?termo=${encodeURIComponent(query)}`;
     },
     needsLogin: false, // Tentar sem login primeiro para evitar o bloqueio da página de login
 
