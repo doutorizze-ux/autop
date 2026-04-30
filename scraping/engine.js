@@ -102,19 +102,35 @@ function parseSupplierSessionData(supplier) {
     return null;
 }
 
-async function waitForAnyVisible(page, selectors, timeout = 8000) {
-    let lastError;
-
-    for (const selector of selectors) {
-        try {
-            await page.locator(selector).first().waitFor({ state: 'visible', timeout });
-            return selector;
-        } catch (error) {
-            lastError = error;
-        }
+async function waitForAnyVisible(page, selectors, timeout = 5000) {
+    if (!selectors || selectors.length === 0) {
+        throw new Error('Nenhum seletor fornecido para waitForAnyVisible');
     }
 
-    throw new Error(`Nenhum seletor visível encontrado. Tentados: ${selectors.join(' | ')}. ${lastError ? `Último erro: ${lastError.message}` : ''}`);
+    try {
+        // Tenta esperar por QUALQUER um dos seletores usando uma string combinada
+        // Isso é MUITO mais rápido que esperar sequencialmente
+        const combinedSelector = selectors.join(', ');
+        await page.locator(combinedSelector).first().waitFor({ state: 'visible', timeout });
+
+        // Identifica qual seletor funcionou para retornar o nome correto
+        for (const selector of selectors) {
+            if (await page.locator(selector).first().isVisible()) {
+                return selector;
+            }
+        }
+    } catch (error) {
+        // Se falhou, tentamos uma última vez individualmente (caso a string combinada tenha dado erro de sintaxe)
+        for (const selector of selectors) {
+            try {
+                if (await page.locator(selector).first().isVisible({ timeout: 100 })) {
+                    return selector;
+                }
+            } catch (_) {}
+        }
+        throw new Error(`Nenhum seletor visível em ${timeout}ms. Tentados: ${selectors.join(' | ')}`);
+    }
+    return selectors[0];
 }
 
 async function fillFirstVisible(page, selectors, value, options = {}) {
@@ -129,9 +145,10 @@ async function fillVisibleLocator(locator, value) {
     await locator.press('Control+A').catch(() => {});
     await locator.fill('');
     try {
-        await locator.type(stringValue, { delay: 35 });
-    } catch (_) {
+        // Removido delay de digitação para aumentar a velocidade
         await locator.fill(stringValue, { force: true });
+    } catch (_) {
+        await locator.type(stringValue, { delay: 10 });
     }
     await locator.evaluate((el) => {
         el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -164,8 +181,8 @@ async function getVisibleLocators(page, selectors, timeout = 4000) {
 }
 
 async function waitForPageSettle(page, selectors = [], options = {}) {
-    const timeout = options.timeout ?? 7000;
-    const settleMs = options.settleMs ?? 500;
+    const timeout = options.timeout ?? 6000;
+    const settleMs = options.settleMs ?? 300;
     const previousUrl = safeString(options.previousUrl || page.url());
     const waiters = [];
 
@@ -196,8 +213,8 @@ async function waitForLoginCompletion(page, previousUrl, loginUrl, supplier, str
         : buildSelectorList(supplier.searchBarSelector, strategy.searchSelector);
 
     await waitForPageSettle(page, successSelectors, {
-        timeout: strategy.loginSettleTimeout ?? 8000,
-        settleMs: strategy.loginSettleDelay ?? 2500,
+        timeout: strategy.loginSettleTimeout ?? 6000,
+        settleMs: strategy.loginSettleDelay ?? 1000,
         previousUrl,
     });
 
@@ -411,7 +428,7 @@ async function performSearch(page, supplier, query, strategy = {}) {
         ]
     );
 
-    const selector = await waitForAnyVisible(page, searchSelectors, 15000);
+    const selector = await waitForAnyVisible(page, searchSelectors, 6000);
     const input = page.locator(selector).first();
     await input.click({ force: true }).catch(() => {});
     await input.press('Control+A').catch(() => {});
@@ -605,7 +622,7 @@ async function ensureLoggedIn(page, loginUrl, supplier, strategy = {}, options =
 async function resetForNextSearch(page, supplier) {
     const targetUrl = supplier.searchUrl || supplier.url;
     await page.goto(targetUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(500);
 }
 
 async function createContext(browser, supplier) {
@@ -737,8 +754,8 @@ async function scrapeProduct(supplier, productName) {
 
     const { context, hasPreloadedSession } = await createContext(browser, supplier);
     const page = await context.newPage();
-    page.setDefaultTimeout(120000);
-    page.setDefaultNavigationTimeout(120000);
+    page.setDefaultTimeout(60000);
+    page.setDefaultNavigationTimeout(60000);
 
     try {
         console.error(`[DEBUG] Iniciando scraping para: ${supplier.name}`);
@@ -813,7 +830,7 @@ async function scrapeProduct(supplier, productName) {
                     strategy.itemContainerSelector,
                     strategy.loginSuccessSelector
                 ),
-                { timeout: 12000, settleMs: 1500, previousUrl: normalizedCurrentUrl }
+                { timeout: 8000, settleMs: 500, previousUrl: normalizedCurrentUrl }
             );
             await dismissTransientUi(page);
         }
@@ -863,7 +880,7 @@ async function scrapeProduct(supplier, productName) {
             await waitForPageSettle(
                 page,
                 postSearchSelectors,
-                { timeout: 12000, settleMs: 500, previousUrl: beforeSearchUrl }
+                { timeout: 8000, settleMs: 300, previousUrl: beforeSearchUrl }
             );
             await dismissTransientUi(page);
 

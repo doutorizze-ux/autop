@@ -30,7 +30,7 @@ module.exports = {
             page.locator('text=Nenhum registro').first().waitFor({ state: 'visible', timeout: 12000 }).catch(() => null),
         ]).catch(() => null);
 
-        await page.waitForTimeout(1500);
+        await page.waitForTimeout(500);
         await dismissTransientUi();
     },
     extractItems: async ({ page }) => {
