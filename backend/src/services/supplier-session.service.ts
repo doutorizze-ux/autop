@@ -57,23 +57,39 @@ export class SupplierSessionService {
         const profilePath = getSupplierProfilePath(supplier.name);
         ensureDirectory(profilePath);
 
-        const context = await chromium.launchPersistentContext(profilePath, {
+        const browserOptions = {
             headless: process.env.LOGIN_ASSIST_HEADLESS === 'true',
             viewport: { width: 1280, height: 900 },
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             locale: 'pt-BR',
+            timezoneId: 'America/Sao_Paulo',
             ignoreHTTPSErrors: true,
+            ignoreDefaultArgs: ['--enable-automation'],
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
-                '--disable-blink-features=AutomationControlled',
                 '--window-size=1280,900',
             ],
-        });
+        };
+
+        let context;
+        try {
+            context = await chromium.launchPersistentContext(profilePath, {
+                ...browserOptions,
+                channel: 'chrome',
+            });
+        } catch (error) {
+            console.error(`[Login Assistido] Chrome real indisponivel, usando Chromium: ${error instanceof Error ? error.message : error}`);
+            context = await chromium.launchPersistentContext(profilePath, browserOptions);
+        }
 
         await context.addInitScript(() => {
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en-US', 'en'] });
+            Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+            (window as any).chrome = (window as any).chrome || { runtime: {} };
         });
 
         const page = context.pages()[0] || await context.newPage();

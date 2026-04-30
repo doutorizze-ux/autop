@@ -81,6 +81,16 @@ export const Suppliers = () => {
         fetchSuppliers();
     }, []);
 
+    useEffect(() => {
+        if (!assistSupplier) return;
+
+        const interval = window.setInterval(() => {
+            refreshAssistSession().catch(() => {});
+        }, 2500);
+
+        return () => window.clearInterval(interval);
+    }, [assistSupplier?.id]);
+
     const fetchSuppliers = async () => {
         try {
             const response = await axios.get(`${apiBase}/api/suppliers`);
@@ -433,6 +443,9 @@ export const Suppliers = () => {
                         <h2 style={{ marginBottom: '0.5rem' }}>Login Assistido</h2>
                         <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
                             Faça login em <strong>{assistSupplier.name}</strong>, passe pela verificação e salve a sessão quando estiver dentro do portal.
+                        </p>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                            Clique no campo dentro da imagem, escreva no campo acima e use Digitar. A tela atualiza sozinha enquanto a verificacao carrega.
                         </p>
 
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
