@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.43.0-jammy AS builder
+FROM mcr.microsoft.com/playwright:v1.59.1-jammy AS builder
 
 WORKDIR /app
 
@@ -9,7 +9,7 @@ RUN cd backend && npm install && npx prisma generate
 
 # Install scraping dependencies
 COPY scraping/package*.json ./scraping/
-RUN cd scraping && npm install && npx playwright install chromium
+RUN cd scraping && npm install
 
 # Copy all source
 COPY . .
@@ -18,7 +18,7 @@ COPY . .
 RUN cd backend && npm run build
 
 # Final stage
-FROM mcr.microsoft.com/playwright:v1.43.0-jammy
+FROM mcr.microsoft.com/playwright:v1.59.1-jammy
 
 WORKDIR /app
 
@@ -30,10 +30,6 @@ COPY --from=builder /app/backend/prisma ./backend/prisma
 
 # Copy scraping engine (already has node_modules)
 COPY --from=builder /app/scraping ./scraping
-
-# Ensure playwright is ready in the final image
-RUN npx playwright install-deps chromium
-RUN npx playwright install chromium
 
 EXPOSE 5000
 
