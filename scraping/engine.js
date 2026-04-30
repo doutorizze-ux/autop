@@ -114,7 +114,7 @@ async function waitForAnyVisible(page, selectors, timeout = 8000) {
         }
     }
 
-    throw new Error(`Nenhum seletor visivel encontrado. Tentados: ${selectors.join(' | ')}. ${lastError ? `Ultimo erro: ${lastError.message}` : ''}`);
+    throw new Error(`Nenhum seletor visível encontrado. Tentados: ${selectors.join(' | ')}. ${lastError ? `Último erro: ${lastError.message}` : ''}`);
 }
 
 async function fillFirstVisible(page, selectors, value, options = {}) {
@@ -608,7 +608,7 @@ async function resetForNextSearch(page, supplier) {
     await page.waitForTimeout(1500);
 }
 
-async function createContext(browser, supplier, strategy = {}) {
+async function createContext(browser, supplier) {
     const sessionStatePath = getSessionStatePath(supplier);
     const supplierSessionState = parseSupplierSessionData(supplier);
     const contextOptions = {
@@ -616,7 +616,7 @@ async function createContext(browser, supplier, strategy = {}) {
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         locale: 'pt-BR',
         ignoreHTTPSErrors: true,
-        proxy: !strategy.usesOwnProxy && process.env.SCRAPER_PROXY ? { server: process.env.SCRAPER_PROXY } : undefined,
+        proxy: process.env.SCRAPER_PROXY ? { server: process.env.SCRAPER_PROXY } : undefined,
         extraHTTPHeaders: {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -732,33 +732,19 @@ function getBrowser() {
 
 async function scrapeProduct(supplier, productName) {
     const browser = await getBrowser();
-    const strategy = resolveStrategy(supplier.name);
-    const effectiveNeedsLogin = strategy.needsLogin !== undefined
-        ? Boolean(strategy.needsLogin)
-        : Boolean(supplier.needsLogin);
-    const effectiveSupplier = { ...supplier, needsLogin: effectiveNeedsLogin };
 
-    const { context, hasPreloadedSession } = await createContext(browser, effectiveSupplier, strategy);
+    const { context, hasPreloadedSession } = await createContext(browser, supplier);
     const page = await context.newPage();
-    const supplierTimeoutMs = Math.max(
-        120000,
-        Number.parseInt(process.env.SCRAPER_SUPPLIER_TIMEOUT_MS || String(supplier.scraperTimeoutMs || 120000), 10) || 120000
-    );
-    const operationTimeoutMs = Math.max(5000, supplierTimeoutMs - 5000);
-    let timedOut = false;
-    const timeoutHandle = setTimeout(() => {
-        timedOut = true;
-        context.close().catch(() => {});
-    }, supplierTimeoutMs);
-
-    page.setDefaultTimeout(operationTimeoutMs);
-    page.setDefaultNavigationTimeout(operationTimeoutMs);
+    page.setDefaultTimeout(120000);
+    page.setDefaultNavigationTimeout(120000);
 
     try {
         console.error(`[DEBUG] Iniciando scraping para: ${supplier.name}`);
-        const loginUrl = effectiveSupplier.loginUrl || effectiveSupplier.url;
+        const strategy = resolveStrategy(supplier.name);
+
+        const loginUrl = supplier.loginUrl || supplier.url;
         const initialUrl = hasPreloadedSession
-            ? resolveAuthenticatedUrl(strategy, effectiveSupplier, loginUrl)
+            ? resolveAuthenticatedUrl(strategy, supplier, loginUrl)
             : loginUrl;
 
         await page.goto(initialUrl, { waitUntil: 'domcontentloaded' });
@@ -767,12 +753,12 @@ async function scrapeProduct(supplier, productName) {
 
         let didLoginThisRun = false;
 
-        if (effectiveSupplier.needsLogin) {
+        if (supplier.needsLogin) {
             const alreadyLogged = await isAnySelectorVisible(
                 page,
                 buildSelectorList(
                     strategy.loginSuccessSelector,
-                    effectiveSupplier.searchBarSelector,
+                    supplier.searchBarSelector,
                     strategy.searchSelector
                 ),
                 3000
@@ -787,28 +773,28 @@ async function scrapeProduct(supplier, productName) {
                 }
 
                 const preLoginUrl = page.url();
-                await runGenericLogin(page, effectiveSupplier, strategy);
+                await runGenericLogin(page, supplier, strategy);
                 didLoginThisRun = true;
-                await waitForLoginCompletion(page, preLoginUrl, loginUrl, effectiveSupplier, strategy, {
+                await waitForLoginCompletion(page, preLoginUrl, loginUrl, supplier, strategy, {
                     ignoreSessionDataHint: hasPreloadedSession,
                 });
             } else {
                 await dismissTransientUi(page);
-                await ensureLoggedIn(page, loginUrl, effectiveSupplier, strategy);
+                await ensureLoggedIn(page, loginUrl, supplier, strategy);
             }
-            await persistSession(context, effectiveSupplier, didLoginThisRun);
+            await persistSession(context, supplier, didLoginThisRun);
         }
 
-        const authenticatedTargetUrl = resolveAuthenticatedUrl(strategy, effectiveSupplier, loginUrl);
+        const authenticatedTargetUrl = resolveAuthenticatedUrl(strategy, supplier, loginUrl);
         const normalizedAuthenticatedTarget = safeString(authenticatedTargetUrl).replace(/\/+$/, '');
         const normalizedCurrentUrl = safeString(page.url()).replace(/\/+$/, '');
-        const searchReadySelectors = buildSelectorList(strategy.searchSelector, effectiveSupplier.searchBarSelector);
+        const searchReadySelectors = buildSelectorList(strategy.searchSelector, supplier.searchBarSelector);
         const searchReady = searchReadySelectors.length
             ? await isAnySelectorVisible(page, searchReadySelectors, 1500)
             : false;
 
         if (
-            effectiveSupplier.needsLogin
+            supplier.needsLogin
             && normalizedAuthenticatedTarget
             && (
                 strategy.navigateToAuthenticatedAfterLogin
@@ -821,7 +807,7 @@ async function scrapeProduct(supplier, productName) {
                 page,
                 buildSelectorList(
                     strategy.searchSelector,
-                    effectiveSupplier.searchBarSelector,
+                    supplier.searchBarSelector,
                     strategy.itemContainerSelector,
                     strategy.loginSuccessSelector
                 ),
@@ -843,33 +829,33 @@ async function scrapeProduct(supplier, productName) {
         for (const query of queries) {
             console.error(`[DEBUG] Buscando por: ${query}`);
 
-            if (effectiveSupplier.searchUrl) {
-                await page.goto(effectiveSupplier.searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+            if (supplier.searchUrl) {
+                await page.goto(supplier.searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
                 await page.waitForTimeout(200);
             }
 
             const beforeSearchUrl = page.url();
-            await performSearch(page, effectiveSupplier, query, strategy);
+            await performSearch(page, supplier, query, strategy);
             const postSearchSelectors = strategy.waitForResultsOnly
                 ? buildSelectorList(
-                    strategy.preferStrategySelectors ? strategy.itemContainerSelector : effectiveSupplier.itemContainerSelector,
-                    strategy.preferStrategySelectors ? strategy.productNameSelector : effectiveSupplier.productNameSelector,
-                    strategy.preferStrategySelectors ? strategy.priceSelector : effectiveSupplier.priceSelector,
-                    strategy.preferStrategySelectors ? effectiveSupplier.itemContainerSelector : strategy.itemContainerSelector,
-                    strategy.preferStrategySelectors ? effectiveSupplier.productNameSelector : strategy.productNameSelector,
-                    strategy.preferStrategySelectors ? effectiveSupplier.priceSelector : strategy.priceSelector,
+                    strategy.preferStrategySelectors ? strategy.itemContainerSelector : supplier.itemContainerSelector,
+                    strategy.preferStrategySelectors ? strategy.productNameSelector : supplier.productNameSelector,
+                    strategy.preferStrategySelectors ? strategy.priceSelector : supplier.priceSelector,
+                    strategy.preferStrategySelectors ? supplier.itemContainerSelector : strategy.itemContainerSelector,
+                    strategy.preferStrategySelectors ? supplier.productNameSelector : strategy.productNameSelector,
+                    strategy.preferStrategySelectors ? supplier.priceSelector : strategy.priceSelector,
                     strategy.emptyResultSelector
                 )
                 : buildSelectorList(
-                    strategy.preferStrategySelectors ? strategy.itemContainerSelector : effectiveSupplier.itemContainerSelector,
-                    strategy.preferStrategySelectors ? strategy.productNameSelector : effectiveSupplier.productNameSelector,
-                    strategy.preferStrategySelectors ? strategy.priceSelector : effectiveSupplier.priceSelector,
-                    strategy.preferStrategySelectors ? effectiveSupplier.itemContainerSelector : strategy.itemContainerSelector,
-                    strategy.preferStrategySelectors ? effectiveSupplier.productNameSelector : strategy.productNameSelector,
-                    strategy.preferStrategySelectors ? effectiveSupplier.priceSelector : strategy.priceSelector,
+                    strategy.preferStrategySelectors ? strategy.itemContainerSelector : supplier.itemContainerSelector,
+                    strategy.preferStrategySelectors ? strategy.productNameSelector : supplier.productNameSelector,
+                    strategy.preferStrategySelectors ? strategy.priceSelector : supplier.priceSelector,
+                    strategy.preferStrategySelectors ? supplier.itemContainerSelector : strategy.itemContainerSelector,
+                    strategy.preferStrategySelectors ? supplier.productNameSelector : strategy.productNameSelector,
+                    strategy.preferStrategySelectors ? supplier.priceSelector : strategy.priceSelector,
                     strategy.searchSelector,
                     strategy.loginSuccessSelector,
-                    effectiveSupplier.searchBarSelector
+                    supplier.searchBarSelector
                 );
 
             await waitForPageSettle(
@@ -881,28 +867,28 @@ async function scrapeProduct(supplier, productName) {
 
             let items = [];
             if (strategy.extractItems) {
-                items = await strategy.extractItems({ page, supplier: effectiveSupplier });
+                items = await strategy.extractItems({ page, supplier });
             }
 
             if (
-                effectiveSupplier.itemContainerSelector || effectiveSupplier.productNameSelector || effectiveSupplier.priceSelector
+                supplier.itemContainerSelector || supplier.productNameSelector || supplier.priceSelector
                 || strategy.itemContainerSelector || strategy.productNameSelector || strategy.priceSelector
             ) {
-                items = items.length ? items : await extractWithConfiguredSelectors(page, effectiveSupplier, strategy);
+                items = items.length ? items : await extractWithConfiguredSelectors(page, supplier, strategy);
             }
 
             if (!items.length) {
                 items = await extractGeneric(page);
             }
 
-            finalItems = buildBrowserPayload(items, effectiveSupplier);
+            finalItems = buildBrowserPayload(items, supplier);
 
             if (finalItems.length > 0) {
                 break;
             }
 
             console.error(`[DEBUG] Nenhum resultado para "${query}". Tentando próxima query se houver.`);
-            await resetForNextSearch(page, effectiveSupplier);
+            await resetForNextSearch(page, supplier);
         }
 
         if (!finalItems.length) {
@@ -917,20 +903,18 @@ async function scrapeProduct(supplier, productName) {
             pageTitle: '',
             bodySnippet: '',
         }));
-        let errorMessage = timedOut
-            ? `Timeout apos ${Math.round(supplierTimeoutMs / 1000)}s pesquisando este fornecedor.`
-            : error.message;
+        let errorMessage = error.message;
 
         if (
-            effectiveSupplier.needsLogin &&
+            supplier.needsLogin &&
             errorMessage.includes('Falha no login') &&
-            !safeString(effectiveSupplier.sessionData)
+            !safeString(supplier.sessionData)
         ) {
             errorMessage = `${errorMessage} Dica: preencha "Sessao/Cookies JSON" no cadastro do fornecedor para reutilizar uma sessao autenticada.`;
         } else if (
-            effectiveSupplier.needsLogin &&
+            supplier.needsLogin &&
             errorMessage.includes('Falha no login') &&
-            safeString(effectiveSupplier.sessionData)
+            safeString(supplier.sessionData)
         ) {
             errorMessage = `${errorMessage} A sessao manual tambem nao foi suficiente ou expirou.`;
         }
@@ -945,7 +929,6 @@ async function scrapeProduct(supplier, productName) {
             debug,
         };
     } finally {
-        clearTimeout(timeoutHandle);
         await context.close().catch(() => {});
         // O browser.close() foi removido para manter a instancia global viva
     }
