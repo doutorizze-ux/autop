@@ -11,7 +11,7 @@ async function runSupplierSearch(supplier: any, productName: string) {
     try {
         const supplierTimeoutMs = Math.max(
             10000,
-            Number.parseInt(process.env.SCRAPER_SUPPLIER_TIMEOUT_MS || '70000', 10) || 70000
+            Number.parseInt(process.env.SCRAPER_SUPPLIER_TIMEOUT_MS || '120000', 10) || 120000
         );
         const data = await scrapeProduct({ ...supplier, scraperTimeoutMs: supplierTimeoutMs }, productName);
 
@@ -109,7 +109,7 @@ export class ScraperService {
 
     static async searchMultipleProducts(productNames: string[], socketId?: string) {
         const suppliers = await prisma.supplier.findMany();
-        const concurrency = Math.max(1, Number.parseInt(process.env.SCRAPER_CONCURRENCY || '3', 10) || 3);
+        const concurrency = Math.max(1, Number.parseInt(process.env.SCRAPER_CONCURRENCY || '2', 10) || 2);
         const resultsByProduct: Record<string, any[]> = {};
 
         for (const productName of productNames) {
