@@ -6,6 +6,7 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import { PrismaClient } from '@prisma/client';
+import fs from 'fs/promises';
 import path from 'path';
 import pino from 'pino';
 import QRCode from 'qrcode';
@@ -22,6 +23,7 @@ class WhatsAppService {
     public qr: string | null = null;
     public status: 'connecting' | 'connected' | 'disconnected' | 'qr' = 'disconnected';
     private initializing = false;
+    private readonly sessionPath = path.join(__dirname, '../../sessions');
 
     async init() {
         if (this.initializing) return;
@@ -32,7 +34,7 @@ class WhatsAppService {
         try {
             this.sock?.end?.();
 
-            const { state, saveCreds } = await useMultiFileAuthState(path.join(__dirname, '../../sessions'));
+            const { state, saveCreds } = await useMultiFileAuthState(this.sessionPath);
             const { version } = await fetchLatestBaileysVersion();
 
             this.sock = makeWASocket({
@@ -62,6 +64,11 @@ class WhatsAppService {
                     this.status = 'disconnected';
                     this.qr = null;
                     io.emit('whatsapp_status', { status: 'disconnected' });
+                    console.log(`WhatsApp connection closed. statusCode=${statusCode || 'unknown'} shouldReconnect=${shouldReconnect}`);
+
+                    if (statusCode === DisconnectReason.loggedOut) {
+                        await this.clearSession();
+                    }
 
                     if (shouldReconnect) {
                         setTimeout(() => {
@@ -126,10 +133,24 @@ class WhatsAppService {
         }
     }
 
-    async reconnect() {
+    private async clearSession() {
+        try {
+            await fs.rm(this.sessionPath, { recursive: true, force: true });
+        } catch (error) {
+            console.error('Erro ao limpar sessao do WhatsApp:', error);
+        }
+    }
+
+    async reconnect(forceNewSession = false) {
         this.sock?.end?.();
         this.sock = null;
         this.qr = null;
+        this.initializing = false;
+
+        if (forceNewSession) {
+            await this.clearSession();
+        }
+
         await this.init();
     }
 

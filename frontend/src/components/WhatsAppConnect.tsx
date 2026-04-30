@@ -6,6 +6,7 @@ import { CheckCircle2, RefreshCcw, WifiOff } from 'lucide-react';
 export const WhatsAppConnect = () => {
     const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'qr'>('connecting');
     const [qrCode, setQrCode] = useState<string | null>(null);
+    const [errorMessage, setErrorMessage] = useState('');
 
     useEffect(() => {
         const fetchInitialStatus = async () => {
@@ -13,20 +14,25 @@ export const WhatsAppConnect = () => {
                 const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/whatsapp/status`);
                 setStatus(response.data.status);
                 setQrCode(response.data.qr || null);
+                setErrorMessage('');
             } catch {
                 setStatus('disconnected');
                 setQrCode(null);
+                setErrorMessage('Nao foi possivel consultar o status do WhatsApp.');
             }
         };
 
         fetchInitialStatus();
+        const interval = window.setInterval(fetchInitialStatus, 4000);
 
         socket.on('whatsapp_status', (data: { status: 'connecting' | 'connected' | 'disconnected' | 'qr'; qr?: string }) => {
             setStatus(data.status);
             setQrCode(data.qr || null);
+            setErrorMessage('');
         });
 
         return () => {
+            window.clearInterval(interval);
             socket.off('whatsapp_status');
         };
     }, []);
@@ -34,12 +40,14 @@ export const WhatsAppConnect = () => {
     const reconnect = async () => {
         try {
             setStatus('connecting');
+            setErrorMessage('');
             const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/whatsapp/reconnect`);
             setStatus(response.data.status);
             setQrCode(response.data.qr || null);
-        } catch {
+        } catch (error: any) {
             setStatus('disconnected');
             setQrCode(null);
+            setErrorMessage(error?.response?.data?.message || 'Nao foi possivel iniciar uma nova sessao do WhatsApp.');
         }
     };
 
@@ -70,6 +78,7 @@ export const WhatsAppConnect = () => {
                     <div style={{ textAlign: 'center' }}>
                         <RefreshCcw size={64} className="spin" style={{ marginBottom: '1rem' }} />
                         <h3>Iniciando WhatsApp...</h3>
+                        <p style={{ marginTop: '0.75rem', color: 'var(--text-muted)' }}>Aguarde alguns segundos. O QR Code aparece aqui assim que a sessao nova for criada.</p>
                     </div>
                 );
             default:
@@ -77,6 +86,7 @@ export const WhatsAppConnect = () => {
                     <div style={{ textAlign: 'center' }}>
                         <WifiOff size={64} style={{ marginBottom: '1rem', color: '#ef4444' }} />
                         <h3>Desconectado</h3>
+                        {errorMessage && <p style={{ marginTop: '0.75rem', color: '#ef4444' }}>{errorMessage}</p>}
                         <button className="btn-primary" style={{ marginTop: '1rem' }} onClick={reconnect}>Tentar Novamente</button>
                     </div>
                 );

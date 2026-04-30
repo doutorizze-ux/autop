@@ -15,7 +15,7 @@ router.get('/status', (req, res) => {
 
 router.post('/reconnect', async (_req, res) => {
     try {
-        await whatsappService.reconnect();
+        await whatsappService.reconnect(true);
         res.json({
             status: whatsappService.status,
             qr: whatsappService.qr,
