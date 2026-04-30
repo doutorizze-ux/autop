@@ -15,6 +15,21 @@ export const Dashboard = () => {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('clientes');
   const [wsStatus, setWsStatus] = useState<string>('connecting');
+  const [themeLogo, setThemeLogo] = useState(() => localStorage.getItem('theme_logo') || '');
+
+  useEffect(() => {
+    const refreshTheme = () => {
+      setThemeLogo(localStorage.getItem('theme_logo') || '');
+    };
+
+    window.addEventListener('theme-updated', refreshTheme);
+    window.addEventListener('storage', refreshTheme);
+
+    return () => {
+      window.removeEventListener('theme-updated', refreshTheme);
+      window.removeEventListener('storage', refreshTheme);
+    };
+  }, []);
 
   useEffect(() => {
     socket.on('whatsapp_status', (data: any) => {
@@ -40,8 +55,8 @@ export const Dashboard = () => {
     <div className="layout-container">
       <aside className="sidebar">
         <div className="sidebar-header">
-          {localStorage.getItem('theme_logo') ? (
-            <img src={localStorage.getItem('theme_logo')!} alt="Logo" className="logo-image" />
+          {themeLogo ? (
+            <img src={themeLogo} alt="Logo" className="logo-image" />
           ) : (
             <h2>Auto<span>CRM</span></h2>
           )}

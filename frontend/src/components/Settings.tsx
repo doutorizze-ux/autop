@@ -22,6 +22,10 @@ export const Settings = () => {
         aiKey: '',
         whatsappMode: 'baileys'
     });
+    const [appearanceData, setAppearanceData] = useState({
+        color: localStorage.getItem('theme_color') || '#0056b3',
+        logo: localStorage.getItem('theme_logo') || ''
+    });
 
     useEffect(() => {
         if (user?.role === 'ADMIN') {
@@ -223,20 +227,29 @@ export const Settings = () => {
                             </div>
                             <form onSubmit={(e) => {
                                 e.preventDefault();
-                                const color = (document.getElementById('theme_color') as HTMLInputElement)?.value;
-                                const logo = (document.getElementById('theme_logo') as HTMLInputElement)?.value;
+                                const color = appearanceData.color || '#0056b3';
+                                const logo = appearanceData.logo.trim();
                                 localStorage.setItem('theme_color', color);
-                                localStorage.setItem('theme_logo', logo);
+                                if (logo) {
+                                    localStorage.setItem('theme_logo', logo);
+                                } else {
+                                    localStorage.removeItem('theme_logo');
+                                }
                                 document.documentElement.style.setProperty('--primary-color', color);
+                                window.dispatchEvent(new Event('theme-updated'));
                                 setMessage({ type: 'success', text: 'Tema atualizado com sucesso!' });
                             }}>
                                 <div className="form-group">
                                     <label>Cor Principal do Sistema</label>
-                                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                    <div className="appearance-control-row">
                                         <input 
-                                            id="theme_color"
                                             type="color" 
-                                            defaultValue={localStorage.getItem('theme_color') || '#0056b3'}
+                                            value={appearanceData.color}
+                                            onChange={e => {
+                                                const color = e.target.value;
+                                                setAppearanceData(prev => ({ ...prev, color }));
+                                                document.documentElement.style.setProperty('--primary-color', color);
+                                            }}
                                             style={{ height: '45px', width: '80px', padding: '0', cursor: 'pointer', border: '1px solid var(--border-color)', borderRadius: '6px' }}
                                         />
                                         <span style={{color: 'var(--text-muted)', fontSize: '0.9rem'}}>Escolha a cor que combine com a loja.</span>
@@ -245,13 +258,18 @@ export const Settings = () => {
                                 <div className="form-group">
                                     <label>URL do Logotipo (Imagem)</label>
                                     <input 
-                                        id="theme_logo"
                                         type="url" 
                                         className="form-input" 
                                         placeholder="Ex: https://i.imgur.com/logo.png"
-                                        defaultValue={localStorage.getItem('theme_logo') || ''}
+                                        value={appearanceData.logo}
+                                        onChange={e => setAppearanceData(prev => ({ ...prev, logo: e.target.value }))}
                                     />
-                                    <p style={{fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem'}}>Cole o link de uma imagem da logo da Autopeças para substituir o nome AutoCRM. Recarregue a página após salvar.</p>
+                                    <p style={{fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem'}}>Cole o link de uma imagem da logo da Autopeças para substituir o nome AutoCRM.</p>
+                                    {appearanceData.logo.trim() && (
+                                        <div className="logo-preview">
+                                            <img src={appearanceData.logo.trim()} alt="Previa da logo" />
+                                        </div>
+                                    )}
                                 </div>
                                 <button type="submit" className="btn-primary">
                                     <Save size={18} />
@@ -372,6 +390,30 @@ export const Settings = () => {
                     background: var(--bg-color);
                     padding: 1.5rem;
                     border-radius: 8px;
+                }
+                .appearance-control-row {
+                    display: flex;
+                    gap: 1rem;
+                    align-items: center;
+                    flex-wrap: wrap;
+                }
+                .logo-preview {
+                    margin-top: 0.75rem;
+                    width: 100%;
+                    max-width: 260px;
+                    height: 110px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: var(--bg-color);
+                    border: 1px solid var(--border-color);
+                    border-radius: 8px;
+                    padding: 0.75rem;
+                }
+                .logo-preview img {
+                    max-width: 100%;
+                    max-height: 100%;
+                    object-fit: contain;
                 }
                 .status-row {
                     display: flex;
