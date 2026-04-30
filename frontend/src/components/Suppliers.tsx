@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Globe, Lock, Trash2, ExternalLink, Play } from 'lucide-react';
+import { Plus, Globe, Lock, Trash2, ExternalLink, Play, Monitor } from 'lucide-react';
 
 interface Supplier {
   id: string;
@@ -47,6 +47,10 @@ export const Suppliers = () => {
     const [testProduct, setTestProduct] = useState('');
     const [isTestingSupplier, setIsTestingSupplier] = useState(false);
     const [testResult, setTestResult] = useState<SupplierTestResult | null>(null);
+    const [assistSupplier, setAssistSupplier] = useState<Supplier | null>(null);
+    const [assistSnapshot, setAssistSnapshot] = useState<{ image: string; url: string; title: string } | null>(null);
+    const [assistText, setAssistText] = useState('');
+    const [isAssistLoading, setIsAssistLoading] = useState(false);
     const [formData, setFormData] = useState({
         name: '',
         url: '',
@@ -71,6 +75,7 @@ export const Suppliers = () => {
     });
 
     const [activeSection, setActiveSection] = useState<'basic' | 'login' | 'mapping'>('basic');
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
     useEffect(() => {
         fetchSuppliers();
@@ -78,7 +83,7 @@ export const Suppliers = () => {
 
     const fetchSuppliers = async () => {
         try {
-            const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/suppliers`);
+            const response = await axios.get(`${apiBase}/api/suppliers`);
             setSuppliers(response.data);
         } catch (err) {
             console.error('Erro ao buscar fornecedores');
@@ -90,9 +95,9 @@ export const Suppliers = () => {
         try {
             const isEdit = (formData as any).id;
             if (isEdit) {
-                await axios.put(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/suppliers/${(formData as any).id}`, formData);
+                await axios.put(`${apiBase}/api/suppliers/${(formData as any).id}`, formData);
             } else {
-                await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/suppliers`, formData);
+                await axios.post(`${apiBase}/api/suppliers`, formData);
             }
             setShowModal(false);
             setFormData({
@@ -115,7 +120,7 @@ export const Suppliers = () => {
     const handleDelete = async (id: string) => {
         if (!confirm('Deseja remover este fornecedor?')) return;
         try {
-            await axios.delete(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/suppliers/${id}`);
+            await axios.delete(`${apiBase}/api/suppliers/${id}`);
             fetchSuppliers();
         } catch (err) {
             alert('Erro ao remover');
@@ -143,7 +148,7 @@ export const Suppliers = () => {
             setTestResult(null);
 
             const response = await axios.post(
-                `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/suppliers/${testModalSupplier.id}/test`,
+                `${apiBase}/api/suppliers/${testModalSupplier.id}/test`,
                 { product: testProduct.trim() }
             );
 
@@ -160,6 +165,67 @@ export const Suppliers = () => {
         } finally {
             setIsTestingSupplier(false);
         }
+    };
+
+    const startAssistSession = async (supplier: Supplier) => {
+        try {
+            setIsAssistLoading(true);
+            setAssistSupplier(supplier);
+            setAssistText('');
+            const response = await axios.post(`${apiBase}/api/suppliers/${supplier.id}/session/start`);
+            setAssistSnapshot(response.data);
+        } catch (err: any) {
+            alert('Erro ao iniciar login assistido: ' + (err.response?.data?.message || err.message));
+            setAssistSupplier(null);
+        } finally {
+            setIsAssistLoading(false);
+        }
+    };
+
+    const refreshAssistSession = async () => {
+        if (!assistSupplier) return;
+        const response = await axios.get(`${apiBase}/api/suppliers/${assistSupplier.id}/session/snapshot`);
+        setAssistSnapshot(response.data);
+    };
+
+    const clickAssistSession = async (event: React.MouseEvent<HTMLImageElement>) => {
+        if (!assistSupplier) return;
+        const rect = event.currentTarget.getBoundingClientRect();
+        const naturalWidth = event.currentTarget.naturalWidth || rect.width;
+        const naturalHeight = event.currentTarget.naturalHeight || rect.height;
+        const x = Math.round((event.clientX - rect.left) * (naturalWidth / rect.width));
+        const y = Math.round((event.clientY - rect.top) * (naturalHeight / rect.height));
+        const response = await axios.post(`${apiBase}/api/suppliers/${assistSupplier.id}/session/click`, { x, y });
+        setAssistSnapshot(response.data);
+    };
+
+    const typeAssistText = async () => {
+        if (!assistSupplier || !assistText) return;
+        const response = await axios.post(`${apiBase}/api/suppliers/${assistSupplier.id}/session/type`, { text: assistText });
+        setAssistSnapshot(response.data);
+        setAssistText('');
+    };
+
+    const pressAssistKey = async (key: string) => {
+        if (!assistSupplier) return;
+        const response = await axios.post(`${apiBase}/api/suppliers/${assistSupplier.id}/session/press`, { key });
+        setAssistSnapshot(response.data);
+    };
+
+    const saveAssistSession = async () => {
+        if (!assistSupplier) return;
+        await axios.post(`${apiBase}/api/suppliers/${assistSupplier.id}/session/save`);
+        await fetchSuppliers();
+        alert('Sessao salva. Agora teste a busca deste fornecedor.');
+    };
+
+    const closeAssistSession = async () => {
+        if (assistSupplier) {
+            await axios.post(`${apiBase}/api/suppliers/${assistSupplier.id}/session/stop`).catch(() => {});
+        }
+        setAssistSupplier(null);
+        setAssistSnapshot(null);
+        setAssistText('');
     };
 
     return (
@@ -200,6 +266,16 @@ export const Suppliers = () => {
                                     <Play size={14} />
                                     <span>Testar Busca</span>
                                 </button>
+                                {s.needsLogin && (
+                                    <button
+                                        type="button"
+                                        className="test-link"
+                                        onClick={() => startAssistSession(s)}
+                                    >
+                                        <Monitor size={14} />
+                                        <span>Login Assistido</span>
+                                    </button>
+                                )}
                                 <a href={s.url} target="_blank" rel="noreferrer" className="visit-link">
                                     <span>Visitar Site</span>
                                     <ExternalLink size={14} />
@@ -347,6 +423,62 @@ export const Suppliers = () => {
                                 <button type="button" className="btn-secondary" onClick={() => setShowModal(false)} style={{ flex: 1, padding: '0.85rem', background: 'var(--bg-color)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '6px', cursor: 'pointer' }}>Cancelar</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {assistSupplier && (
+                <div className="modal-overlay">
+                    <div className="modal-content auth-card" style={{ maxWidth: '980px', width: '94%', maxHeight: '94vh', overflowY: 'auto' }}>
+                        <h2 style={{ marginBottom: '0.5rem' }}>Login Assistido</h2>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                            Faça login em <strong>{assistSupplier.name}</strong>, passe pela verificação e salve a sessão quando estiver dentro do portal.
+                        </p>
+
+                        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                            <input
+                                type="text"
+                                className="form-input"
+                                value={assistText}
+                                onChange={(e) => setAssistText(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        typeAssistText();
+                                    }
+                                }}
+                                placeholder="Texto para digitar no campo selecionado"
+                                style={{ flex: '1 1 300px' }}
+                            />
+                            <button type="button" className="btn-secondary" onClick={typeAssistText} style={{ padding: '0.75rem 1rem' }}>Digitar</button>
+                            <button type="button" className="btn-secondary" onClick={() => pressAssistKey('Enter')} style={{ padding: '0.75rem 1rem' }}>Enter</button>
+                            <button type="button" className="btn-secondary" onClick={() => pressAssistKey('Tab')} style={{ padding: '0.75rem 1rem' }}>Tab</button>
+                            <button type="button" className="btn-secondary" onClick={refreshAssistSession} style={{ padding: '0.75rem 1rem' }}>Atualizar</button>
+                        </div>
+
+                        <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden', background: '#111', minHeight: '320px' }}>
+                            {assistSnapshot?.image ? (
+                                <img
+                                    src={assistSnapshot.image}
+                                    alt="Sessao remota do fornecedor"
+                                    onClick={clickAssistSession}
+                                    style={{ display: 'block', width: '100%', cursor: 'crosshair' }}
+                                />
+                            ) : (
+                                <div style={{ color: 'white', padding: '2rem' }}>{isAssistLoading ? 'Abrindo navegador...' : 'Sem imagem da sessao.'}</div>
+                            )}
+                        </div>
+
+                        {assistSnapshot?.url && (
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.75rem', wordBreak: 'break-all' }}>
+                                {assistSnapshot.title ? `${assistSnapshot.title} - ` : ''}{assistSnapshot.url}
+                            </p>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                            <button type="button" className="btn-primary" onClick={saveAssistSession} style={{ flex: 2 }}>Salvar Sessão</button>
+                            <button type="button" className="btn-secondary" onClick={closeAssistSession} style={{ flex: 1, padding: '0.85rem', background: 'var(--bg-color)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '6px', cursor: 'pointer' }}>Fechar</button>
+                        </div>
                     </div>
                 </div>
             )}

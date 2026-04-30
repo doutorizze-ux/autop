@@ -35,4 +35,4 @@ EXPOSE 5000
 
 ENV NODE_ENV=production
 
-CMD ["sh", "-c", "cd backend && npx prisma migrate deploy && node dist/index.js"]
+CMD ["sh", "-c", "cd backend && npx prisma migrate deploy && xvfb-run -a node dist/index.js"]

@@ -32,6 +32,26 @@ function getSessionStatePath(supplier) {
     return path.join(sessionsDir, `${fileName || 'supplier'}.json`);
 }
 
+function getSupplierSlug(supplier) {
+    return safeString(supplier.name)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'supplier';
+}
+
+function getPersistentProfilePath(supplier) {
+    const profileRoot = process.env.SCRAPER_PROFILE_ROOT || path.join(__dirname, '../backend/data/browser-profiles');
+    const profilePath = path.join(profileRoot, getSupplierSlug(supplier));
+
+    if (!fs.existsSync(profilePath)) {
+        return null;
+    }
+
+    return profilePath;
+}
+
 function normalizeCookie(cookie) {
     if (!cookie || !cookie.name || cookie.value === undefined) {
         return null;
@@ -611,6 +631,7 @@ async function resetForNextSearch(page, supplier) {
 async function createContext(browser, supplier) {
     const sessionStatePath = getSessionStatePath(supplier);
     const supplierSessionState = parseSupplierSessionData(supplier);
+    const profilePath = getPersistentProfilePath(supplier);
     const contextOptions = {
         viewport: { width: 1920, height: 1080 },
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -631,7 +652,9 @@ async function createContext(browser, supplier) {
         }
     };
 
-    if (supplierSessionState) {
+    if (profilePath) {
+        console.error(`[DEBUG] Reutilizando perfil persistente para: ${supplier.name}`);
+    } else if (supplierSessionState) {
         console.error(`[DEBUG] Reutilizando sessionData para: ${supplier.name} (${supplierSessionState.cookieCount || 0} cookies)`);
         contextOptions.storageState = {
             cookies: supplierSessionState.cookies || [],
@@ -642,7 +665,9 @@ async function createContext(browser, supplier) {
         contextOptions.storageState = sessionStatePath;
     }
 
-    const context = await browser.newContext(contextOptions);
+    const context = profilePath
+        ? await chromium.launchPersistentContext(profilePath, contextOptions)
+        : await browser.newContext(contextOptions);
     await context.addInitScript(() => {
         Object.defineProperty(navigator, 'webdriver', {
             get: () => undefined,
@@ -679,7 +704,7 @@ async function createContext(browser, supplier) {
     return {
         context,
         sessionStatePath,
-        hasPreloadedSession: Boolean(supplierSessionState || fs.existsSync(sessionStatePath)),
+        hasPreloadedSession: Boolean(profilePath || supplierSessionState || fs.existsSync(sessionStatePath)),
     };
 }
 
