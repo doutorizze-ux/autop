@@ -395,7 +395,7 @@ async function performSearch(page, supplier, query, strategy = {}) {
     if (strategy.buildSearchUrl) {
         const directUrl = strategy.buildSearchUrl(query, supplier);
         if (directUrl) {
-            await page.goto(directUrl, { waitUntil: 'networkidle' }).catch(() => {});
+            await page.goto(directUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
             return;
         }
     }
@@ -759,8 +759,19 @@ async function scrapeProduct(supplier, productName) {
 
     const { context, hasPreloadedSession } = await createContext(browser, effectiveSupplier, strategy);
     const page = await context.newPage();
-    page.setDefaultTimeout(60000);
-    page.setDefaultNavigationTimeout(60000);
+    const supplierTimeoutMs = Math.max(
+        10000,
+        Number.parseInt(process.env.SCRAPER_SUPPLIER_TIMEOUT_MS || String(supplier.scraperTimeoutMs || 70000), 10) || 70000
+    );
+    const operationTimeoutMs = Math.max(5000, supplierTimeoutMs - 5000);
+    let timedOut = false;
+    const timeoutHandle = setTimeout(() => {
+        timedOut = true;
+        context.close().catch(() => {});
+    }, supplierTimeoutMs);
+
+    page.setDefaultTimeout(operationTimeoutMs);
+    page.setDefaultNavigationTimeout(operationTimeoutMs);
 
     try {
         console.error(`[DEBUG] Iniciando scraping para: ${supplier.name}`);
@@ -925,7 +936,9 @@ async function scrapeProduct(supplier, productName) {
             pageTitle: '',
             bodySnippet: '',
         }));
-        let errorMessage = error.message;
+        let errorMessage = timedOut
+            ? `Timeout apos ${Math.round(supplierTimeoutMs / 1000)}s pesquisando este fornecedor.`
+            : error.message;
 
         if (
             effectiveSupplier.needsLogin &&
@@ -951,6 +964,7 @@ async function scrapeProduct(supplier, productName) {
             debug,
         };
     } finally {
+        clearTimeout(timeoutHandle);
         await context.close().catch(() => {});
         // O browser.close() foi removido para manter a instancia global viva
     }

@@ -13,13 +13,7 @@ async function runSupplierSearch(supplier: any, productName: string) {
             10000,
             Number.parseInt(process.env.SCRAPER_SUPPLIER_TIMEOUT_MS || '70000', 10) || 70000
         );
-        const timeoutResult = new Promise((resolve) => {
-            setTimeout(() => resolve({
-                provider: supplier.name,
-                error: `Timeout apos ${Math.round(supplierTimeoutMs / 1000)}s pesquisando este fornecedor.`,
-            }), supplierTimeoutMs);
-        });
-        const data = await Promise.race([scrapeProduct(supplier, productName), timeoutResult]);
+        const data = await scrapeProduct({ ...supplier, scraperTimeoutMs: supplierTimeoutMs }, productName);
 
         if (Array.isArray(data) && data.length > 0) {
             const bestItem = data[0];
