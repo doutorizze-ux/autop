@@ -130,13 +130,6 @@ export class ScraperService {
             resultsByProduct[productName] = productResults;
         }
 
-        await prisma.quote.create({
-            data: {
-                product: productNames.join(', '),
-                results: JSON.stringify(resultsByProduct),
-            },
-        });
-
         return resultsByProduct;
     }
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { socket } from '../services/socket';
-import { Send, User, Search, Paperclip, MoreVertical, Sparkles } from 'lucide-react';
+import { Send, User, Search, Paperclip, MoreVertical } from 'lucide-react';
 
 interface Client {
   id: string;
@@ -50,6 +50,18 @@ export const ChatArea = () => {
             }));
         });
 
+        socket.on('client_upserted', (client: Client) => {
+            setClients(prev => {
+                const exists = prev.findIndex(item => item.phone === client.phone);
+                if (exists >= 0) {
+                    const next = [...prev];
+                    next[exists] = client;
+                    return next;
+                }
+                return [client, ...prev];
+            });
+        });
+
         socket.on('message_sent', (data: any) => {
             const contactKey = normalizeContactKey(data.to);
             setMessages(prev => ({
@@ -65,6 +77,7 @@ export const ChatArea = () => {
         return () => {
             socket.off('incoming_message');
             socket.off('message_sent');
+            socket.off('client_upserted');
         };
     }, []);
 
@@ -119,6 +132,8 @@ export const ChatArea = () => {
         c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
         c.phone.includes(searchTerm)
     );
+    void isAILoading;
+    void handleAIInterpret;
 
     return (
         <div className="chat-layout">
@@ -169,15 +184,6 @@ export const ChatArea = () => {
                                 <span className="chat-user-status">WhatsApp: {selectedClient.phone}</span>
                             </div>
                             <div className="chat-header-actions" style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
-                                <button 
-                                    className="ai-btn"
-                                    onClick={handleAIInterpret}
-                                    disabled={isAILoading}
-                                    title="Interpretar com IA"
-                                >
-                                    <Sparkles size={16} />
-                                    <span>{isAILoading ? 'IA...' : 'Auto-Lista via IA'}</span>
-                                </button>
                                 <MoreVertical size={20} style={{ color: 'var(--text-muted)', cursor: 'pointer' }} />
                             </div>
                         </div>

@@ -13,6 +13,18 @@ router.get('/status', (req, res) => {
     });
 });
 
+router.post('/reconnect', async (_req, res) => {
+    try {
+        await whatsappService.reconnect();
+        res.json({
+            status: whatsappService.status,
+            qr: whatsappService.qr,
+        });
+    } catch (err: any) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
 router.post('/send', async (req, res) => {
     try {
         const { to, text } = req.body;

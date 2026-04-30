@@ -31,6 +31,18 @@ export const WhatsAppConnect = () => {
         };
     }, []);
 
+    const reconnect = async () => {
+        try {
+            setStatus('connecting');
+            const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/whatsapp/reconnect`);
+            setStatus(response.data.status);
+            setQrCode(response.data.qr || null);
+        } catch {
+            setStatus('disconnected');
+            setQrCode(null);
+        }
+    };
+
     const renderContent = () => {
         switch (status) {
             case 'qr':
@@ -65,7 +77,7 @@ export const WhatsAppConnect = () => {
                     <div style={{ textAlign: 'center' }}>
                         <WifiOff size={64} style={{ marginBottom: '1rem', color: '#ef4444' }} />
                         <h3>Desconectado</h3>
-                        <button className="btn-primary" style={{ marginTop: '1rem' }} onClick={() => window.location.reload()}>Tentar Novamente</button>
+                        <button className="btn-primary" style={{ marginTop: '1rem' }} onClick={reconnect}>Tentar Novamente</button>
                     </div>
                 );
         }
