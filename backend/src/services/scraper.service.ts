@@ -10,7 +10,7 @@ async function runSupplierSearch(supplier: any, productName: string) {
     console.error(`[BACKEND_VERSION] Executing scraper engine v3 (branch: main) for: ${supplier.name}`);
     try {
         const supplierTimeoutMs = Math.max(
-            10000,
+            120000,
             Number.parseInt(process.env.SCRAPER_SUPPLIER_TIMEOUT_MS || '120000', 10) || 120000
         );
         const data = await scrapeProduct({ ...supplier, scraperTimeoutMs: supplierTimeoutMs }, productName);

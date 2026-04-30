@@ -616,9 +616,7 @@ async function createContext(browser, supplier, strategy = {}) {
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         locale: 'pt-BR',
         ignoreHTTPSErrors: true,
-        proxy: !strategy.usesOwnProxy && process.env.SCRAPERAPI_KEY ? {
-            server: 'http://scraperapi:5162629b3989345c2105156a56e522a4@proxy-server.scraperapi.com:8001'.replace('5162629b3989345c2105156a56e522a4', process.env.SCRAPERAPI_KEY)
-        } : (!strategy.usesOwnProxy && process.env.SCRAPER_PROXY ? { server: process.env.SCRAPER_PROXY } : undefined),
+        proxy: !strategy.usesOwnProxy && process.env.SCRAPER_PROXY ? { server: process.env.SCRAPER_PROXY } : undefined,
         extraHTTPHeaders: {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -743,7 +741,7 @@ async function scrapeProduct(supplier, productName) {
     const { context, hasPreloadedSession } = await createContext(browser, effectiveSupplier, strategy);
     const page = await context.newPage();
     const supplierTimeoutMs = Math.max(
-        10000,
+        120000,
         Number.parseInt(process.env.SCRAPER_SUPPLIER_TIMEOUT_MS || String(supplier.scraperTimeoutMs || 120000), 10) || 120000
     );
     const operationTimeoutMs = Math.max(5000, supplierTimeoutMs - 5000);
