@@ -625,7 +625,7 @@ async function resetForNextSearch(page, supplier) {
     await page.waitForTimeout(500);
 }
 
-async function createContext(browser, supplier) {
+async function createContext(browser, supplier, strategy = {}) {
     const sessionStatePath = getSessionStatePath(supplier);
     const supplierSessionState = parseSupplierSessionData(supplier);
     const contextOptions = {
@@ -633,9 +633,9 @@ async function createContext(browser, supplier) {
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         locale: 'pt-BR',
         ignoreHTTPSErrors: true,
-        proxy: process.env.SCRAPERAPI_KEY ? {
+        proxy: !strategy.usesOwnProxy && process.env.SCRAPERAPI_KEY ? {
             server: 'http://scraperapi:5162629b3989345c2105156a56e522a4@proxy-server.scraperapi.com:8001'.replace('5162629b3989345c2105156a56e522a4', process.env.SCRAPERAPI_KEY)
-        } : (process.env.SCRAPER_PROXY ? { server: process.env.SCRAPER_PROXY } : undefined),
+        } : (!strategy.usesOwnProxy && process.env.SCRAPER_PROXY ? { server: process.env.SCRAPER_PROXY } : undefined),
         extraHTTPHeaders: {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -751,19 +751,22 @@ function getBrowser() {
 
 async function scrapeProduct(supplier, productName) {
     const browser = await getBrowser();
+    const strategy = resolveStrategy(supplier.name);
+    const effectiveNeedsLogin = strategy.needsLogin !== undefined
+        ? Boolean(strategy.needsLogin)
+        : Boolean(supplier.needsLogin);
+    const effectiveSupplier = { ...supplier, needsLogin: effectiveNeedsLogin };
 
-    const { context, hasPreloadedSession } = await createContext(browser, supplier);
+    const { context, hasPreloadedSession } = await createContext(browser, effectiveSupplier, strategy);
     const page = await context.newPage();
     page.setDefaultTimeout(60000);
     page.setDefaultNavigationTimeout(60000);
 
     try {
         console.error(`[DEBUG] Iniciando scraping para: ${supplier.name}`);
-        const strategy = resolveStrategy(supplier.name);
-
-        const loginUrl = supplier.loginUrl || supplier.url;
+        const loginUrl = effectiveSupplier.loginUrl || effectiveSupplier.url;
         const initialUrl = hasPreloadedSession
-            ? resolveAuthenticatedUrl(strategy, supplier, loginUrl)
+            ? resolveAuthenticatedUrl(strategy, effectiveSupplier, loginUrl)
             : loginUrl;
 
         await page.goto(initialUrl, { waitUntil: 'domcontentloaded' });
@@ -772,12 +775,12 @@ async function scrapeProduct(supplier, productName) {
 
         let didLoginThisRun = false;
 
-        if (supplier.needsLogin) {
+        if (effectiveSupplier.needsLogin) {
             const alreadyLogged = await isAnySelectorVisible(
                 page,
                 buildSelectorList(
                     strategy.loginSuccessSelector,
-                    supplier.searchBarSelector,
+                    effectiveSupplier.searchBarSelector,
                     strategy.searchSelector
                 ),
                 3000
@@ -792,28 +795,28 @@ async function scrapeProduct(supplier, productName) {
                 }
 
                 const preLoginUrl = page.url();
-                await runGenericLogin(page, supplier, strategy);
+                await runGenericLogin(page, effectiveSupplier, strategy);
                 didLoginThisRun = true;
-                await waitForLoginCompletion(page, preLoginUrl, loginUrl, supplier, strategy, {
+                await waitForLoginCompletion(page, preLoginUrl, loginUrl, effectiveSupplier, strategy, {
                     ignoreSessionDataHint: hasPreloadedSession,
                 });
             } else {
                 await dismissTransientUi(page);
-                await ensureLoggedIn(page, loginUrl, supplier, strategy);
+                await ensureLoggedIn(page, loginUrl, effectiveSupplier, strategy);
             }
-            await persistSession(context, supplier, didLoginThisRun);
+            await persistSession(context, effectiveSupplier, didLoginThisRun);
         }
 
-        const authenticatedTargetUrl = resolveAuthenticatedUrl(strategy, supplier, loginUrl);
+        const authenticatedTargetUrl = resolveAuthenticatedUrl(strategy, effectiveSupplier, loginUrl);
         const normalizedAuthenticatedTarget = safeString(authenticatedTargetUrl).replace(/\/+$/, '');
         const normalizedCurrentUrl = safeString(page.url()).replace(/\/+$/, '');
-        const searchReadySelectors = buildSelectorList(strategy.searchSelector, supplier.searchBarSelector);
+        const searchReadySelectors = buildSelectorList(strategy.searchSelector, effectiveSupplier.searchBarSelector);
         const searchReady = searchReadySelectors.length
             ? await isAnySelectorVisible(page, searchReadySelectors, 1500)
             : false;
 
         if (
-            supplier.needsLogin
+            effectiveSupplier.needsLogin
             && normalizedAuthenticatedTarget
             && (
                 strategy.navigateToAuthenticatedAfterLogin
@@ -826,7 +829,7 @@ async function scrapeProduct(supplier, productName) {
                 page,
                 buildSelectorList(
                     strategy.searchSelector,
-                    supplier.searchBarSelector,
+                    effectiveSupplier.searchBarSelector,
                     strategy.itemContainerSelector,
                     strategy.loginSuccessSelector
                 ),
@@ -848,33 +851,33 @@ async function scrapeProduct(supplier, productName) {
         for (const query of queries) {
             console.error(`[DEBUG] Buscando por: ${query}`);
 
-            if (supplier.searchUrl) {
-                await page.goto(supplier.searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+            if (effectiveSupplier.searchUrl) {
+                await page.goto(effectiveSupplier.searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
                 await page.waitForTimeout(200);
             }
 
             const beforeSearchUrl = page.url();
-            await performSearch(page, supplier, query, strategy);
+            await performSearch(page, effectiveSupplier, query, strategy);
             const postSearchSelectors = strategy.waitForResultsOnly
                 ? buildSelectorList(
-                    strategy.preferStrategySelectors ? strategy.itemContainerSelector : supplier.itemContainerSelector,
-                    strategy.preferStrategySelectors ? strategy.productNameSelector : supplier.productNameSelector,
-                    strategy.preferStrategySelectors ? strategy.priceSelector : supplier.priceSelector,
-                    strategy.preferStrategySelectors ? supplier.itemContainerSelector : strategy.itemContainerSelector,
-                    strategy.preferStrategySelectors ? supplier.productNameSelector : strategy.productNameSelector,
-                    strategy.preferStrategySelectors ? supplier.priceSelector : strategy.priceSelector,
+                    strategy.preferStrategySelectors ? strategy.itemContainerSelector : effectiveSupplier.itemContainerSelector,
+                    strategy.preferStrategySelectors ? strategy.productNameSelector : effectiveSupplier.productNameSelector,
+                    strategy.preferStrategySelectors ? strategy.priceSelector : effectiveSupplier.priceSelector,
+                    strategy.preferStrategySelectors ? effectiveSupplier.itemContainerSelector : strategy.itemContainerSelector,
+                    strategy.preferStrategySelectors ? effectiveSupplier.productNameSelector : strategy.productNameSelector,
+                    strategy.preferStrategySelectors ? effectiveSupplier.priceSelector : strategy.priceSelector,
                     strategy.emptyResultSelector
                 )
                 : buildSelectorList(
-                    strategy.preferStrategySelectors ? strategy.itemContainerSelector : supplier.itemContainerSelector,
-                    strategy.preferStrategySelectors ? strategy.productNameSelector : supplier.productNameSelector,
-                    strategy.preferStrategySelectors ? strategy.priceSelector : supplier.priceSelector,
-                    strategy.preferStrategySelectors ? supplier.itemContainerSelector : strategy.itemContainerSelector,
-                    strategy.preferStrategySelectors ? supplier.productNameSelector : strategy.productNameSelector,
-                    strategy.preferStrategySelectors ? supplier.priceSelector : strategy.priceSelector,
+                    strategy.preferStrategySelectors ? strategy.itemContainerSelector : effectiveSupplier.itemContainerSelector,
+                    strategy.preferStrategySelectors ? strategy.productNameSelector : effectiveSupplier.productNameSelector,
+                    strategy.preferStrategySelectors ? strategy.priceSelector : effectiveSupplier.priceSelector,
+                    strategy.preferStrategySelectors ? effectiveSupplier.itemContainerSelector : strategy.itemContainerSelector,
+                    strategy.preferStrategySelectors ? effectiveSupplier.productNameSelector : strategy.productNameSelector,
+                    strategy.preferStrategySelectors ? effectiveSupplier.priceSelector : strategy.priceSelector,
                     strategy.searchSelector,
                     strategy.loginSuccessSelector,
-                    supplier.searchBarSelector
+                    effectiveSupplier.searchBarSelector
                 );
 
             await waitForPageSettle(
@@ -886,28 +889,28 @@ async function scrapeProduct(supplier, productName) {
 
             let items = [];
             if (strategy.extractItems) {
-                items = await strategy.extractItems({ page, supplier });
+                items = await strategy.extractItems({ page, supplier: effectiveSupplier });
             }
 
             if (
-                supplier.itemContainerSelector || supplier.productNameSelector || supplier.priceSelector
+                effectiveSupplier.itemContainerSelector || effectiveSupplier.productNameSelector || effectiveSupplier.priceSelector
                 || strategy.itemContainerSelector || strategy.productNameSelector || strategy.priceSelector
             ) {
-                items = items.length ? items : await extractWithConfiguredSelectors(page, supplier, strategy);
+                items = items.length ? items : await extractWithConfiguredSelectors(page, effectiveSupplier, strategy);
             }
 
             if (!items.length) {
                 items = await extractGeneric(page);
             }
 
-            finalItems = buildBrowserPayload(items, supplier);
+            finalItems = buildBrowserPayload(items, effectiveSupplier);
 
             if (finalItems.length > 0) {
                 break;
             }
 
             console.error(`[DEBUG] Nenhum resultado para "${query}". Tentando próxima query se houver.`);
-            await resetForNextSearch(page, supplier);
+            await resetForNextSearch(page, effectiveSupplier);
         }
 
         if (!finalItems.length) {
@@ -925,15 +928,15 @@ async function scrapeProduct(supplier, productName) {
         let errorMessage = error.message;
 
         if (
-            supplier.needsLogin &&
+            effectiveSupplier.needsLogin &&
             errorMessage.includes('Falha no login') &&
-            !safeString(supplier.sessionData)
+            !safeString(effectiveSupplier.sessionData)
         ) {
             errorMessage = `${errorMessage} Dica: preencha "Sessao/Cookies JSON" no cadastro do fornecedor para reutilizar uma sessao autenticada.`;
         } else if (
-            supplier.needsLogin &&
+            effectiveSupplier.needsLogin &&
             errorMessage.includes('Falha no login') &&
-            safeString(supplier.sessionData)
+            safeString(effectiveSupplier.sessionData)
         ) {
             errorMessage = `${errorMessage} A sessao manual tambem nao foi suficiente ou expirou.`;
         }

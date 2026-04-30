@@ -12,6 +12,11 @@ services:
       - DATABASE_URL=file:///app/backend/data/dev.db
       - JWT_SECRET=${JWT_SECRET:-secret}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - SCRAPERAPI_KEY=${SCRAPERAPI_KEY}
+      - SCRAPER_PROXY=${SCRAPER_PROXY}
+      - SCRAPER_CONCURRENCY=${SCRAPER_CONCURRENCY:-3}
+      - SCRAPER_SUPPLIER_TIMEOUT_MS=${SCRAPER_SUPPLIER_TIMEOUT_MS:-70000}
+      - HEADLESS=${HEADLESS:-true}
     restart: unless-stopped
 
   frontend:

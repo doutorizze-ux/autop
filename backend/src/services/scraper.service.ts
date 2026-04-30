@@ -9,7 +9,17 @@ const { scrapeProduct } = require(enginePath);
 async function runSupplierSearch(supplier: any, productName: string) {
     console.error(`[BACKEND_VERSION] Executing scraper engine v3 (branch: main) for: ${supplier.name}`);
     try {
-        const data = await scrapeProduct(supplier, productName);
+        const supplierTimeoutMs = Math.max(
+            10000,
+            Number.parseInt(process.env.SCRAPER_SUPPLIER_TIMEOUT_MS || '70000', 10) || 70000
+        );
+        const timeoutResult = new Promise((resolve) => {
+            setTimeout(() => resolve({
+                provider: supplier.name,
+                error: `Timeout apos ${Math.round(supplierTimeoutMs / 1000)}s pesquisando este fornecedor.`,
+            }), supplierTimeoutMs);
+        });
+        const data = await Promise.race([scrapeProduct(supplier, productName), timeoutResult]);
 
         if (Array.isArray(data) && data.length > 0) {
             const bestItem = data[0];
@@ -105,7 +115,7 @@ export class ScraperService {
 
     static async searchMultipleProducts(productNames: string[], socketId?: string) {
         const suppliers = await prisma.supplier.findMany();
-        const concurrency = Math.max(1, Number.parseInt(process.env.SCRAPER_CONCURRENCY || '1', 10) || 1);
+        const concurrency = Math.max(1, Number.parseInt(process.env.SCRAPER_CONCURRENCY || '3', 10) || 3);
         const resultsByProduct: Record<string, any[]> = {};
 
         for (const productName of productNames) {

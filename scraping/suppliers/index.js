@@ -5,7 +5,7 @@ const rmp = require('./rmp');
 const sav = require('./sav');
 const sky = require('./sky');
 
-const dpk = require('./dpk_v2');
+const dpk = require('./dpk');
 
 const suppliers = [comdip, kaizen, rmp, sav, sky, dpk];
 
