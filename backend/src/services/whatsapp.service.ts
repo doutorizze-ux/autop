@@ -19,6 +19,30 @@ function normalizeWhatsappPhone(jid: string) {
     return String(jid || '').replace(/@s\.whatsapp\.net$/, '').replace(/\D/g, '');
 }
 
+function buildWhatsappJid(value: string) {
+    const raw = String(value || '').trim();
+    if (!raw) {
+        throw new Error('Contato sem telefone/WhatsApp.');
+    }
+
+    if (raw.includes('@')) {
+        return raw;
+    }
+
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) {
+        throw new Error('Contato sem telefone valido.');
+    }
+
+    // IDs @lid do WhatsApp costumam chegar como numeros longos sem codigo do pais.
+    if (digits.length >= 14 && !digits.startsWith('55')) {
+        return `${digits}@lid`;
+    }
+
+    const withCountry = digits.length === 10 || digits.length === 11 ? `55${digits}` : digits;
+    return `${withCountry}@s.whatsapp.net`;
+}
+
 class WhatsAppService {
     public sock: any = null;
     public qr: string | null = null;
@@ -109,7 +133,7 @@ class WhatsAppService {
                     if (msg.key.fromMe) continue;
 
                     const sender = msg.key.remoteJid;
-                    const phone = normalizeWhatsappPhone(sender);
+                    const phone = String(sender || '').endsWith('@lid') ? String(sender) : normalizeWhatsappPhone(sender);
                     const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
                     const pushName = msg.pushName || `Lead ${phone}`;
 
@@ -206,8 +230,12 @@ class WhatsAppService {
             throw new Error('WhatsApp nao conectado');
         }
 
-        const cleanPhone = normalizeWhatsappPhone(to);
-        const jid = to.includes('@s.whatsapp.net') ? to : `${cleanPhone}@s.whatsapp.net`;
+        const jid = buildWhatsappJid(to);
+        const exists = await this.sock.onWhatsApp(jid).catch(() => []);
+        if (jid.endsWith('@s.whatsapp.net') && Array.isArray(exists) && exists.length > 0 && exists[0]?.exists === false) {
+            throw new Error('Este telefone nao possui WhatsApp ou nao foi encontrado.');
+        }
+
         await this.sock.sendMessage(jid, { text });
         io.emit('message_sent', { to: jid, text, timestamp: Math.floor(Date.now() / 1000) });
     }

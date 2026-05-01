@@ -17,7 +17,7 @@ interface Message {
 }
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-const normalizeContactKey = (value: string) => value.replace(/@s\.whatsapp\.net$/, '');
+const normalizeContactKey = (value: string) => value.replace(/@(s\.whatsapp\.net|lid)$/, '');
 
 export const ChatArea = () => {
   const [clients, setClients] = useState<Client[]>([]);
@@ -32,6 +32,14 @@ export const ChatArea = () => {
       try {
         const res = await axios.get(`${API_URL}/api/clients`);
         setClients(res.data);
+        const selectedId = localStorage.getItem('selected_attendance_client_id');
+        if (selectedId) {
+          const client = res.data.find((item: Client) => item.id === selectedId);
+          if (client) {
+            setSelectedClient(client);
+          }
+          localStorage.removeItem('selected_attendance_client_id');
+        }
       } catch (err) {
         console.error('Erro ao buscar clientes:', err);
       }
@@ -96,8 +104,8 @@ export const ChatArea = () => {
         to: selectedClient.phone,
         text
       });
-    } catch (err) {
-      alert('Erro ao enviar mensagem');
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || 'Erro ao enviar mensagem');
       setInputText(text);
     }
   };
@@ -196,7 +204,7 @@ export const ChatArea = () => {
           <div className="empty-chat">
             <User size={64} />
             <h3>Selecione um cliente para conversar</h3>
-            <p>O AutoCRM esta conectado ao seu WhatsApp.</p>
+            <p>WhatsApp conectado e pronto para atendimento.</p>
           </div>
         )}
       </section>

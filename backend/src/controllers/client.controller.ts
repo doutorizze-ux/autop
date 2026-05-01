@@ -59,3 +59,19 @@ export const getClientDetails = async (req: Request, res: Response): Promise<voi
         res.status(500).json({ message: 'Erro ao buscar cliente' });
     }
 };
+
+export const deleteClient = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+        await prisma.client.delete({
+            where: { id }
+        });
+        res.json({ success: true });
+    } catch (err: any) {
+        if (err.code === 'P2025') {
+            res.status(404).json({ message: 'Cliente nao encontrado' });
+            return;
+        }
+        res.status(500).json({ message: 'Erro ao excluir cliente' });
+    }
+};

@@ -144,7 +144,14 @@ export const Dashboard = () => {
         </header>
 
         <section className="page-content">
-          {activeTab === 'clientes' && <Clients />}
+          {activeTab === 'clientes' && (
+            <Clients
+              onOpenAttendance={(clientId) => {
+                localStorage.setItem('selected_attendance_client_id', clientId);
+                setActiveTab('atendimento');
+              }}
+            />
+          )}
           {activeTab === 'atendimento' && (
             <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <h1 className="page-title">Atendimento WhatsApp</h1>

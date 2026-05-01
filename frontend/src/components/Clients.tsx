@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Search, Phone, History, ChevronRight } from 'lucide-react';
+import { Plus, Search, Phone, History, ChevronRight, Trash2 } from 'lucide-react';
 
 interface Client {
   id: string;
@@ -10,7 +10,11 @@ interface Client {
   updatedAt: string;
 }
 
-export const Clients = () => {
+type ClientsProps = {
+  onOpenAttendance?: (clientId: string) => void;
+};
+
+export const Clients = ({ onOpenAttendance }: ClientsProps) => {
   const [clients, setClients] = useState<Client[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -48,6 +52,18 @@ export const Clients = () => {
       fetchClients();
     } catch (err: any) {
       alert(err.response?.data?.message || 'Erro ao criar cliente');
+    }
+  };
+
+  const handleDeleteClient = async (client: Client) => {
+    const confirmed = window.confirm(`Excluir o lead ${client.name}?`);
+    if (!confirmed) return;
+
+    try {
+      await axios.delete(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/clients/${client.id}`);
+      setClients(current => current.filter(item => item.id !== client.id));
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Erro ao excluir lead');
     }
   };
 
@@ -104,9 +120,20 @@ export const Clients = () => {
                 <p><History size={14} /> Atualizado em: {new Date(client.updatedAt).toLocaleDateString()}</p>
               </div>
               <div className="client-actions">
-                <button className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', justifyContent: 'center', padding: '0.5rem', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px', cursor: 'pointer' }}>
+                <button
+                  className="btn-secondary"
+                  onClick={() => onOpenAttendance?.(client.id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, justifyContent: 'center', padding: '0.5rem', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px', cursor: 'pointer' }}
+                >
                   <span>Ver Atendimento</span>
                   <ChevronRight size={16} />
+                </button>
+                <button
+                  className="delete-client-btn"
+                  onClick={() => void handleDeleteClient(client)}
+                  title="Excluir lead"
+                >
+                  <Trash2 size={16} />
                 </button>
               </div>
             </div>
@@ -169,6 +196,19 @@ export const Clients = () => {
         }
         .client-actions {
           margin-top: 1.5rem;
+          display: flex;
+          gap: 0.6rem;
+        }
+        .delete-client-btn {
+          width: 38px;
+          border: 1px solid rgba(239, 68, 68, 0.25);
+          border-radius: 4px;
+          background: rgba(239, 68, 68, 0.08);
+          color: #dc2626;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
         }
         .modal-overlay {
           position: fixed;
