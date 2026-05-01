@@ -7,6 +7,7 @@ interface Client {
   id: string;
   name: string;
   phone: string;
+  whatsappJid?: string | null;
   status: string;
 }
 
@@ -18,6 +19,22 @@ interface Message {
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const normalizeContactKey = (value: string) => value.replace(/@(s\.whatsapp\.net|lid)$/, '');
+const getClientContactKey = (client: Client) => normalizeContactKey(client.whatsappJid || client.phone);
+const isTechnicalLid = (value: string) => {
+  const raw = String(value || '');
+  const digits = raw.replace(/\D/g, '');
+  return raw.endsWith('@lid') || (digits.length >= 14 && !digits.startsWith('55'));
+};
+const formatClientPhone = (client: Client) => {
+  const raw = String(client.phone || '');
+  if (isTechnicalLid(raw)) return 'Telefone aguardando sincronizacao';
+
+  const digits = raw.replace(/\D/g, '');
+  if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+    return digits.slice(2);
+  }
+  return raw;
+};
 
 export const ChatArea = () => {
   const [clients, setClients] = useState<Client[]>([]);
@@ -60,7 +77,11 @@ export const ChatArea = () => {
 
     socket.on('client_upserted', (client: Client) => {
       setClients(prev => {
-        const existingIndex = prev.findIndex(item => item.phone === client.phone);
+        const existingIndex = prev.findIndex(item =>
+          item.id === client.id ||
+          item.phone === client.phone ||
+          (!!item.whatsappJid && item.whatsappJid === client.whatsappJid)
+        );
         if (existingIndex >= 0) {
           const next = [...prev];
           next[existingIndex] = client;
@@ -101,7 +122,7 @@ export const ChatArea = () => {
 
     try {
       await axios.post(`${API_URL}/api/whatsapp/send`, {
-        to: selectedClient.phone,
+        to: selectedClient.whatsappJid || selectedClient.phone,
         text
       });
     } catch (err: any) {
@@ -112,11 +133,11 @@ export const ChatArea = () => {
 
   const filteredClients = clients.filter(client => {
     const term = searchTerm.toLowerCase();
-    return client.name.toLowerCase().includes(term) || client.phone.includes(searchTerm);
+    return client.name.toLowerCase().includes(term) || formatClientPhone(client).includes(searchTerm);
   });
 
   const selectedMessages = selectedClient
-    ? messages[normalizeContactKey(selectedClient.phone)] || []
+    ? messages[getClientContactKey(selectedClient)] || []
     : [];
 
   return (
@@ -148,7 +169,7 @@ export const ChatArea = () => {
                   <span className="conv-name">{client.name}</span>
                   <span className="conv-time">{client.status}</span>
                 </span>
-                <span className="conv-last-msg">{client.phone}</span>
+                <span className="conv-last-msg">{formatClientPhone(client)}</span>
               </span>
             </button>
           ))}
@@ -161,7 +182,7 @@ export const ChatArea = () => {
             <header className="chat-header">
               <div className="chat-user-info">
                 <span className="chat-user-name">{selectedClient.name}</span>
-                <span className="chat-user-status">WhatsApp: {selectedClient.phone}</span>
+                <span className="chat-user-status">WhatsApp: {formatClientPhone(selectedClient)}</span>
               </div>
               <button type="button" className="header-icon-btn" title="Opcoes">
                 <MoreVertical size={20} />

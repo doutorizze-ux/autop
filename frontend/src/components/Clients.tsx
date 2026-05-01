@@ -6,6 +6,7 @@ interface Client {
   id: string;
   name: string;
   phone: string;
+  whatsappJid?: string | null;
   status: string;
   updatedAt: string;
 }
@@ -22,6 +23,17 @@ export const Clients = ({ onOpenAttendance }: ClientsProps) => {
   const [newPhone, setNewPhone] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [, setError] = useState('');
+
+  const formatClientPhone = (client: Client) => {
+    const raw = String(client.phone || '');
+    const digits = raw.replace(/\D/g, '');
+    const isTechnicalLid = raw.endsWith('@lid') || (digits.length >= 14 && !digits.startsWith('55'));
+    if (isTechnicalLid) return 'Telefone aguardando sincronizacao';
+    if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+      return digits.slice(2);
+    }
+    return raw;
+  };
 
   const fetchClients = async () => {
     try {
@@ -78,7 +90,7 @@ export const Clients = ({ onOpenAttendance }: ClientsProps) => {
 
   const filteredClients = clients.filter(c => 
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    c.phone.includes(searchTerm)
+    formatClientPhone(c).includes(searchTerm)
   );
 
   return (
@@ -116,7 +128,7 @@ export const Clients = ({ onOpenAttendance }: ClientsProps) => {
                 </span>
               </div>
               <div className="client-info">
-                <p><Phone size={14} /> {client.phone}</p>
+                <p><Phone size={14} /> {formatClientPhone(client)}</p>
                 <p><History size={14} /> Atualizado em: {new Date(client.updatedAt).toLocaleDateString()}</p>
               </div>
               <div className="client-actions">
