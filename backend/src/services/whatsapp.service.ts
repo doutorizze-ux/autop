@@ -21,6 +21,7 @@ type StoredChatMessage = {
     text: string;
     fromMe: boolean;
     timestamp: number;
+    system?: boolean;
 };
 
 function normalizeWhatsappPhone(jid: string) {
@@ -42,6 +43,12 @@ function normalizeWhatsappJid(jid: string) {
 
 function isRealWhatsappJid(jid: string) {
     return String(jid || '').endsWith('@s.whatsapp.net');
+}
+
+function isTechnicalLidPhone(value: string) {
+    const raw = String(value || '');
+    const digits = raw.replace(/\D/g, '');
+    return raw.endsWith('@lid') || (digits.length >= 14 && !digits.startsWith('55'));
 }
 
 function pickRealWhatsappJid(...values: unknown[]) {
@@ -195,6 +202,8 @@ async function appendClientMessage(clientId: string, message: StoredChatMessage)
         },
     });
 }
+
+const phoneRequestsSent = new Set<string>();
 
 async function upsertClientFromWhatsapp(params: {
     jid: string;
@@ -425,6 +434,27 @@ class WhatsAppService {
         }
     }
 
+    private async requestPhoneNumberIfNeeded(client: { id: string; phone: string; whatsappJid?: string | null }) {
+        if (!this.sock || !client.whatsappJid || !client.whatsappJid.endsWith('@lid')) return;
+        if (!isTechnicalLidPhone(client.phone)) return;
+        if (phoneRequestsSent.has(client.whatsappJid)) return;
+
+        phoneRequestsSent.add(client.whatsappJid);
+
+        try {
+            await this.sock.sendMessage(client.whatsappJid, { requestPhoneNumber: true } as any);
+            await appendClientMessage(client.id, {
+                text: '__PHONE_REQUEST_SENT__',
+                fromMe: true,
+                timestamp: Math.floor(Date.now() / 1000),
+                system: true,
+            });
+        } catch (error) {
+            phoneRequestsSent.delete(client.whatsappJid);
+            console.error('Erro ao solicitar telefone do lead:', error);
+        }
+    }
+
     private async syncContacts(contacts: any[]) {
         for (const contact of contacts) {
             try {
@@ -523,9 +553,11 @@ class WhatsAppService {
             },
         });
 
-        if (client) {
-            client = await appendClientMessage(client.id, {
-                text,
+                        if (client) {
+                            await this.requestPhoneNumberIfNeeded(client);
+
+                            client = await appendClientMessage(client.id, {
+                                text,
                 fromMe: true,
                 timestamp: Math.floor(Date.now() / 1000),
             }) || client;

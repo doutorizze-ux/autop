@@ -16,6 +16,7 @@ interface Message {
   text: string;
   fromMe: boolean;
   timestamp: number;
+  system?: boolean;
 }
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -36,7 +37,9 @@ const parseClientHistory = (client: Client): Message[] => {
         item &&
         typeof item.text === 'string' &&
         typeof item.fromMe === 'boolean' &&
-        typeof item.timestamp === 'number'
+        typeof item.timestamp === 'number' &&
+        !item.system &&
+        item.text !== '__PHONE_REQUEST_SENT__'
       );
     }
   } catch (_) {}
