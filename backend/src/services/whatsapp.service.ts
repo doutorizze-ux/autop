@@ -1,7 +1,9 @@
 import makeWASocket, {
     Browsers,
     DisconnectReason,
+    extractMessageContent,
     fetchLatestBaileysVersion,
+    getContentType,
     makeCacheableSignalKeyStore,
     useMultiFileAuthState,
 } from '@whiskeysockets/baileys';
@@ -66,6 +68,55 @@ function buildWhatsappJid(value: string) {
 
     const withCountry = digits.length === 10 || digits.length === 11 ? `55${digits}` : digits;
     return `${withCountry}@s.whatsapp.net`;
+}
+
+function getWhatsappMessageText(message: any): string {
+    const content: any = extractMessageContent(message || {});
+    const type = getContentType(content);
+    const body: any = type ? content?.[type] : null;
+
+    if (!content || !type) return '';
+
+    if (typeof content.conversation === 'string') return content.conversation;
+    if (typeof body === 'string') return body;
+
+    const candidates = [
+        body?.text,
+        body?.caption,
+        body?.selectedDisplayText,
+        body?.title,
+        body?.description,
+        body?.name,
+        body?.displayName,
+        body?.singleSelectReply?.selectedRowId,
+        body?.selectedButtonId,
+        body?.hydratedTemplateButtonReply?.hydratedButton?.displayText,
+    ];
+
+    for (const candidate of candidates) {
+        if (typeof candidate === 'string' && candidate.trim()) {
+            return candidate.trim();
+        }
+    }
+
+    if (body?.nativeFlowResponseMessage?.paramsJson) {
+        try {
+            const params = JSON.parse(body.nativeFlowResponseMessage.paramsJson);
+            return params?.display_text || params?.title || params?.id || '';
+        } catch (_) {}
+    }
+
+    const mediaLabels: Record<string, string> = {
+        imageMessage: '[Imagem recebida]',
+        videoMessage: '[Video recebido]',
+        audioMessage: '[Audio recebido]',
+        documentMessage: '[Documento recebido]',
+        stickerMessage: '[Figurinha recebida]',
+        contactMessage: '[Contato recebido]',
+        locationMessage: '[Localizacao recebida]',
+    };
+
+    return mediaLabels[type] || '[Mensagem recebida]';
 }
 
 async function upsertClientFromWhatsapp(params: {
@@ -264,7 +315,7 @@ class WhatsAppService {
 
                     const sender = String(msg.key.remoteJid || '');
                     const realJid = isRealWhatsappJid(sender) ? sender : '';
-                    const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+                    const text = getWhatsappMessageText(msg.message);
                     const displayPhone = toDisplayPhone(realJid || sender);
                     const pushName = msg.pushName || `Lead ${displayPhone}`;
 
