@@ -40,14 +40,20 @@ type QuoteHistoryEntry = {
 };
 
 type QuoteSearchResponse = {
-    quoteId: string;
+    jobId?: string;
+    status?: 'running' | 'completed' | 'failed' | 'cancelled';
+    quoteId?: string;
     createdAt: string;
+    completedAt?: string;
+    updatedAt?: string;
     items: QuoteItemInput[];
     suppliers: string[];
     matrix: QuoteMatrix;
+    error?: string;
 };
 
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const activeQuoteJobStorageKey = 'active_quote_job_id';
 
 const buildItemLabel = (item: QuoteItemInput) => {
     const query = String(item.query || '').trim();
@@ -84,6 +90,9 @@ export const Quotes = () => {
     const [currentQuoteId, setCurrentQuoteId] = useState('');
     const [currentCreatedAt, setCurrentCreatedAt] = useState('');
     const [activeHistoryId, setActiveHistoryId] = useState('');
+    const [activeJobId, setActiveJobId] = useState(() => localStorage.getItem(activeQuoteJobStorageKey) || '');
+    const [quoteJobStatus, setQuoteJobStatus] = useState('');
+    const [quoteJobError, setQuoteJobError] = useState('');
 
     const loadHistory = async () => {
         setIsHistoryLoading(true);
@@ -103,6 +112,65 @@ export const Quotes = () => {
     useEffect(() => {
         void loadHistory();
     }, []);
+
+    const applyQuoteJob = async (data: QuoteSearchResponse) => {
+        setQuoteJobStatus(data.status || '');
+        setQuoteJobError(data.error || '');
+        setPartList(
+            data.items.map((item) => ({
+                query: item.query,
+                description: item.description,
+                label: item.label,
+            }))
+        );
+        setQuoteMatrix(data.matrix || {});
+        setSuppliers(data.suppliers || []);
+
+        if (data.jobId) {
+            setActiveJobId(data.jobId);
+        }
+
+        if (data.status === 'running') {
+            setIsSearching(true);
+            setCurrentCreatedAt(data.createdAt);
+            return;
+        }
+
+        setIsSearching(false);
+        localStorage.removeItem(activeQuoteJobStorageKey);
+        setActiveJobId('');
+
+        if (data.status === 'completed') {
+            setCurrentQuoteId(data.quoteId || '');
+            setCurrentCreatedAt(data.completedAt || data.createdAt);
+            setActiveHistoryId(data.quoteId || '');
+            await loadHistory();
+        }
+    };
+
+    const fetchQuoteJob = async (jobId: string) => {
+        const response = await axios.get<QuoteSearchResponse>(`${apiBase}/api/quotes/jobs/${jobId}`);
+        await applyQuoteJob(response.data);
+    };
+
+    useEffect(() => {
+        if (!activeJobId) return;
+
+        localStorage.setItem(activeQuoteJobStorageKey, activeJobId);
+        void fetchQuoteJob(activeJobId).catch(() => {
+            setIsSearching(false);
+            setActiveJobId('');
+            localStorage.removeItem(activeQuoteJobStorageKey);
+        });
+
+        const interval = window.setInterval(() => {
+            void fetchQuoteJob(activeJobId).catch((error) => {
+                console.error('Quote Job Poll Error:', error);
+            });
+        }, 3000);
+
+        return () => window.clearInterval(interval);
+    }, [activeJobId]);
 
     useEffect(() => {
         const handleProgress = (data: { supplier: string; productName: string; result: any }) => {
@@ -173,6 +241,11 @@ export const Quotes = () => {
         setIsSearching(true);
         setQuoteMatrix({});
         setSuppliers([]);
+        setCurrentQuoteId('');
+        setCurrentCreatedAt('');
+        setActiveHistoryId('');
+        setQuoteJobStatus('running');
+        setQuoteJobError('');
 
         try {
             const response = await axios.post<QuoteSearchResponse>(`${apiBase}/api/quotes/search`, {
@@ -183,24 +256,31 @@ export const Quotes = () => {
                 socketId: socket.id
             });
 
-            setPartList(
-                response.data.items.map((item) => ({
-                    query: item.query,
-                    description: item.description,
-                    label: item.label,
-                }))
-            );
-            setQuoteMatrix(response.data.matrix || {});
-            setSuppliers(response.data.suppliers || []);
-            setCurrentQuoteId(response.data.quoteId);
-            setCurrentCreatedAt(response.data.createdAt);
-            setActiveHistoryId(response.data.quoteId);
-            await loadHistory();
+            if (response.data.jobId) {
+                localStorage.setItem(activeQuoteJobStorageKey, response.data.jobId);
+            }
+            await applyQuoteJob(response.data);
         } catch (error) {
             console.error('Search Quote Error:', error);
             alert('Erro ao buscar precos. Verifique se os fornecedores estao configurados corretamente.');
-        } finally {
             setIsSearching(false);
+            setQuoteJobStatus('');
+        } finally {
+        }
+    };
+
+    const handleCancelSearch = async () => {
+        if (!activeJobId) return;
+
+        try {
+            await axios.post(`${apiBase}/api/quotes/jobs/${activeJobId}/cancel`);
+            setIsSearching(false);
+            setQuoteJobStatus('cancelled');
+            setActiveJobId('');
+            localStorage.removeItem(activeQuoteJobStorageKey);
+        } catch (error) {
+            console.error('Cancel Quote Job Error:', error);
+            alert('Nao foi possivel cancelar este orcamento agora.');
         }
     };
 
@@ -242,6 +322,9 @@ export const Quotes = () => {
             setSuppliers(response.data.suppliers || []);
             setCurrentQuoteId(response.data.quoteId || quoteId);
             setCurrentCreatedAt(response.data.createdAt);
+            setIsSearching(false);
+            setActiveJobId('');
+            localStorage.removeItem(activeQuoteJobStorageKey);
         } catch (error) {
             console.error('Open Saved Quote Error:', error);
             alert('Nao foi possivel abrir essa cotacao salva.');
@@ -393,6 +476,22 @@ export const Quotes = () => {
                                 </>
                             )}
                         </button>
+                        {isSearching && (
+                            <div className="quote-running-status">
+                                <span>
+                                    Orcamento em andamento. Pode trocar de menu ou atualizar a pagina que ele continua.
+                                </span>
+                                <button type="button" onClick={() => void handleCancelSearch()}>
+                                    Parar este orcamento
+                                </button>
+                            </div>
+                        )}
+                        {quoteJobStatus === 'cancelled' && (
+                            <div className="quote-job-warning">Orcamento cancelado.</div>
+                        )}
+                        {quoteJobStatus === 'failed' && (
+                            <div className="quote-job-warning">{quoteJobError || 'Orcamento falhou.'}</div>
+                        )}
                     </div>
                 )}
             </div>
@@ -662,6 +761,37 @@ export const Quotes = () => {
                     align-items: center;
                     gap: 0.8rem;
                 }
+                .quote-running-status {
+                    margin-top: 0.9rem;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 1rem;
+                    color: var(--text-muted);
+                    font-size: 0.9rem;
+                    background: var(--bg-color);
+                    border: 1px solid var(--border-color);
+                    border-radius: 8px;
+                    padding: 0.8rem 1rem;
+                }
+                .quote-running-status button {
+                    border: 1px solid rgba(239, 68, 68, 0.25);
+                    color: #dc2626;
+                    background: var(--panel-bg);
+                    border-radius: 8px;
+                    padding: 0.55rem 0.8rem;
+                    font-weight: 700;
+                    cursor: pointer;
+                    white-space: nowrap;
+                }
+                .quote-job-warning {
+                    margin-top: 0.9rem;
+                    color: #dc2626;
+                    background: rgba(239, 68, 68, 0.08);
+                    border: 1px solid rgba(239, 68, 68, 0.18);
+                    border-radius: 8px;
+                    padding: 0.8rem 1rem;
+                }
                 .results-panel { overflow: hidden; min-width: 0; width: 100%; }
                 .results-header, .history-panel-header {
                     display: flex;
@@ -842,6 +972,10 @@ export const Quotes = () => {
                     }
                     .add-part-form { grid-template-columns: 1fr; }
                     .export-actions, .history-card-actions { width: 100%; }
+                    .quote-running-status {
+                        flex-direction: column;
+                        align-items: stretch;
+                    }
                 }
             `}</style>
         </div>

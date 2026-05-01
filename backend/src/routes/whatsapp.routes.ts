@@ -9,7 +9,8 @@ router.use(authMiddleware);
 router.get('/status', (req, res) => {
     res.json({ 
         status: whatsappService.status, 
-        qr: whatsappService.qr 
+        qr: whatsappService.qr,
+        error: whatsappService.lastError,
     });
 });
 
@@ -19,6 +20,7 @@ router.post('/reconnect', async (_req, res) => {
         res.json({
             status: whatsappService.status,
             qr: whatsappService.qr,
+            error: whatsappService.lastError,
         });
     } catch (err: any) {
         res.status(500).json({ message: err.message });

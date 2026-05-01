@@ -22,13 +22,17 @@ class WhatsAppService {
     public sock: any = null;
     public qr: string | null = null;
     public status: 'connecting' | 'connected' | 'disconnected' | 'qr' = 'disconnected';
+    public lastError: string | null = null;
     private initializing = false;
+    private generation = 0;
     private readonly sessionPath = path.join(__dirname, '../../sessions');
 
     async init() {
         if (this.initializing) return;
         this.initializing = true;
+        const generation = ++this.generation;
         this.status = 'connecting';
+        this.lastError = null;
         io.emit('whatsapp_status', { status: 'connecting' });
 
         try {
@@ -50,6 +54,7 @@ class WhatsAppService {
             });
 
             this.sock.ev.on('connection.update', async (update: any) => {
+                if (generation !== this.generation) return;
                 const { connection, lastDisconnect, qr } = update;
 
                 if (qr) {
@@ -63,6 +68,7 @@ class WhatsAppService {
                     const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
                     this.status = 'disconnected';
                     this.qr = null;
+                    this.lastError = `Conexao fechada pelo WhatsApp. Codigo: ${statusCode || 'desconhecido'}`;
                     io.emit('whatsapp_status', { status: 'disconnected' });
                     console.log(`WhatsApp connection closed. statusCode=${statusCode || 'unknown'} shouldReconnect=${shouldReconnect}`);
 
@@ -72,12 +78,14 @@ class WhatsAppService {
 
                     if (shouldReconnect) {
                         setTimeout(() => {
+                            if (generation !== this.generation) return;
                             this.init().catch((error) => console.error('WhatsApp reconnect error:', error));
                         }, 3000);
                     }
                 } else if (connection === 'open') {
                     this.status = 'connected';
                     this.qr = null;
+                    this.lastError = null;
                     io.emit('whatsapp_status', { status: 'connected' });
                     console.log('WhatsApp connection opened');
                 }
@@ -127,6 +135,7 @@ class WhatsAppService {
             console.error('WhatsApp Init Error:', error);
             this.status = 'disconnected';
             this.qr = null;
+            this.lastError = error instanceof Error ? error.message : String(error);
             io.emit('whatsapp_status', { status: 'disconnected' });
         } finally {
             this.initializing = false;
@@ -142,9 +151,11 @@ class WhatsAppService {
     }
 
     async reconnect(forceNewSession = false) {
+        this.generation += 1;
         this.sock?.end?.();
         this.sock = null;
         this.qr = null;
+        this.lastError = null;
         this.initializing = false;
 
         if (forceNewSession) {

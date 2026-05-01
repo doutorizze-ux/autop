@@ -3,6 +3,7 @@ import { ScraperService } from '../services/scraper.service';
 import { PrismaClient } from '@prisma/client';
 import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
+import { randomUUID } from 'crypto';
 
 const prisma = new PrismaClient();
 
@@ -26,6 +27,39 @@ type ParsedStoredQuote = {
     suppliers: string[];
     matrix: QuoteMatrix;
 };
+
+type QuoteJobStatus = 'running' | 'completed' | 'failed' | 'cancelled';
+
+type QuoteJob = {
+    id: string;
+    status: QuoteJobStatus;
+    items: QuoteItem[];
+    suppliers: string[];
+    matrix: QuoteMatrix;
+    createdAt: string;
+    updatedAt: string;
+    quoteId?: string;
+    completedAt?: string;
+    error?: string;
+    cancelled: boolean;
+};
+
+const quoteJobs = new Map<string, QuoteJob>();
+
+function serializeQuoteJob(job: QuoteJob) {
+    return {
+        jobId: job.id,
+        status: job.status,
+        items: job.items,
+        suppliers: job.suppliers,
+        matrix: job.matrix,
+        createdAt: job.createdAt,
+        updatedAt: job.updatedAt,
+        completedAt: job.completedAt,
+        quoteId: job.quoteId,
+        error: job.error,
+    };
+}
 
 function buildItemLabel(query: string, description?: string) {
     const cleanDescription = String(description || '').trim();
@@ -294,35 +328,118 @@ export const searchQuote = async (req: Request, res: Response) => {
             return res.status(400).json({ message: 'Lista de produtos e obrigatoria' });
         }
 
-        const productNames = items.map((item) => item.query);
-        const matrix = await ScraperService.searchMultipleProducts(productNames, req.body.socketId);
+        const job: QuoteJob = {
+            id: randomUUID(),
+            status: 'running',
+            items,
+            suppliers: [],
+            matrix: {},
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            cancelled: false,
+        };
+
+        quoteJobs.set(job.id, job);
+
+        void runQuoteJob(job, req.body.socketId);
+
+        return res.status(202).json(serializeQuoteJob(job));
+    } catch (err) {
+        console.error('Start Quote Job Error:', err);
+        return res.status(500).json({ message: 'Erro ao iniciar cotacao em lote' });
+    }
+};
+
+async function runQuoteJob(job: QuoteJob, socketId?: string) {
+    try {
+        const productNames = job.items.map((item) => item.query);
+        const matrix = await ScraperService.searchMultipleProducts(
+            productNames,
+            socketId,
+            ({ supplier, productName, result }) => {
+                if (!job.matrix[productName]) {
+                    job.matrix[productName] = [];
+                }
+
+                const existingIndex = job.matrix[productName].findIndex((entry: any) => entry.provider === supplier);
+                if (existingIndex >= 0) {
+                    job.matrix[productName][existingIndex] = result;
+                } else {
+                    job.matrix[productName].push(result);
+                }
+
+                if (!job.suppliers.includes(supplier)) {
+                    job.suppliers.push(supplier);
+                }
+
+                job.updatedAt = new Date().toISOString();
+            },
+            () => job.cancelled
+        );
+
+        if (job.cancelled) {
+            job.status = 'cancelled';
+            job.completedAt = new Date().toISOString();
+            job.updatedAt = job.completedAt;
+            return;
+        }
+
         const suppliers = extractSuppliersFromMatrix(matrix);
 
         const payload: StoredQuotePayload = {
             version: 1,
-            items,
+            items: job.items,
             suppliers,
             matrix,
         };
 
         const savedQuote = await prisma.quote.create({
             data: {
-                product: items.map((item) => item.label).join(' | '),
+                product: job.items.map((item) => item.label).join(' | '),
                 results: JSON.stringify(payload),
             },
         });
 
-        res.json({
-            quoteId: savedQuote.id,
-            createdAt: savedQuote.createdAt,
-            items,
-            suppliers,
-            matrix,
-        });
+        job.status = 'completed';
+        job.quoteId = savedQuote.id;
+        job.completedAt = savedQuote.createdAt.toISOString();
+        job.updatedAt = new Date().toISOString();
+        job.suppliers = suppliers;
+        job.matrix = matrix;
     } catch (err) {
-        console.error('Search Quote Error:', err);
-        res.status(500).json({ message: 'Erro ao processar cotacao em lote' });
+        console.error('Run Quote Job Error:', err);
+        job.status = 'failed';
+        job.error = err instanceof Error ? err.message : 'Erro ao processar cotacao em lote';
+        job.completedAt = new Date().toISOString();
+        job.updatedAt = job.completedAt;
     }
+}
+
+export const getQuoteJob = async (req: Request, res: Response) => {
+    const job = quoteJobs.get(req.params.jobId);
+
+    if (!job) {
+        return res.status(404).json({ message: 'Orcamento em andamento nao encontrado.' });
+    }
+
+    return res.json(serializeQuoteJob(job));
+};
+
+export const cancelQuoteJob = async (req: Request, res: Response) => {
+    const job = quoteJobs.get(req.params.jobId);
+
+    if (!job) {
+        return res.status(404).json({ message: 'Orcamento em andamento nao encontrado.' });
+    }
+
+    if (job.status === 'running') {
+        job.cancelled = true;
+        job.status = 'cancelled';
+        job.updatedAt = new Date().toISOString();
+        job.completedAt = job.updatedAt;
+    }
+
+    return res.json(serializeQuoteJob(job));
 };
 
 export const listQuoteHistory = async (_req: Request, res: Response) => {

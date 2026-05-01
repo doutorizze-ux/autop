@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 const enginePath = path.resolve(__dirname, '../../../scraping/engine.js');
 const { scrapeProduct } = require(enginePath);
 
-async function runSupplierSearch(supplier: any, productName: string) {
+export async function runSupplierSearch(supplier: any, productName: string) {
     try {
         const data = await scrapeProduct(supplier, productName);
 
@@ -47,8 +47,14 @@ async function runSupplierSearch(supplier: any, productName: string) {
             ) {
                 errorMsg = 'Erro do Bot: Acesso bloqueado pelo site (CloudFront/403).';
             } else
-            if (errorMsg.includes('Nenhum produto encontrado') || errorMsg.includes('Nenhum item')) {
-                errorMsg = 'Nao ha este produto no estoque';
+            if (
+                errorMsg.includes('Sessao manual invalida') ||
+                errorMsg.includes('Falha no login') ||
+                errorMsg.includes('credenciais recusadas')
+            ) {
+                errorMsg = 'Sessao expirada ou login bloqueado. Refaça o Login Assistido deste fornecedor.';
+            } else if (errorMsg.includes('Nenhum produto encontrado') || errorMsg.includes('Nenhum item')) {
+                errorMsg = 'Nao encontrado nesta consulta. Preco/estoque nao confirmado.';
             } else if (!errorMsg.startsWith('Erro do Bot')) {
                 errorMsg = `Erro do Bot: ${data.error}`;
             }
@@ -102,25 +108,45 @@ export class ScraperService {
         return runSupplierSearch(supplier, productName);
     }
 
-    static async searchMultipleProducts(productNames: string[], socketId?: string) {
+    static async searchMultipleProducts(
+        productNames: string[],
+        socketId?: string,
+        onProgress?: (payload: { supplier: string; productName: string; result: any }) => void,
+        shouldCancel?: () => boolean
+    ) {
         const suppliers = await prisma.supplier.findMany();
         const concurrency = Math.max(1, Number.parseInt(process.env.SCRAPER_CONCURRENCY || '1', 10) || 1);
         const resultsByProduct: Record<string, any[]> = {};
 
         for (const productName of productNames) {
+            if (shouldCancel?.()) break;
             console.log(`Buscando em todos os fornecedores para: ${productName}`);
 
             const productResults: any[] = [];
             for (let index = 0; index < suppliers.length; index += concurrency) {
+                if (shouldCancel?.()) break;
                 const currentBatch = suppliers.slice(index, index + concurrency);
                 const batchResults = await Promise.all(currentBatch.map(async (supplier) => {
+                    if (shouldCancel?.()) {
+                        return {
+                            provider: supplier.name,
+                            product: productName,
+                            price: '---',
+                            error: 'Orcamento cancelado pelo usuario.',
+                            link: supplier.url,
+                            available: false,
+                            debug: null,
+                        };
+                    }
                     const result = await runSupplierSearch(supplier, productName);
+                    const progressPayload = {
+                        supplier: supplier.name,
+                        productName,
+                        result
+                    };
+                    onProgress?.(progressPayload);
                     if (socketId) {
-                        io.to(socketId).emit('quote_progress', {
-                            supplier: supplier.name,
-                            productName,
-                            result
-                        });
+                        io.to(socketId).emit('quote_progress', progressPayload);
                     }
                     return result;
                 }));

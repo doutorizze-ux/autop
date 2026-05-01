@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { socket } from '../services/socket';
 import { CheckCircle2, RefreshCcw, WifiOff } from 'lucide-react';
 
@@ -7,6 +7,22 @@ export const WhatsAppConnect = () => {
     const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'qr'>('connecting');
     const [qrCode, setQrCode] = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState('');
+    const autoReconnectStarted = useRef(false);
+
+    const reconnect = async () => {
+        try {
+            setStatus('connecting');
+            setErrorMessage('');
+            const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/whatsapp/reconnect`);
+            setStatus(response.data.status);
+            setQrCode(response.data.qr || null);
+            setErrorMessage(response.data.error || '');
+        } catch (error: any) {
+            setStatus('disconnected');
+            setQrCode(null);
+            setErrorMessage(error?.response?.data?.message || 'Nao foi possivel iniciar uma nova sessao do WhatsApp.');
+        }
+    };
 
     useEffect(() => {
         const fetchInitialStatus = async () => {
@@ -14,7 +30,12 @@ export const WhatsAppConnect = () => {
                 const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/whatsapp/status`);
                 setStatus(response.data.status);
                 setQrCode(response.data.qr || null);
-                setErrorMessage('');
+                setErrorMessage(response.data.error || '');
+
+                if (response.data.status === 'disconnected' && !autoReconnectStarted.current) {
+                    autoReconnectStarted.current = true;
+                    await reconnect();
+                }
             } catch {
                 setStatus('disconnected');
                 setQrCode(null);
@@ -36,20 +57,6 @@ export const WhatsAppConnect = () => {
             socket.off('whatsapp_status');
         };
     }, []);
-
-    const reconnect = async () => {
-        try {
-            setStatus('connecting');
-            setErrorMessage('');
-            const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/whatsapp/reconnect`);
-            setStatus(response.data.status);
-            setQrCode(response.data.qr || null);
-        } catch (error: any) {
-            setStatus('disconnected');
-            setQrCode(null);
-            setErrorMessage(error?.response?.data?.message || 'Nao foi possivel iniciar uma nova sessao do WhatsApp.');
-        }
-    };
 
     const renderContent = () => {
         switch (status) {

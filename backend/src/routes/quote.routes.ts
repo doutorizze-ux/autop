@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import {
     searchQuote,
+    getQuoteJob,
+    cancelQuoteJob,
     exportPDF,
     exportExcel,
     listQuoteHistory,
@@ -16,6 +18,8 @@ const router = Router();
 router.use(authMiddleware);
 
 router.post('/search', searchQuote);
+router.get('/jobs/:jobId', getQuoteJob);
+router.post('/jobs/:jobId/cancel', cancelQuoteJob);
 router.post('/export/pdf', exportPDF);
 router.post('/export/excel', exportExcel);
 router.get('/history', listQuoteHistory);
