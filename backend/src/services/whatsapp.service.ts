@@ -1,4 +1,5 @@
 import makeWASocket, {
+    Browsers,
     DisconnectReason,
     fetchLatestBaileysVersion,
     makeCacheableSignalKeyStore,
@@ -52,8 +53,9 @@ class WhatsAppService {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
                 },
-                browser: ['AutoCRM', 'Chrome', '1.0.0'],
+                browser: Browsers.ubuntu('Chrome'),
                 syncFullHistory: false,
+                markOnlineOnConnect: false,
             });
 
             this.sock.ev.on('connection.update', async (update: any) => {
@@ -68,11 +70,14 @@ class WhatsAppService {
 
                 if (connection === 'close') {
                     const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+                    const restartRequired = statusCode === DisconnectReason.restartRequired;
                     const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-                    this.status = 'disconnected';
+                    this.status = restartRequired ? 'connecting' : 'disconnected';
                     this.qr = null;
-                    this.lastError = `Conexao fechada pelo WhatsApp. Codigo: ${statusCode || 'desconhecido'}`;
-                    io.emit('whatsapp_status', { status: 'disconnected' });
+                    this.lastError = restartRequired
+                        ? 'WhatsApp pediu reinicio da conexao para concluir o pareamento.'
+                        : `Conexao fechada pelo WhatsApp. Codigo: ${statusCode || 'desconhecido'}`;
+                    io.emit('whatsapp_status', { status: this.status });
                     console.log(`WhatsApp connection closed. statusCode=${statusCode || 'unknown'} shouldReconnect=${shouldReconnect}`);
 
                     if (statusCode === DisconnectReason.loggedOut) {
@@ -84,7 +89,7 @@ class WhatsAppService {
                         setTimeout(() => {
                             if (generation !== this.generation) return;
                             this.init().catch((error) => console.error('WhatsApp reconnect error:', error));
-                        }, 3000);
+                        }, restartRequired ? 500 : 3000);
                     }
                 } else if (connection === 'open') {
                     this.status = 'connected';
