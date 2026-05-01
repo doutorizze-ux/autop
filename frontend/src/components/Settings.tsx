@@ -20,7 +20,9 @@ export const Settings = () => {
     // Config State
     const [systemConfig, setSystemConfig] = useState({
         aiKey: '',
-        whatsappMode: 'baileys'
+        whatsappMode: 'baileys',
+        themeColor: '#0056b3',
+        themeLogo: ''
     });
     const [appearanceData, setAppearanceData] = useState({
         color: localStorage.getItem('theme_color') || '#0056b3',
@@ -45,6 +47,13 @@ export const Settings = () => {
         try {
             const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/config`);
             setSystemConfig(response.data);
+            const themeColor = response.data.themeColor || localStorage.getItem('theme_color') || '#0056b3';
+            const themeLogo = response.data.themeLogo || localStorage.getItem('theme_logo') || '';
+            setAppearanceData({ color: themeColor, logo: themeLogo });
+            document.documentElement.style.setProperty('--primary-color', themeColor);
+            window.dispatchEvent(new CustomEvent('theme-updated', {
+                detail: { themeColor, themeLogo }
+            }));
         } catch (err) {
             console.error('Erro ao buscar configurações do sistema');
         }
@@ -227,17 +236,34 @@ export const Settings = () => {
                             </div>
                             <form onSubmit={(e) => {
                                 e.preventDefault();
+                                setLoading(true);
                                 const color = appearanceData.color || '#0056b3';
                                 const logo = appearanceData.logo.trim();
-                                localStorage.setItem('theme_color', color);
-                                if (logo) {
-                                    localStorage.setItem('theme_logo', logo);
-                                } else {
-                                    localStorage.removeItem('theme_logo');
-                                }
-                                document.documentElement.style.setProperty('--primary-color', color);
-                                window.dispatchEvent(new Event('theme-updated'));
-                                setMessage({ type: 'success', text: 'Tema atualizado com sucesso!' });
+                                axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/config`, {
+                                    ...systemConfig,
+                                    themeColor: color,
+                                    themeLogo: logo || null,
+                                }).then((response) => {
+                                    const themeColor = response.data.themeColor || color;
+                                    const themeLogo = response.data.themeLogo || '';
+                                    setSystemConfig(response.data);
+                                    setAppearanceData({ color: themeColor, logo: themeLogo });
+                                    localStorage.setItem('theme_color', themeColor);
+                                    if (themeLogo) {
+                                        localStorage.setItem('theme_logo', themeLogo);
+                                    } else {
+                                        localStorage.removeItem('theme_logo');
+                                    }
+                                    document.documentElement.style.setProperty('--primary-color', themeColor);
+                                    window.dispatchEvent(new CustomEvent('theme-updated', {
+                                        detail: { themeColor, themeLogo }
+                                    }));
+                                    setMessage({ type: 'success', text: 'Tema atualizado para todos os acessos!' });
+                                }).catch(() => {
+                                    setMessage({ type: 'error', text: 'Erro ao salvar aparencia da loja' });
+                                }).finally(() => {
+                                    setLoading(false);
+                                });
                             }}>
                                 <div className="form-group">
                                     <label>Cor Principal do Sistema</label>
@@ -271,9 +297,9 @@ export const Settings = () => {
                                         </div>
                                     )}
                                 </div>
-                                <button type="submit" className="btn-primary">
+                                <button type="submit" className="btn-primary" disabled={loading}>
                                     <Save size={18} />
-                                    <span>Salvar Design</span>
+                                    <span>{loading ? 'Salvando...' : 'Salvar Design'}</span>
                                 </button>
                             </form>
                         </div>

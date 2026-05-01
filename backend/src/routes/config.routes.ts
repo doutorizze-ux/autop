@@ -17,12 +17,12 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
     try {
-        const { aiKey, whatsappMode } = req.body;
+        const { aiKey, whatsappMode, themeColor, themeLogo } = req.body;
         // Apenas ADMIN pode mudar configurações globais
         if ((req as any).user.role !== 'ADMIN') {
             return res.status(403).json({ message: 'Acesso negado' });
         }
-        const config = await ConfigService.updateConfig({ aiKey, whatsappMode });
+        const config = await ConfigService.updateConfig({ aiKey, whatsappMode, themeColor, themeLogo });
         res.json(config);
     } catch (err) {
         res.status(500).json({ message: 'Erro ao atualizar configurações' });

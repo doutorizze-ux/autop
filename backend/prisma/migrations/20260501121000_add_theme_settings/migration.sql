@@ -1,0 +1,2 @@
+ALTER TABLE "SystemConfig" ADD COLUMN "themeColor" TEXT NOT NULL DEFAULT '#0056b3';
+ALTER TABLE "SystemConfig" ADD COLUMN "themeLogo" TEXT;

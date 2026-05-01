@@ -70,5 +70,7 @@ model SystemConfig {
   id           String   @id @default("system_settings")
   aiKey        String?
   whatsappMode String   @default("baileys")
+  themeColor   String   @default("#0056b3")
+  themeLogo    String?
   updatedAt    DateTime @updatedAt
 }

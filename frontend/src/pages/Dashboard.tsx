@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Users, MessageSquare, Briefcase, Settings, LogOut, Search } from 'lucide-react';
 import { Clients } from '../components/Clients';
@@ -18,9 +19,34 @@ export const Dashboard = () => {
   const [themeLogo, setThemeLogo] = useState(() => localStorage.getItem('theme_logo') || '');
 
   useEffect(() => {
-    const refreshTheme = () => {
-      setThemeLogo(localStorage.getItem('theme_logo') || '');
+    const applyTheme = (themeColor?: string, logo?: string) => {
+      const color = themeColor || localStorage.getItem('theme_color') || '#0056b3';
+      const themeLogo = logo ?? localStorage.getItem('theme_logo') ?? '';
+      document.documentElement.style.setProperty('--primary-color', color);
+      setThemeLogo(themeLogo);
+      localStorage.setItem('theme_color', color);
+      if (themeLogo) {
+        localStorage.setItem('theme_logo', themeLogo);
+      } else {
+        localStorage.removeItem('theme_logo');
+      }
     };
+
+    const fetchTheme = async () => {
+      try {
+        const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/config`);
+        applyTheme(response.data.themeColor, response.data.themeLogo || '');
+      } catch (error) {
+        applyTheme();
+      }
+    };
+
+    const refreshTheme = (event?: Event) => {
+      const detail = (event as CustomEvent<{ themeColor?: string; themeLogo?: string }>)?.detail;
+      applyTheme(detail?.themeColor, detail?.themeLogo);
+    };
+
+    void fetchTheme();
 
     window.addEventListener('theme-updated', refreshTheme);
     window.addEventListener('storage', refreshTheme);
