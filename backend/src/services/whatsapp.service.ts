@@ -25,7 +25,9 @@ class WhatsAppService {
     public lastError: string | null = null;
     private initializing = false;
     private generation = 0;
-    private readonly sessionPath = path.join(__dirname, '../../sessions');
+    private activeSessionPath = '';
+    private readonly sessionRoot = path.join(__dirname, '../../data/whatsapp-sessions');
+    private readonly activeSessionMarker = path.join(this.sessionRoot, 'active-session.txt');
 
     async init() {
         if (this.initializing) return;
@@ -36,9 +38,10 @@ class WhatsAppService {
         io.emit('whatsapp_status', { status: 'connecting' });
 
         try {
-            this.sock?.end?.();
+            this.closeSocket();
 
-            const { state, saveCreds } = await useMultiFileAuthState(this.sessionPath);
+            const sessionPath = await this.getActiveSessionPath();
+            const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
             const { version } = await fetchLatestBaileysVersion();
 
             this.sock = makeWASocket({
@@ -73,7 +76,8 @@ class WhatsAppService {
                     console.log(`WhatsApp connection closed. statusCode=${statusCode || 'unknown'} shouldReconnect=${shouldReconnect}`);
 
                     if (statusCode === DisconnectReason.loggedOut) {
-                        await this.clearSession();
+                        await this.rotateSession();
+                        this.lastError = 'Sessao do WhatsApp expirada. Clique em Tentar Novamente para gerar um QR Code novo.';
                     }
 
                     if (shouldReconnect) {
@@ -142,24 +146,51 @@ class WhatsAppService {
         }
     }
 
-    private async clearSession() {
+    private closeSocket() {
         try {
-            await fs.rm(this.sessionPath, { recursive: true, force: true });
+            this.sock?.end?.();
         } catch (error) {
-            console.error('Erro ao limpar sessao do WhatsApp:', error);
+            console.error('Erro ao encerrar socket do WhatsApp:', error);
         }
+    }
+
+    private async getActiveSessionPath() {
+        if (this.activeSessionPath) {
+            return this.activeSessionPath;
+        }
+
+        await fs.mkdir(this.sessionRoot, { recursive: true });
+
+        try {
+            const sessionName = (await fs.readFile(this.activeSessionMarker, 'utf8')).trim();
+            if (sessionName) {
+                this.activeSessionPath = path.join(this.sessionRoot, sessionName);
+                return this.activeSessionPath;
+            }
+        } catch (_) {}
+
+        this.activeSessionPath = path.join(this.sessionRoot, 'current');
+        await fs.writeFile(this.activeSessionMarker, 'current', 'utf8');
+        return this.activeSessionPath;
+    }
+
+    private async rotateSession() {
+        await fs.mkdir(this.sessionRoot, { recursive: true });
+        const sessionName = `session-${Date.now()}`;
+        this.activeSessionPath = path.join(this.sessionRoot, sessionName);
+        await fs.writeFile(this.activeSessionMarker, sessionName, 'utf8');
     }
 
     async reconnect(forceNewSession = false) {
         this.generation += 1;
-        this.sock?.end?.();
+        this.closeSocket();
         this.sock = null;
         this.qr = null;
         this.lastError = null;
         this.initializing = false;
 
         if (forceNewSession) {
-            await this.clearSession();
+            await this.rotateSession();
         }
 
         await this.init();
