@@ -17,6 +17,12 @@ import { io } from '../index';
 
 const prisma = new PrismaClient();
 
+type StoredChatMessage = {
+    text: string;
+    fromMe: boolean;
+    timestamp: number;
+};
+
 function normalizeWhatsappPhone(jid: string) {
     return String(jid || '').replace(/@s\.whatsapp\.net$/, '').replace(/\D/g, '');
 }
@@ -45,6 +51,32 @@ function pickRealWhatsappJid(...values: unknown[]) {
         const jid = normalizeWhatsappJid(raw);
         if (isRealWhatsappJid(jid)) return jid;
     }
+    return '';
+}
+
+function findRealWhatsappJidDeep(value: unknown, visited = new Set<unknown>()): string {
+    if (!value || visited.has(value)) return '';
+
+    if (typeof value === 'string') {
+        return pickRealWhatsappJid(value);
+    }
+
+    if (typeof value !== 'object') return '';
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const found = findRealWhatsappJidDeep(item, visited);
+            if (found) return found;
+        }
+        return '';
+    }
+
+    for (const item of Object.values(value as Record<string, unknown>)) {
+        const found = findRealWhatsappJidDeep(item, visited);
+        if (found) return found;
+    }
+
     return '';
 }
 
@@ -129,6 +161,41 @@ function getWhatsappMessageText(message: any): string {
     return mediaLabels[type] || '[Mensagem recebida]';
 }
 
+function readClientHistory(history?: string | null): StoredChatMessage[] {
+    if (!history) return [];
+
+    try {
+        const parsed = JSON.parse(history);
+        if (Array.isArray(parsed)) {
+            return parsed.filter(item => item && typeof item.text === 'string');
+        }
+    } catch (_) {}
+
+    return [{ text: history, fromMe: false, timestamp: Math.floor(Date.now() / 1000) }];
+}
+
+async function appendClientMessage(clientId: string, message: StoredChatMessage) {
+    const client = await prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) return null;
+
+    const history = readClientHistory(client.history);
+    const alreadySaved = history.some(item =>
+        item.timestamp === message.timestamp &&
+        item.fromMe === message.fromMe &&
+        item.text === message.text
+    );
+
+    const nextHistory = alreadySaved ? history : [...history, message].slice(-300);
+
+    return prisma.client.update({
+        where: { id: client.id },
+        data: {
+            history: JSON.stringify(nextHistory),
+            status: client.status === 'FINALIZADO' ? 'NOVO' : client.status,
+        },
+    });
+}
+
 async function upsertClientFromWhatsapp(params: {
     jid: string;
     realJid?: string;
@@ -181,7 +248,7 @@ async function upsertClientFromWhatsapp(params: {
         phone,
         whatsappJid: technicalJid || realJid || existing?.whatsappJid,
         status: 'NOVO',
-        history: params.text || existing?.history,
+        history: existing?.history,
     };
 
     if (existing) {
@@ -294,27 +361,11 @@ class WhatsAppService {
             });
 
             this.sock.ev.on('contacts.upsert', async (contacts: any[]) => {
-                for (const contact of contacts) {
-                    try {
-                        const contactJid = normalizeWhatsappJid(contact.id);
-                        const lidJid = normalizeWhatsappJid(contact.lid);
-                        const realJid = isRealWhatsappJid(contactJid) ? contactJid : '';
-                        const technicalJid = lidJid || contactJid;
+                await this.syncContacts(contacts);
+            });
 
-                        if (!technicalJid || !realJid || technicalJid === realJid) continue;
-
-                        const client = await upsertClientFromWhatsapp({
-                            jid: technicalJid,
-                            realJid,
-                            name: contact.name || contact.notify || contact.verifiedName,
-                        });
-                        if (client) {
-                            io.emit('client_upserted', client);
-                        }
-                    } catch (error) {
-                        console.error('Erro ao atualizar contato do WhatsApp:', error);
-                    }
-                }
+            this.sock.ev.on('contacts.update', async (contacts: any[]) => {
+                await this.syncContacts(contacts);
             });
 
             this.sock.ev.on('messages.upsert', async (m: any) => {
@@ -327,14 +378,15 @@ class WhatsAppService {
                     const realJid = pickRealWhatsappJid(
                         sender,
                         msg.key?.participant,
-                        msg.participant
+                        msg.participant,
+                        findRealWhatsappJidDeep(msg)
                     );
                     const text = getWhatsappMessageText(msg.message);
                     const displayPhone = toDisplayPhone(realJid || sender);
                     const pushName = msg.pushName || `Lead ${displayPhone}`;
 
                     if (sender) {
-                        const client = await upsertClientFromWhatsapp({
+                        let client = await upsertClientFromWhatsapp({
                             jid: sender,
                             realJid,
                             name: pushName,
@@ -342,18 +394,23 @@ class WhatsAppService {
                         });
 
                         if (client) {
-                            io.emit('client_upserted', client);
-                        }
+                            client = await appendClientMessage(client.id, {
+                                text,
+                                fromMe: false,
+                                timestamp: Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000),
+                            }) || client;
 
-                        io.emit('incoming_message', {
-                            from: sender,
-                            clientId: client?.id,
-                            phone: client?.phone,
-                            whatsappJid: client?.whatsappJid,
-                            text,
-                            timestamp: msg.messageTimestamp,
-                            pushName,
-                        });
+                            io.emit('client_upserted', client);
+                            io.emit('incoming_message', {
+                                from: sender,
+                                clientId: client.id,
+                                phone: client.phone,
+                                whatsappJid: client.whatsappJid,
+                                text,
+                                timestamp: msg.messageTimestamp,
+                                pushName,
+                            });
+                        }
                     }
                 }
             });
@@ -365,6 +422,30 @@ class WhatsAppService {
             io.emit('whatsapp_status', { status: 'disconnected' });
         } finally {
             this.initializing = false;
+        }
+    }
+
+    private async syncContacts(contacts: any[]) {
+        for (const contact of contacts) {
+            try {
+                const contactJid = normalizeWhatsappJid(contact.id);
+                const lidJid = normalizeWhatsappJid(contact.lid);
+                const realJid = isRealWhatsappJid(contactJid) ? contactJid : findRealWhatsappJidDeep(contact);
+                const technicalJid = lidJid || contactJid;
+
+                if (!technicalJid || !realJid || technicalJid === realJid) continue;
+
+                const client = await upsertClientFromWhatsapp({
+                    jid: technicalJid,
+                    realJid,
+                    name: contact.name || contact.notify || contact.verifiedName,
+                });
+                if (client) {
+                    io.emit('client_upserted', client);
+                }
+            } catch (error) {
+                console.error('Erro ao atualizar contato do WhatsApp:', error);
+            }
         }
     }
 
@@ -430,7 +511,33 @@ class WhatsAppService {
         }
 
         await this.sock.sendMessage(jid, { text });
-        io.emit('message_sent', { to: jid, text, timestamp: Math.floor(Date.now() / 1000) });
+
+        const digits = normalizeWhatsappPhone(jid);
+        let client = await prisma.client.findFirst({
+            where: {
+                OR: [
+                    { whatsappJid: jid },
+                    { phone: digits },
+                    { phone: toDisplayPhone(jid) },
+                ],
+            },
+        });
+
+        if (client) {
+            client = await appendClientMessage(client.id, {
+                text,
+                fromMe: true,
+                timestamp: Math.floor(Date.now() / 1000),
+            }) || client;
+            io.emit('client_upserted', client);
+        }
+
+        io.emit('message_sent', {
+            to: jid,
+            clientId: client?.id,
+            text,
+            timestamp: Math.floor(Date.now() / 1000),
+        });
     }
 }
 

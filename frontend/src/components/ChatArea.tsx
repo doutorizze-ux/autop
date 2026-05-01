@@ -9,6 +9,7 @@ interface Client {
   phone: string;
   whatsappJid?: string | null;
   status: string;
+  history?: string | null;
 }
 
 interface Message {
@@ -24,6 +25,35 @@ const getClientMessageKeys = (client: Client) => {
     .filter(Boolean)
     .map(value => normalizeContactKey(String(value)));
   return Array.from(new Set(keys));
+};
+const parseClientHistory = (client: Client): Message[] => {
+  if (!client.history) return [];
+
+  try {
+    const parsed = JSON.parse(client.history);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item): item is Message =>
+        item &&
+        typeof item.text === 'string' &&
+        typeof item.fromMe === 'boolean' &&
+        typeof item.timestamp === 'number'
+      );
+    }
+  } catch (_) {}
+
+  return client.history ? [{ text: client.history, fromMe: false, timestamp: Math.floor(Date.now() / 1000) }] : [];
+};
+const mergeMessages = (current: Message[] = [], incoming: Message[] = []) => {
+  const all = [...current, ...incoming];
+  return all
+    .filter((message, index, list) =>
+      list.findIndex(item =>
+        item.timestamp === message.timestamp &&
+        item.fromMe === message.fromMe &&
+        item.text === message.text
+      ) === index
+    )
+    .sort((a, b) => a.timestamp - b.timestamp);
 };
 const isTechnicalLid = (value: string) => {
   const raw = String(value || '');
@@ -54,6 +84,13 @@ export const ChatArea = () => {
       try {
         const res = await axios.get(`${API_URL}/api/clients`);
         setClients(res.data);
+        setMessages(prev => {
+          const next = { ...prev };
+          res.data.forEach((client: Client) => {
+            next[client.id] = mergeMessages(next[client.id], parseClientHistory(client));
+          });
+          return next;
+        });
         const selectedId = localStorage.getItem('selected_attendance_client_id');
         if (selectedId) {
           const client = res.data.find((item: Client) => item.id === selectedId);
@@ -94,6 +131,10 @@ export const ChatArea = () => {
         }
         return [client, ...prev];
       });
+      setMessages(prev => ({
+        ...prev,
+        [client.id]: mergeMessages(prev[client.id], parseClientHistory(client))
+      }));
       setSelectedClient(current => {
         if (!current) return current;
         const currentKeys = getClientMessageKeys(current);
@@ -104,7 +145,7 @@ export const ChatArea = () => {
     });
 
     socket.on('message_sent', (data: any) => {
-      const contactKey = normalizeContactKey(data.to);
+      const contactKey = normalizeContactKey(data.clientId || data.to);
       setMessages(prev => ({
         ...prev,
         [contactKey]: [
@@ -143,6 +184,30 @@ export const ChatArea = () => {
     }
   };
 
+  const handleFixSelectedPhone = async () => {
+    if (!selectedClient) return;
+
+    const phone = window.prompt('Digite o telefone real do cliente com DDD:', '');
+    if (!phone) return;
+
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 10 || digits.length > 13) {
+      alert('Digite um telefone valido com DDD.');
+      return;
+    }
+
+    try {
+      const response = await axios.patch(`${API_URL}/api/clients/${selectedClient.id}`, {
+        phone: digits,
+      });
+      const updatedClient = response.data as Client;
+      setClients(prev => prev.map(client => client.id === updatedClient.id ? updatedClient : client));
+      setSelectedClient(updatedClient);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Erro ao corrigir telefone do lead');
+    }
+  };
+
   const filteredClients = clients.filter(client => {
     const term = searchTerm.toLowerCase();
     return client.name.toLowerCase().includes(term) || formatClientPhone(client).includes(searchTerm);
@@ -151,14 +216,7 @@ export const ChatArea = () => {
   const selectedMessages = selectedClient
     ? getClientMessageKeys(selectedClient)
         .flatMap(key => messages[key] || [])
-        .filter((message, index, list) =>
-          list.findIndex(item =>
-            item.timestamp === message.timestamp &&
-            item.fromMe === message.fromMe &&
-            item.text === message.text
-          ) === index
-        )
-        .sort((a, b) => a.timestamp - b.timestamp)
+        .reduce((acc, message) => mergeMessages(acc, [message]), [] as Message[])
     : [];
 
   return (
@@ -205,9 +263,16 @@ export const ChatArea = () => {
                 <span className="chat-user-name">{selectedClient.name}</span>
                 <span className="chat-user-status">WhatsApp: {formatClientPhone(selectedClient)}</span>
               </div>
-              <button type="button" className="header-icon-btn" title="Opcoes">
-                <MoreVertical size={20} />
-              </button>
+              <div className="chat-header-actions">
+                {isTechnicalLid(selectedClient.phone) && (
+                  <button type="button" className="fix-phone-btn" onClick={handleFixSelectedPhone}>
+                    Corrigir telefone
+                  </button>
+                )}
+                <button type="button" className="header-icon-btn" title="Opcoes">
+                  <MoreVertical size={20} />
+                </button>
+              </div>
             </header>
 
             <div className="messages-area">
@@ -409,6 +474,23 @@ export const ChatArea = () => {
         .chat-user-status {
           color: var(--text-muted);
           font-size: 0.78rem;
+        }
+
+        .chat-header-actions {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .fix-phone-btn {
+          min-height: 36px;
+          padding: 0 0.8rem;
+          border: 1px solid var(--border-color);
+          border-radius: 6px;
+          color: var(--text-main);
+          background: #fff;
+          cursor: pointer;
+          font-weight: 600;
         }
 
         .header-icon-btn,

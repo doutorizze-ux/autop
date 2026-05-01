@@ -44,6 +44,38 @@ export const updateClientStatus = async (req: Request, res: Response): Promise<v
     }
 };
 
+export const updateClient = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+        const { name, phone } = req.body;
+        const data: { name?: string; phone?: string } = {};
+
+        if (typeof name === 'string' && name.trim()) {
+            data.name = name.trim();
+        }
+
+        if (typeof phone === 'string' && phone.trim()) {
+            data.phone = phone.replace(/\D/g, '');
+        }
+
+        const client = await prisma.client.update({
+            where: { id },
+            data,
+        });
+        res.json(client);
+    } catch (err: any) {
+        if (err.code === 'P2002') {
+            res.status(400).json({ message: 'Telefone ja cadastrado em outro lead' });
+            return;
+        }
+        if (err.code === 'P2025') {
+            res.status(404).json({ message: 'Cliente nao encontrado' });
+            return;
+        }
+        res.status(500).json({ message: 'Erro ao atualizar cliente' });
+    }
+};
+
 export const getClientDetails = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
