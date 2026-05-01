@@ -4,6 +4,18 @@ import { authMiddleware } from '../middlewares/auth.middleware';
 
 const router = Router();
 
+router.get('/public', async (_req, res) => {
+    try {
+        const config = await ConfigService.getConfig();
+        res.json({
+            themeColor: config.themeColor,
+            themeLogo: config.themeLogo,
+        });
+    } catch (err) {
+        res.status(500).json({ message: 'Erro ao buscar aparencia do sistema' });
+    }
+});
+
 router.use(authMiddleware);
 
 router.get('/', async (req, res) => {

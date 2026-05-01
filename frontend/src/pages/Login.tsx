@@ -1,16 +1,46 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { LogIn } from 'lucide-react';
 
 export const Login = () => {
+  const [themeLogo, setThemeLogo] = useState(() => localStorage.getItem('theme_logo') || '');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+  useEffect(() => {
+    const loadPublicAppearance = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/api/config/public`);
+        const color = response.data.themeColor || localStorage.getItem('theme_color') || '#0056b3';
+        const logo = response.data.themeLogo || '';
+
+        document.documentElement.style.setProperty('--primary-color', color);
+        localStorage.setItem('theme_color', color);
+
+        if (logo) {
+          localStorage.setItem('theme_logo', logo);
+        } else {
+          localStorage.removeItem('theme_logo');
+        }
+
+        setThemeLogo(logo);
+      } catch (err) {
+        const savedColor = localStorage.getItem('theme_color');
+        if (savedColor) {
+          document.documentElement.style.setProperty('--primary-color', savedColor);
+        }
+      }
+    };
+
+    loadPublicAppearance();
+  }, [API_URL]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,7 +48,7 @@ export const Login = () => {
     setIsLoading(true);
 
     try {
-      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/login`, {
+      const response = await axios.post(`${API_URL}/api/auth/login`, {
         email,
         password
       });
@@ -36,7 +66,11 @@ export const Login = () => {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-logo">
-          <h1>Auto<span>CRM</span></h1>
+          {themeLogo ? (
+            <img src={themeLogo} alt="Logo da loja" />
+          ) : (
+            <h1>Sistema de Atendimento</h1>
+          )}
         </div>
         {error && <div className="error-message">{error}</div>}
         <form onSubmit={handleSubmit}>
@@ -74,6 +108,25 @@ export const Login = () => {
           </button>
         </form>
       </div>
+      <style>{`
+        .auth-logo {
+          display: flex;
+          justify-content: center;
+          margin-bottom: 2rem;
+        }
+
+        .auth-logo img {
+          width: min(180px, 70%);
+          max-height: 110px;
+          object-fit: contain;
+        }
+
+        .auth-logo h1 {
+          color: var(--text-main);
+          font-size: 1.35rem;
+          text-align: center;
+        }
+      `}</style>
     </div>
   );
 };
