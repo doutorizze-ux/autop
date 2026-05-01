@@ -9,7 +9,6 @@ import {
     Download,
     Loader2,
     RefreshCw,
-    Sparkles,
     History,
     FolderOpen,
     Clock3,
@@ -393,13 +392,6 @@ export const Quotes = () => {
                         Pesquise uma peca em todos os fornecedores cadastrados ao mesmo tempo.
                     </p>
                 </div>
-                <div className="expert-tip">
-                    <Sparkles size={16} />
-                    <span>
-                        <strong>Dica do Dono:</strong> Use o caractere <strong>%</strong> entre as palavras
-                        (ex: <i>Pastilha % Hilux % 2022</i>) para buscas mais precisas.
-                    </span>
-                </div>
             </div>
 
             <div className="search-box">
@@ -653,18 +645,6 @@ export const Quotes = () => {
                 .quotes-container { display: flex; flex-direction: column; gap: 2rem; }
                 .quotes-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
                 .page-subtitle { color: var(--text-muted); margin-top: 0.5rem; }
-                .expert-tip {
-                    background: rgba(99, 102, 241, 0.1);
-                    border: 1px solid rgba(99, 102, 241, 0.2);
-                    padding: 0.8rem 1rem;
-                    border-radius: 8px;
-                    display: flex;
-                    align-items: center;
-                    gap: 0.8rem;
-                    color: #6366f1;
-                    font-size: 0.9rem;
-                    max-width: 450px;
-                }
                 .search-box, .results-panel, .history-panel {
                     background: var(--panel-bg);
                     border: 1px solid var(--border-color);
