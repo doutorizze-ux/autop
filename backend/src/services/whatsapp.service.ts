@@ -38,6 +38,16 @@ function isRealWhatsappJid(jid: string) {
     return String(jid || '').endsWith('@s.whatsapp.net');
 }
 
+function pickRealWhatsappJid(...values: unknown[]) {
+    for (const value of values) {
+        const raw = String(value || '').trim();
+        if (!raw.includes('@s.whatsapp.net')) continue;
+        const jid = normalizeWhatsappJid(raw);
+        if (isRealWhatsappJid(jid)) return jid;
+    }
+    return '';
+}
+
 function toDisplayPhone(jidOrPhone: string) {
     const digits = normalizeWhatsappPhone(jidOrPhone);
     if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
@@ -314,7 +324,11 @@ class WhatsAppService {
                     if (msg.key.fromMe) continue;
 
                     const sender = String(msg.key.remoteJid || '');
-                    const realJid = isRealWhatsappJid(sender) ? sender : '';
+                    const realJid = pickRealWhatsappJid(
+                        sender,
+                        msg.key?.participant,
+                        msg.participant
+                    );
                     const text = getWhatsappMessageText(msg.message);
                     const displayPhone = toDisplayPhone(realJid || sender);
                     const pushName = msg.pushName || `Lead ${displayPhone}`;
@@ -330,14 +344,17 @@ class WhatsAppService {
                         if (client) {
                             io.emit('client_upserted', client);
                         }
-                    }
 
-                    io.emit('incoming_message', {
-                        from: sender,
-                        text,
-                        timestamp: msg.messageTimestamp,
-                        pushName,
-                    });
+                        io.emit('incoming_message', {
+                            from: sender,
+                            clientId: client?.id,
+                            phone: client?.phone,
+                            whatsappJid: client?.whatsappJid,
+                            text,
+                            timestamp: msg.messageTimestamp,
+                            pushName,
+                        });
+                    }
                 }
             });
         } catch (error) {

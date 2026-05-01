@@ -19,7 +19,12 @@ interface Message {
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const normalizeContactKey = (value: string) => value.replace(/@(s\.whatsapp\.net|lid)$/, '');
-const getClientContactKey = (client: Client) => normalizeContactKey(client.whatsappJid || client.phone);
+const getClientMessageKeys = (client: Client) => {
+  const keys = [client.id, client.whatsappJid, client.phone]
+    .filter(Boolean)
+    .map(value => normalizeContactKey(String(value)));
+  return Array.from(new Set(keys));
+};
 const isTechnicalLid = (value: string) => {
   const raw = String(value || '');
   const digits = raw.replace(/\D/g, '');
@@ -65,7 +70,7 @@ export const ChatArea = () => {
     fetchClients();
 
     socket.on('incoming_message', (data: any) => {
-      const contactKey = normalizeContactKey(data.from);
+      const contactKey = normalizeContactKey(data.clientId || data.whatsappJid || data.from);
       setMessages(prev => ({
         ...prev,
         [contactKey]: [
@@ -88,6 +93,13 @@ export const ChatArea = () => {
           return next;
         }
         return [client, ...prev];
+      });
+      setSelectedClient(current => {
+        if (!current) return current;
+        const currentKeys = getClientMessageKeys(current);
+        const incomingKeys = getClientMessageKeys(client);
+        const sameClient = current.id === client.id || currentKeys.some(key => incomingKeys.includes(key));
+        return sameClient ? client : current;
       });
     });
 
@@ -137,7 +149,16 @@ export const ChatArea = () => {
   });
 
   const selectedMessages = selectedClient
-    ? messages[getClientContactKey(selectedClient)] || []
+    ? getClientMessageKeys(selectedClient)
+        .flatMap(key => messages[key] || [])
+        .filter((message, index, list) =>
+          list.findIndex(item =>
+            item.timestamp === message.timestamp &&
+            item.fromMe === message.fromMe &&
+            item.text === message.text
+          ) === index
+        )
+        .sort((a, b) => a.timestamp - b.timestamp)
     : [];
 
   return (
