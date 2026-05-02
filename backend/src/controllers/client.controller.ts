@@ -3,12 +3,32 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+function isUnresolvedPhone(value: string) {
+    const raw = String(value || '');
+    const digits = raw.replace(/\D/g, '');
+    return raw.endsWith('@lid') || (digits.length >= 14 && !digits.startsWith('55'));
+}
+
+function normalizeContactName(value: string) {
+    return String(value || '').trim().toLowerCase();
+}
+
 export const getClients = async (req: Request, res: Response): Promise<void> => {
     try {
         const clients = await prisma.client.findMany({
-            orderBy: { updatedAt: 'desc' }
+            orderBy: { updatedAt: 'desc' },
         });
-        res.json(clients);
+        const resolvedNames = new Set(
+            clients
+                .filter(client => !isUnresolvedPhone(client.phone))
+                .map(client => normalizeContactName(client.name))
+                .filter(Boolean)
+        );
+        const visibleClients = clients.filter(client => {
+            const name = normalizeContactName(client.name);
+            return !(name && isUnresolvedPhone(client.phone) && resolvedNames.has(name));
+        });
+        res.json(visibleClients);
     } catch (err) {
         res.status(500).json({ message: 'Erro ao buscar clientes' });
     }
@@ -18,7 +38,7 @@ export const createClient = async (req: Request, res: Response): Promise<void> =
     try {
         const { name, phone } = req.body;
         const client = await prisma.client.create({
-            data: { name, phone }
+            data: { name, phone },
         });
         res.status(201).json(client);
     } catch (err: any) {
@@ -36,7 +56,7 @@ export const updateClientStatus = async (req: Request, res: Response): Promise<v
         const { status } = req.body;
         const client = await prisma.client.update({
             where: { id },
-            data: { status }
+            data: { status },
         });
         res.json(client);
     } catch (err) {
@@ -65,7 +85,7 @@ export const updateClient = async (req: Request, res: Response): Promise<void> =
         res.json(client);
     } catch (err: any) {
         if (err.code === 'P2002') {
-            res.status(400).json({ message: 'Telefone ja cadastrado em outro lead' });
+            res.status(400).json({ message: 'Telefone já cadastrado em outro lead' });
             return;
         }
         if (err.code === 'P2025') {
@@ -80,7 +100,7 @@ export const getClientDetails = async (req: Request, res: Response): Promise<voi
     try {
         const { id } = req.params;
         const client = await prisma.client.findUnique({
-            where: { id }
+            where: { id },
         });
         if (!client) {
             res.status(404).json({ message: 'Cliente não encontrado' });
@@ -96,7 +116,7 @@ export const deleteClient = async (req: Request, res: Response): Promise<void> =
     try {
         const { id } = req.params;
         await prisma.client.delete({
-            where: { id }
+            where: { id },
         });
         res.json({ success: true });
     } catch (err: any) {

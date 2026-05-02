@@ -17,6 +17,12 @@ interface Message {
   fromMe: boolean;
   timestamp: number;
   system?: boolean;
+  media?: {
+    type: 'image' | 'video' | 'audio' | 'document' | 'sticker';
+    url: string;
+    mimetype?: string;
+    fileName?: string;
+  } | null;
 }
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -39,6 +45,7 @@ const parseClientHistory = (client: Client): Message[] => {
         typeof item.fromMe === 'boolean' &&
         typeof item.timestamp === 'number' &&
         !item.system &&
+        (!!item.text.trim() || !!item.media) &&
         item.text !== '__PHONE_REQUEST_SENT__'
       );
     }
@@ -53,7 +60,8 @@ const mergeMessages = (current: Message[] = [], incoming: Message[] = []) => {
       list.findIndex(item =>
         item.timestamp === message.timestamp &&
         item.fromMe === message.fromMe &&
-        item.text === message.text
+        item.text === message.text &&
+        (item.media?.url || '') === (message.media?.url || '')
       ) === index
     )
     .sort((a, b) => a.timestamp - b.timestamp);
@@ -72,6 +80,26 @@ const formatClientPhone = (client: Client) => {
     return digits.slice(2);
   }
   return raw;
+};
+
+const resolveMediaUrl = (url?: string) => {
+  if (!url) return '';
+  return url.startsWith('http') ? url : `${API_URL}${url}`;
+};
+
+const shouldShowMessageText = (message: Message) => {
+  if (!message.text?.trim()) return false;
+  if (!message.media) return true;
+  const mediaLabels = new Set([
+    '[Imagem recebida]',
+    '[Vídeo recebido]',
+    '[Video recebido]',
+    '[Áudio recebido]',
+    '[Audio recebido]',
+    '[Documento recebido]',
+    '[Figurinha recebida]',
+  ]);
+  return !mediaLabels.has(message.text.trim());
 };
 
 export const ChatArea = () => {
@@ -115,7 +143,7 @@ export const ChatArea = () => {
         ...prev,
         [contactKey]: [
           ...(prev[contactKey] || []),
-          { text: data.text, fromMe: false, timestamp: data.timestamp }
+          { text: data.text, fromMe: false, timestamp: data.timestamp, media: data.media || null }
         ]
       }));
     });
@@ -147,13 +175,18 @@ export const ChatArea = () => {
       });
     });
 
+    socket.on('client_deleted', (payload: { id: string }) => {
+      setClients(prev => prev.filter(client => client.id !== payload.id));
+      setSelectedClient(current => current?.id === payload.id ? null : current);
+    });
+
     socket.on('message_sent', (data: any) => {
       const contactKey = normalizeContactKey(data.clientId || data.to);
       setMessages(prev => ({
         ...prev,
         [contactKey]: [
           ...(prev[contactKey] || []),
-          { text: data.text, fromMe: true, timestamp: data.timestamp }
+          { text: data.text, fromMe: true, timestamp: data.timestamp, media: data.media || null }
         ]
       }));
     });
@@ -162,6 +195,7 @@ export const ChatArea = () => {
       socket.off('incoming_message');
       socket.off('message_sent');
       socket.off('client_upserted');
+      socket.off('client_deleted');
     };
   }, []);
 
@@ -272,7 +306,7 @@ export const ChatArea = () => {
                     Corrigir telefone
                   </button>
                 )}
-                <button type="button" className="header-icon-btn" title="Opcoes">
+                <button type="button" className="header-icon-btn" title="Opções">
                   <MoreVertical size={20} />
                 </button>
               </div>
@@ -282,7 +316,30 @@ export const ChatArea = () => {
               {selectedMessages.map((message, index) => (
                 <div key={`${message.timestamp}-${index}`} className={`message-wrapper ${message.fromMe ? 'sent' : 'received'}`}>
                   <div className="message-bubble">
-                    <p>{message.text}</p>
+                    {message.media?.type === 'image' || message.media?.type === 'sticker' ? (
+                      <img
+                        className="message-image"
+                        src={resolveMediaUrl(message.media.url)}
+                        alt={message.media.fileName || 'Imagem recebida'}
+                      />
+                    ) : null}
+                    {message.media?.type === 'video' ? (
+                      <video className="message-video" controls src={resolveMediaUrl(message.media.url)} />
+                    ) : null}
+                    {message.media?.type === 'audio' ? (
+                      <audio className="message-audio" controls src={resolveMediaUrl(message.media.url)} />
+                    ) : null}
+                    {message.media?.type === 'document' ? (
+                      <a
+                        className="message-document"
+                        href={resolveMediaUrl(message.media.url)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {message.media.fileName || 'Abrir documento'}
+                      </a>
+                    ) : null}
+                    {shouldShowMessageText(message) ? <p>{message.text}</p> : null}
                     <span className="msg-time">
                       {new Date(message.timestamp * 1000).toLocaleTimeString([], {
                         hour: '2-digit',
@@ -563,6 +620,33 @@ export const ChatArea = () => {
         .message-bubble p {
           word-break: break-word;
           white-space: pre-wrap;
+        }
+
+        .message-image,
+        .message-video {
+          display: block;
+          max-width: min(320px, 100%);
+          max-height: 360px;
+          object-fit: contain;
+          border-radius: 6px;
+          background: rgba(0, 0, 0, 0.08);
+        }
+
+        .message-audio {
+          display: block;
+          width: min(320px, 100%);
+          max-width: 100%;
+        }
+
+        .message-document {
+          display: inline-flex;
+          max-width: 100%;
+          padding: 0.55rem 0.7rem;
+          color: inherit;
+          background: rgba(255, 255, 255, 0.28);
+          border-radius: 6px;
+          text-decoration: underline;
+          word-break: break-word;
         }
 
         .msg-time {

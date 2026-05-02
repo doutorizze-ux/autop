@@ -1,6 +1,7 @@
 import makeWASocket, {
     Browsers,
     DisconnectReason,
+    downloadContentFromMessage,
     extractMessageContent,
     fetchLatestBaileysVersion,
     getContentType,
@@ -9,6 +10,7 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import { PrismaClient } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import pino from 'pino';
@@ -22,6 +24,14 @@ type StoredChatMessage = {
     fromMe: boolean;
     timestamp: number;
     system?: boolean;
+    media?: StoredChatMedia | null;
+};
+
+type StoredChatMedia = {
+    type: 'image' | 'video' | 'audio' | 'document' | 'sticker';
+    url: string;
+    mimetype?: string;
+    fileName?: string;
 };
 
 function normalizeWhatsappPhone(jid: string) {
@@ -61,6 +71,11 @@ function isUnresolvedPhone(value: string) {
     const raw = String(value || '');
     const digits = raw.replace(/\D/g, '');
     return raw.endsWith('@lid') || (digits.length >= 14 && !digits.startsWith('55'));
+}
+
+function isResolvedPhone(value: string) {
+    const digits = String(value || '').replace(/\D/g, '');
+    return (digits.length === 10 || digits.length === 11) || (digits.startsWith('55') && (digits.length === 12 || digits.length === 13));
 }
 
 function normalizeContactName(value: string) {
@@ -189,15 +204,80 @@ function getWhatsappMessageText(message: any): string {
 
     const mediaLabels: Record<string, string> = {
         imageMessage: '[Imagem recebida]',
-        videoMessage: '[Video recebido]',
-        audioMessage: '[Audio recebido]',
+        videoMessage: '[Vídeo recebido]',
+        audioMessage: '[Áudio recebido]',
         documentMessage: '[Documento recebido]',
         stickerMessage: '[Figurinha recebida]',
         contactMessage: '[Contato recebido]',
-        locationMessage: '[Localizacao recebida]',
+        locationMessage: '[Localização recebida]',
     };
 
     return mediaLabels[type] || '[Mensagem recebida]';
+}
+
+function getMediaKind(type?: string): StoredChatMedia['type'] | null {
+    const mediaKinds: Record<string, StoredChatMedia['type']> = {
+        imageMessage: 'image',
+        videoMessage: 'video',
+        audioMessage: 'audio',
+        documentMessage: 'document',
+        stickerMessage: 'sticker',
+    };
+
+    return type ? mediaKinds[type] || null : null;
+}
+
+function getMediaExtension(mimetype?: string, fileName?: string) {
+    const fileExtension = String(fileName || '').split('.').pop();
+    if (fileExtension && fileExtension.length <= 8 && fileExtension !== fileName) {
+        return fileExtension.toLowerCase();
+    }
+
+    const mimeExtension = String(mimetype || '').split('/').pop()?.split(';')[0];
+    if (mimeExtension) {
+        if (mimeExtension === 'jpeg') return 'jpg';
+        if (mimeExtension.length <= 8) return mimeExtension;
+    }
+
+    return 'bin';
+}
+
+async function saveWhatsappMedia(message: any): Promise<StoredChatMedia | null> {
+    const content: any = extractMessageContent(message || {});
+    const type = getContentType(content);
+    const body: any = type ? content?.[type] : null;
+    const mediaKind = getMediaKind(type);
+
+    if (!body || !mediaKind) return null;
+
+    try {
+        const stream = await downloadContentFromMessage(
+            body,
+            (mediaKind === 'sticker' ? 'sticker' : mediaKind) as any
+        );
+        const chunks: Buffer[] = [];
+        for await (const chunk of stream) {
+            chunks.push(Buffer.from(chunk));
+        }
+
+        const mediaDir = path.join(__dirname, '../../data/whatsapp-media');
+        await fs.mkdir(mediaDir, { recursive: true });
+
+        const originalFileName = body.fileName || body.title || '';
+        const extension = getMediaExtension(body.mimetype, originalFileName);
+        const storedFileName = `${Date.now()}-${randomUUID()}.${extension}`;
+        await fs.writeFile(path.join(mediaDir, storedFileName), Buffer.concat(chunks));
+
+        return {
+            type: mediaKind,
+            url: `/media/whatsapp/${storedFileName}`,
+            mimetype: body.mimetype,
+            fileName: originalFileName || undefined,
+        };
+    } catch (error) {
+        console.error('Erro ao salvar mídia do WhatsApp:', error);
+        return null;
+    }
 }
 
 function readClientHistory(history?: string | null): StoredChatMessage[] {
@@ -206,7 +286,11 @@ function readClientHistory(history?: string | null): StoredChatMessage[] {
     try {
         const parsed = JSON.parse(history);
         if (Array.isArray(parsed)) {
-            return parsed.filter(item => item && typeof item.text === 'string');
+            return parsed.filter(item =>
+                item &&
+                typeof item.text === 'string' &&
+                (!!item.text.trim() || !!item.media)
+            );
         }
     } catch (_) {}
 
@@ -221,7 +305,8 @@ async function appendClientMessage(clientId: string, message: StoredChatMessage)
     const alreadySaved = history.some(item =>
         item.timestamp === message.timestamp &&
         item.fromMe === message.fromMe &&
-        item.text === message.text
+        item.text === message.text &&
+        (item.media?.url || '') === (message.media?.url || '')
     );
 
     const nextHistory = alreadySaved ? history : [...history, message].slice(-300);
@@ -235,6 +320,23 @@ async function appendClientMessage(clientId: string, message: StoredChatMessage)
     });
 }
 
+function mergeChatHistories(...histories: Array<string | null | undefined>) {
+    const messages = histories.flatMap((history) => readClientHistory(history));
+    const deduped = messages
+        .filter((message, index, list) =>
+            list.findIndex(item =>
+                item.timestamp === message.timestamp &&
+                item.fromMe === message.fromMe &&
+                item.text === message.text &&
+                (item.media?.url || '') === (message.media?.url || '')
+            ) === index
+        )
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .slice(-300);
+
+    return deduped.length > 0 ? JSON.stringify(deduped) : null;
+}
+
 async function enrichExistingClientPhoneFromWhatsappIdentity(params: {
     realJid?: string;
     name?: string;
@@ -245,18 +347,33 @@ async function enrichExistingClientPhoneFromWhatsappIdentity(params: {
 
     if (!realPhone || !contactName) return null;
 
-    const existingWithPhone = await prisma.client.findUnique({ where: { phone: realPhone } });
-    if (existingWithPhone) return existingWithPhone;
-
     const clients = await prisma.client.findMany({
         orderBy: { updatedAt: 'desc' },
     });
+    const existingWithPhone = clients.find((client) => client.phone === realPhone);
 
     const unresolvedClient = clients.find((client) =>
         isUnresolvedPhone(client.phone) &&
         normalizeContactName(client.name) === contactName
     );
 
+    if (existingWithPhone && unresolvedClient && existingWithPhone.id !== unresolvedClient.id) {
+        const mergedClient = await prisma.client.update({
+            where: { id: existingWithPhone.id },
+            data: {
+                name: existingWithPhone.name || unresolvedClient.name,
+                phone: realPhone,
+                whatsappJid: unresolvedClient.whatsappJid || existingWithPhone.whatsappJid || realJid,
+                status: existingWithPhone.status === 'FINALIZADO' ? unresolvedClient.status : existingWithPhone.status,
+                history: mergeChatHistories(existingWithPhone.history, unresolvedClient.history),
+            },
+        });
+        await prisma.client.delete({ where: { id: unresolvedClient.id } }).catch(() => null);
+        io.emit('client_deleted', { id: unresolvedClient.id });
+        return mergedClient;
+    }
+
+    if (existingWithPhone) return existingWithPhone;
     if (!unresolvedClient) return null;
 
     return prisma.client.update({
@@ -303,6 +420,17 @@ async function upsertClientFromWhatsapp(params: {
         });
     }
 
+    if (!existing && !realPhone && isUnresolvedPhone(phone) && params.name) {
+        const contactName = normalizeContactName(params.name);
+        const clients = await prisma.client.findMany({
+            orderBy: { updatedAt: 'desc' },
+        });
+        existing = clients.find((client) =>
+            normalizeContactName(client.name) === contactName &&
+            isResolvedPhone(client.phone)
+        ) || null;
+    }
+
     if (existing && realPhone && technicalPhone && technicalPhone !== realPhone) {
         await prisma.client.deleteMany({
             where: {
@@ -315,12 +443,14 @@ async function upsertClientFromWhatsapp(params: {
         });
     }
 
+    const existingPhone = existing?.phone || '';
+    const keepExistingPhone = !!existing && isUnresolvedPhone(phone) && isResolvedPhone(existingPhone);
     const updateData = {
         name: params.name || existing?.name || `Lead ${phone}`,
-        phone,
+        phone: keepExistingPhone ? existingPhone : phone,
         whatsappJid: technicalJid || realJid || existing?.whatsappJid,
         status: 'NOVO',
-        history: existing?.history,
+        history: existing?.history || null,
     };
 
     if (existing) {
@@ -478,8 +608,10 @@ class WhatsAppService {
                         findRealWhatsappJidDeep(msg)
                     );
                     const text = getWhatsappMessageText(msg.message);
-                    const phoneFromText = extractBrazilPhoneFromText(text);
-                    const resolvedRealJid = realJid || (phoneFromText ? `${phoneFromText}@s.whatsapp.net` : '');
+                    const media = await saveWhatsappMedia(msg.message);
+                    if (!text.trim() && !media) continue;
+
+                    const resolvedRealJid = realJid;
                     const displayPhone = toDisplayPhone(resolvedRealJid || sender);
                     const pushName = msg.pushName || `Lead ${displayPhone}`;
 
@@ -496,6 +628,7 @@ class WhatsAppService {
                                 text,
                                 fromMe: false,
                                 timestamp: Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000),
+                                media,
                             }) || client;
 
                             io.emit('client_upserted', client);
@@ -505,6 +638,7 @@ class WhatsAppService {
                                 phone: client.phone,
                                 whatsappJid: client.whatsappJid,
                                 text,
+                                media,
                                 timestamp: msg.messageTimestamp,
                                 pushName,
                             });
