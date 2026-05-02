@@ -226,7 +226,7 @@ export const Suppliers = () => {
         if (!assistSupplier) return;
         await axios.post(`${apiBase}/api/suppliers/${assistSupplier.id}/session/save`);
         await fetchSuppliers();
-        alert('Sessao salva. Agora teste a busca deste fornecedor.');
+        alert('Sessão salva. Agora teste a busca deste fornecedor.');
     };
 
     const closeAssistSession = async () => {
@@ -264,7 +264,7 @@ export const Suppliers = () => {
                         <div className="supplier-body">
                             <p><Globe size={14} /> {s.url}</p>
                             <p><Lock size={14} /> Login: {s.needsLogin ? 'Ativado' : 'Desativado'}</p>
-                            {s.sessionData && <p><Lock size={14} /> SessÃ£o manual: Configurada</p>}
+                            {s.sessionData && <p><Lock size={14} /> Sessão manual: Configurada</p>}
                         </div>
                         <div className="supplier-footer">
                             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -390,7 +390,7 @@ export const Suppliers = () => {
                                                     Use este campo quando o portal bloquear login automático. Pode ser um array de cookies exportado do navegador ou um storageState do Playwright.
                                                 </small>
                                                 <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '0.35rem' }}>
-                                                    Exemplo: faÃ§a login manual no portal, exporte os cookies com Cookie-Editor ou copie um storageState e cole aqui.
+                                                    Exemplo: faça login manual no portal, exporte os cookies com Cookie-Editor ou copie um storageState e cole aqui.
                                                 </small>
                                             </div>
                                         </>
@@ -445,7 +445,7 @@ export const Suppliers = () => {
                             Faça login em <strong>{assistSupplier.name}</strong>, passe pela verificação e salve a sessão quando estiver dentro do portal.
                         </p>
                         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-                            Clique no campo dentro da imagem, escreva no campo acima e use Digitar. A tela atualiza sozinha enquanto a verificacao carrega.
+                            Clique no campo dentro da imagem, escreva no campo acima e use Digitar. A tela atualiza sozinha enquanto a verificação carrega.
                         </p>
 
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
@@ -473,12 +473,12 @@ export const Suppliers = () => {
                             {assistSnapshot?.image ? (
                                 <img
                                     src={assistSnapshot.image}
-                                    alt="Sessao remota do fornecedor"
+                                    alt="Sessão remota do fornecedor"
                                     onClick={clickAssistSession}
                                     style={{ display: 'block', width: '100%', cursor: 'crosshair' }}
                                 />
                             ) : (
-                                <div style={{ color: 'white', padding: '2rem' }}>{isAssistLoading ? 'Abrindo navegador...' : 'Sem imagem da sessao.'}</div>
+                                <div style={{ color: 'white', padding: '2rem' }}>{isAssistLoading ? 'Abrindo navegador...' : 'Sem imagem da sessão.'}</div>
                             )}
                         </div>
 
@@ -501,7 +501,7 @@ export const Suppliers = () => {
                     <div className="modal-content auth-card" style={{ maxWidth: '560px', width: '90%' }}>
                         <h2 style={{ marginBottom: '0.5rem' }}>Testar Fornecedor</h2>
                         <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                            Vamos validar a integra&ccedil;&atilde;o de <strong>{testModalSupplier.name}</strong> sem depender do or&ccedil;amento completo.
+                            Vamos validar a integração de <strong>{testModalSupplier.name}</strong> sem depender do orçamento completo.
                         </p>
 
                         <div className="form-group" style={{ marginBottom: '1rem' }}>
@@ -527,7 +527,7 @@ export const Suppliers = () => {
                             >
                                 <p style={{ marginBottom: '0.4rem', fontWeight: 600 }}>{testResult.provider}</p>
                                 <p style={{ marginBottom: '0.4rem' }}>Produto: {testResult.product}</p>
-                                {!testResult.error && <p style={{ marginBottom: '0.4rem' }}>Preco: {testResult.price}</p>}
+                                {!testResult.error && <p style={{ marginBottom: '0.4rem' }}>Preço: {testResult.price}</p>}
                                 {testResult.error && <p style={{ color: '#d92d20' }}>{testResult.error}</p>}
                                 {testResult.debug?.finalUrl && (
                                     <p style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>
@@ -536,12 +536,12 @@ export const Suppliers = () => {
                                 )}
                                 {testResult.debug?.pageTitle && (
                                     <p style={{ marginTop: '0.3rem', fontSize: '0.85rem' }}>
-                                        <strong>Titulo:</strong> {testResult.debug.pageTitle}
+                                        <strong>Título:</strong> {testResult.debug.pageTitle}
                                     </p>
                                 )}
                                 {testResult.debug?.bodySnippet && (
                                     <div style={{ marginTop: '0.6rem' }}>
-                                        <p style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.35rem' }}>Texto visivel:</p>
+                                        <p style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.35rem' }}>Texto visível:</p>
                                         <div
                                             style={{
                                                 fontSize: '0.8rem',

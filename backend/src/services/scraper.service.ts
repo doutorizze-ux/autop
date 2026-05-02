@@ -48,13 +48,14 @@ export async function runSupplierSearch(supplier: any, productName: string) {
                 errorMsg = 'Erro do Bot: Acesso bloqueado pelo site (CloudFront/403).';
             } else
             if (
+                errorMsg.includes('Sessão manual inválida') ||
                 errorMsg.includes('Sessao manual invalida') ||
                 errorMsg.includes('Falha no login') ||
                 errorMsg.includes('credenciais recusadas')
             ) {
-                errorMsg = 'Sessao expirada ou login bloqueado. Refaça o Login Assistido deste fornecedor.';
+                errorMsg = 'Sessão expirada ou login bloqueado. Refaça o Login Assistido deste fornecedor.';
             } else if (errorMsg.includes('Nenhum produto encontrado') || errorMsg.includes('Nenhum item')) {
-                errorMsg = 'Nao encontrado nesta consulta. Preco/estoque nao confirmado.';
+                errorMsg = 'Não encontrado nesta consulta. Preço/estoque não confirmado.';
             } else if (!errorMsg.startsWith('Erro do Bot')) {
                 errorMsg = `Erro do Bot: ${data.error}`;
             }
@@ -74,20 +75,20 @@ export async function runSupplierSearch(supplier: any, productName: string) {
             provider: supplier.name,
             product: productName,
             price: '---',
-            error: 'Erro do Bot: Nenhum retorno valido do fornecedor.',
+            error: 'Erro do Bot: Nenhum retorno válido do fornecedor.',
             link: supplier.url,
             available: false,
             debug: null,
         };
 
     } catch (error: any) {
-        console.error(`[Scraper Warning] Falha na execucao para ${supplier.name}: message=${error.message}`);
+        console.error(`[Scraper Warning] Falha na execução para ${supplier.name}: message=${error.message}`);
         
         return {
             provider: supplier.name,
             product: productName,
             price: '---',
-            error: `Erro Critico. ${error.message || 'Falha desconhecida.'}`,
+            error: `Erro crítico. ${error.message || 'Falha desconhecida.'}`,
             link: supplier.url,
             available: false,
             debug: null,
@@ -102,7 +103,7 @@ export class ScraperService {
         });
 
         if (!supplier) {
-            throw new Error('Fornecedor nao encontrado.');
+            throw new Error('Fornecedor não encontrado.');
         }
 
         return runSupplierSearch(supplier, productName);
@@ -132,7 +133,7 @@ export class ScraperService {
                             provider: supplier.name,
                             product: productName,
                             price: '---',
-                            error: 'Orcamento cancelado pelo usuario.',
+                            error: 'Orçamento cancelado pelo usuário.',
                             link: supplier.url,
                             available: false,
                             debug: null,

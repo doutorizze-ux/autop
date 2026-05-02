@@ -49,7 +49,7 @@ export class SupplierSessionService {
     static async start(supplierId: string) {
         const supplier = await prisma.supplier.findUnique({ where: { id: supplierId } });
         if (!supplier) {
-            throw new Error('Fornecedor nao encontrado.');
+            throw new Error('Fornecedor não encontrado.');
         }
 
         await closeExisting(supplierId);
@@ -102,7 +102,7 @@ export class SupplierSessionService {
     static async snapshot(supplierId: string) {
         const session = sessions.get(supplierId);
         if (!session) {
-            throw new Error('Sessao assistida nao iniciada.');
+            throw new Error('Sessão assistida não iniciada.');
         }
 
         const image = await session.page.screenshot({ type: 'jpeg', quality: 75, fullPage: false });
@@ -116,7 +116,7 @@ export class SupplierSessionService {
     static async click(supplierId: string, x: number, y: number) {
         const session = sessions.get(supplierId);
         if (!session) {
-            throw new Error('Sessao assistida nao iniciada.');
+            throw new Error('Sessão assistida não iniciada.');
         }
 
         await session.page.mouse.click(x, y);
@@ -127,7 +127,7 @@ export class SupplierSessionService {
     static async type(supplierId: string, text: string) {
         const session = sessions.get(supplierId);
         if (!session) {
-            throw new Error('Sessao assistida nao iniciada.');
+            throw new Error('Sessão assistida não iniciada.');
         }
 
         await session.page.keyboard.type(text, { delay: 25 });
@@ -138,7 +138,7 @@ export class SupplierSessionService {
     static async press(supplierId: string, key: string) {
         const session = sessions.get(supplierId);
         if (!session) {
-            throw new Error('Sessao assistida nao iniciada.');
+            throw new Error('Sessão assistida não iniciada.');
         }
 
         await session.page.keyboard.press(key);
@@ -150,7 +150,7 @@ export class SupplierSessionService {
         const supplier = await prisma.supplier.findUnique({ where: { id: supplierId } });
         const session = sessions.get(supplierId);
         if (!supplier || !session) {
-            throw new Error('Sessao assistida nao iniciada.');
+            throw new Error('Sessão assistida não iniciada.');
         }
 
         const storageState = await session.context.storageState();

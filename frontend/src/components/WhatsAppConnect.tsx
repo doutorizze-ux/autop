@@ -20,7 +20,7 @@ export const WhatsAppConnect = () => {
         } catch (error: any) {
             setStatus('disconnected');
             setQrCode(null);
-            setErrorMessage(error?.response?.data?.message || 'Nao foi possivel iniciar uma nova sessao do WhatsApp.');
+            setErrorMessage(error?.response?.data?.message || 'Não foi possível iniciar uma nova sessão do WhatsApp.');
         }
     };
 
@@ -39,7 +39,7 @@ export const WhatsAppConnect = () => {
             } catch {
                 setStatus('disconnected');
                 setQrCode(null);
-                setErrorMessage('Nao foi possivel consultar o status do WhatsApp.');
+                setErrorMessage('Não foi possível consultar o status do WhatsApp.');
             }
         };
 
@@ -77,7 +77,7 @@ export const WhatsAppConnect = () => {
                     <div style={{ textAlign: 'center', color: '#10b981' }}>
                         <CheckCircle2 size={64} style={{ marginBottom: '1rem' }} />
                         <h3>WhatsApp Conectado!</h3>
-                        <p style={{ color: 'var(--text-muted)' }}>O sistema estÃ¡ pronto para receber e enviar mensagens.</p>
+                        <p style={{ color: 'var(--text-muted)' }}>O sistema está pronto para receber e enviar mensagens.</p>
                     </div>
                 );
             case 'connecting':
@@ -85,7 +85,7 @@ export const WhatsAppConnect = () => {
                     <div style={{ textAlign: 'center' }}>
                         <RefreshCcw size={64} className="spin" style={{ marginBottom: '1rem' }} />
                         <h3>Iniciando WhatsApp...</h3>
-                        <p style={{ marginTop: '0.75rem', color: 'var(--text-muted)' }}>Aguarde alguns segundos. O QR Code aparece aqui assim que a sessao nova for criada.</p>
+                        <p style={{ marginTop: '0.75rem', color: 'var(--text-muted)' }}>Aguarde alguns segundos. O QR Code aparece aqui assim que a nova sessão for criada.</p>
                     </div>
                 );
             default:

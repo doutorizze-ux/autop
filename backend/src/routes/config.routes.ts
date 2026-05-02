@@ -12,7 +12,7 @@ router.get('/public', async (_req, res) => {
             themeLogo: config.themeLogo,
         });
     } catch (err) {
-        res.status(500).json({ message: 'Erro ao buscar aparencia do sistema' });
+        res.status(500).json({ message: 'Erro ao buscar aparência do sistema' });
     }
 });
 

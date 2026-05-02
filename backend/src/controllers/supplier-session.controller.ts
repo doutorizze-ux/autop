@@ -7,7 +7,7 @@ async function handle(res: Response, action: () => Promise<any>) {
     } catch (error) {
         console.error('Supplier Session Error:', error);
         res.status(500).json({
-            message: error instanceof Error ? error.message : 'Erro na sessao assistida.',
+            message: error instanceof Error ? error.message : 'Erro na sessão assistida.',
         });
     }
 }

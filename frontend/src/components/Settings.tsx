@@ -142,7 +142,7 @@ export const Settings = () => {
                         <div className="settings-section">
                             <div className="section-header">
                                 <h2>Dados de Acesso</h2>
-                                <p>Gerencie seu nome, e-mail e troque sua senha de acesso ao AutoCRM.</p>
+                                <p>Gerencie seu nome, e-mail e troque sua senha de acesso ao sistema.</p>
                             </div>
                             <form onSubmit={handleProfileSubmit}>
                                 <div className="form-group">
@@ -232,7 +232,7 @@ export const Settings = () => {
                         <div className="settings-section">
                             <div className="section-header">
                                 <h2>Personalização Visual</h2>
-                                <p>Altere a logotipo e a cor principal do sistema para ficar com a cara da Autopeças.</p>
+                                <p>Altere o logotipo e a cor principal do sistema para ficar com a cara da autopeças.</p>
                             </div>
                             <form onSubmit={(e) => {
                                 e.preventDefault();
@@ -260,7 +260,7 @@ export const Settings = () => {
                                     }));
                                     setMessage({ type: 'success', text: 'Tema atualizado para todos os acessos!' });
                                 }).catch(() => {
-                                    setMessage({ type: 'error', text: 'Erro ao salvar aparencia da loja' });
+                                    setMessage({ type: 'error', text: 'Erro ao salvar aparência da loja' });
                                 }).finally(() => {
                                     setLoading(false);
                                 });
@@ -290,10 +290,10 @@ export const Settings = () => {
                                         value={appearanceData.logo}
                                         onChange={e => setAppearanceData(prev => ({ ...prev, logo: e.target.value }))}
                                     />
-                                    <p style={{fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem'}}>Cole o link de uma imagem da logo da Autopeças para substituir o nome AutoCRM.</p>
+                                    <p style={{fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem'}}>Cole o link de uma imagem da logo da loja para personalizar o sistema.</p>
                                     {appearanceData.logo.trim() && (
                                         <div className="logo-preview">
-                                            <img src={appearanceData.logo.trim()} alt="Previa da logo" />
+                                            <img src={appearanceData.logo.trim()} alt="Prévia da logo" />
                                         </div>
                                     )}
                                 </div>

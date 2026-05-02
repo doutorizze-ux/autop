@@ -123,10 +123,10 @@ function buildWhatsappJid(value: string) {
 
     const digits = raw.replace(/\D/g, '');
     if (!digits) {
-        throw new Error('Contato sem telefone valido.');
+        throw new Error('Contato sem telefone válido.');
     }
 
-    // IDs @lid do WhatsApp costumam chegar como numeros longos sem codigo do pais.
+    // IDs @lid do WhatsApp costumam chegar como números longos sem código do país.
     if (digits.length >= 14 && !digits.startsWith('55')) {
         return `${digits}@lid`;
     }
@@ -220,7 +220,7 @@ async function appendClientMessage(clientId: string, message: StoredChatMessage)
 }
 
 const phoneRequestsSent = new Set<string>();
-const PHONE_REQUEST_TEXT = 'Para identificarmos seu atendimento, por favor compartilhe seu telefone pelo WhatsApp ou envie o numero com DDD.';
+const PHONE_REQUEST_TEXT = 'Para identificarmos seu atendimento, por favor compartilhe seu telefone pelo WhatsApp ou envie o número com DDD.';
 
 async function upsertClientFromWhatsapp(params: {
     jid: string;
@@ -345,14 +345,14 @@ class WhatsAppService {
                     this.status = restartRequired ? 'connecting' : 'disconnected';
                     this.qr = null;
                     this.lastError = restartRequired
-                        ? 'WhatsApp pediu reinicio da conexao para concluir o pareamento.'
-                        : `Conexao fechada pelo WhatsApp. Codigo: ${statusCode || 'desconhecido'}`;
+                        ? 'WhatsApp pediu reinício da conexão para concluir o pareamento.'
+                        : `Conexão fechada pelo WhatsApp. Código: ${statusCode || 'desconhecido'}`;
                     io.emit('whatsapp_status', { status: this.status });
                     console.log(`WhatsApp connection closed. statusCode=${statusCode || 'unknown'} shouldReconnect=${shouldReconnect}`);
 
                     if (statusCode === DisconnectReason.loggedOut) {
                         await this.rotateSession();
-                        this.lastError = 'Sessao do WhatsApp expirada. Clique em Tentar Novamente para gerar um QR Code novo.';
+                        this.lastError = 'Sessão do WhatsApp expirada. Clique em Tentar Novamente para gerar um QR Code novo.';
                     }
 
                     if (shouldReconnect) {
@@ -551,13 +551,13 @@ class WhatsAppService {
 
     async sendMessage(to: string, text: string) {
         if (!this.sock || this.status !== 'connected') {
-            throw new Error('WhatsApp nao conectado');
+            throw new Error('WhatsApp não conectado');
         }
 
         const jid = buildWhatsappJid(to);
         const exists = await this.sock.onWhatsApp(jid).catch(() => []);
         if (jid.endsWith('@s.whatsapp.net') && Array.isArray(exists) && exists.length > 0 && exists[0]?.exists === false) {
-            throw new Error('Este telefone nao possui WhatsApp ou nao foi encontrado.');
+            throw new Error('Este telefone não possui WhatsApp ou não foi encontrado.');
         }
 
         await this.sock.sendMessage(jid, { text });

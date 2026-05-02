@@ -69,7 +69,7 @@ export const updateClient = async (req: Request, res: Response): Promise<void> =
             return;
         }
         if (err.code === 'P2025') {
-            res.status(404).json({ message: 'Cliente nao encontrado' });
+            res.status(404).json({ message: 'Cliente não encontrado' });
             return;
         }
         res.status(500).json({ message: 'Erro ao atualizar cliente' });
@@ -101,7 +101,7 @@ export const deleteClient = async (req: Request, res: Response): Promise<void> =
         res.json({ success: true });
     } catch (err: any) {
         if (err.code === 'P2025') {
-            res.status(404).json({ message: 'Cliente nao encontrado' });
+            res.status(404).json({ message: 'Cliente não encontrado' });
             return;
         }
         res.status(500).json({ message: 'Erro ao excluir cliente' });

@@ -195,7 +195,7 @@ function renderPDF(res: Response, items: QuoteItem[], suppliers: string[], matri
 
     doc.pipe(res);
 
-    doc.fontSize(20).text('AutoCRM - Planilha de Confronto de Precos', { align: 'center' });
+    doc.fontSize(20).text('Planilha de Confronto de Preços', { align: 'center' });
     doc.moveDown();
     doc.fontSize(10).text(`Gerado em: ${new Date().toLocaleString()}`, { align: 'right' });
     doc.moveDown();
@@ -206,7 +206,7 @@ function renderPDF(res: Response, items: QuoteItem[], suppliers: string[], matri
     let currentY = doc.y;
 
     doc.fontSize(10).font('Helvetica-Bold');
-    doc.text('PECA / CODIGO', startX, currentY, { width: firstColumnWidth });
+    doc.text('PEÇA / CÓDIGO', startX, currentY, { width: firstColumnWidth });
 
     suppliers.forEach((supplier: string, index: number) => {
         doc.text(supplier.toUpperCase(), startX + firstColumnWidth + index * colWidth, currentY, {
@@ -278,8 +278,8 @@ async function renderExcel(res: Response, items: QuoteItem[], suppliers: string[
     const worksheet = workbook.addWorksheet('Confronto');
 
     worksheet.columns = [
-        { header: 'CODIGO', key: 'query', width: 24 },
-        { header: 'DESCRICAO', key: 'description', width: 40 },
+        { header: 'CÓDIGO', key: 'query', width: 24 },
+        { header: 'DESCRIÇÃO', key: 'description', width: 40 },
         ...suppliers.map((supplier) => ({ header: supplier, key: supplier, width: 18 })),
     ];
 
@@ -325,7 +325,7 @@ export const searchQuote = async (req: Request, res: Response) => {
         const items = normalizeQuoteItems(req.body);
 
         if (items.length === 0) {
-            return res.status(400).json({ message: 'Lista de produtos e obrigatoria' });
+            return res.status(400).json({ message: 'Lista de produtos é obrigatória' });
         }
 
         const job: QuoteJob = {
@@ -346,7 +346,7 @@ export const searchQuote = async (req: Request, res: Response) => {
         return res.status(202).json(serializeQuoteJob(job));
     } catch (err) {
         console.error('Start Quote Job Error:', err);
-        return res.status(500).json({ message: 'Erro ao iniciar cotacao em lote' });
+        return res.status(500).json({ message: 'Erro ao iniciar cotação em lote' });
     }
 };
 
@@ -409,7 +409,7 @@ async function runQuoteJob(job: QuoteJob, socketId?: string) {
     } catch (err) {
         console.error('Run Quote Job Error:', err);
         job.status = 'failed';
-        job.error = err instanceof Error ? err.message : 'Erro ao processar cotacao em lote';
+        job.error = err instanceof Error ? err.message : 'Erro ao processar cotação em lote';
         job.completedAt = new Date().toISOString();
         job.updatedAt = job.completedAt;
     }
@@ -419,7 +419,7 @@ export const getQuoteJob = async (req: Request, res: Response) => {
     const job = quoteJobs.get(req.params.jobId);
 
     if (!job) {
-        return res.status(404).json({ message: 'Orcamento em andamento nao encontrado.' });
+        return res.status(404).json({ message: 'Orçamento em andamento não encontrado.' });
     }
 
     return res.json(serializeQuoteJob(job));
@@ -429,7 +429,7 @@ export const cancelQuoteJob = async (req: Request, res: Response) => {
     const job = quoteJobs.get(req.params.jobId);
 
     if (!job) {
-        return res.status(404).json({ message: 'Orcamento em andamento nao encontrado.' });
+        return res.status(404).json({ message: 'Orçamento em andamento não encontrado.' });
     }
 
     if (job.status === 'running') {
@@ -462,7 +462,7 @@ export const listQuoteHistory = async (_req: Request, res: Response) => {
         res.json(history);
     } catch (err) {
         console.error('List Quote History Error:', err);
-        res.status(500).json({ message: 'Erro ao listar historico de cotacoes' });
+        res.status(500).json({ message: 'Erro ao listar histórico de cotações' });
     }
 };
 
@@ -473,7 +473,7 @@ export const getQuoteHistoryById = async (req: Request, res: Response) => {
     });
 
         if (!quote) {
-            return res.status(404).json({ message: 'Cotacao nao encontrada' });
+            return res.status(404).json({ message: 'Cotação não encontrada' });
         }
 
         const parsed = parseStoredQuote(quote);
@@ -487,7 +487,7 @@ export const getQuoteHistoryById = async (req: Request, res: Response) => {
         });
     } catch (err) {
         console.error('Get Quote History Error:', err);
-        res.status(500).json({ message: 'Erro ao carregar cotacao salva' });
+        res.status(500).json({ message: 'Erro ao carregar cotação salva' });
   }
 };
 
@@ -499,7 +499,7 @@ export const deleteQuoteHistory = async (req: Request, res: Response) => {
     });
 
     if (!existingQuote) {
-      return res.status(404).json({ error: 'Cotacao nao encontrada.' });
+      return res.status(404).json({ error: 'Cotação não encontrada.' });
     }
 
     await prisma.quote.delete({
@@ -508,7 +508,7 @@ export const deleteQuoteHistory = async (req: Request, res: Response) => {
 
     return res.json({ success: true });
   } catch (error) {
-    console.error('Erro ao excluir cotacao do historico:', error);
+    console.error('Erro ao excluir cotação do histórico:', error);
     return res.status(500).json({ error: 'Erro interno do servidor' });
   }
 };
@@ -540,14 +540,14 @@ export const exportSavedQuotePDF = async (req: Request, res: Response) => {
         });
 
         if (!quote) {
-            return res.status(404).json({ message: 'Cotacao nao encontrada' });
+            return res.status(404).json({ message: 'Cotação não encontrada' });
         }
 
         const parsed = parseStoredQuote(quote);
         renderPDF(res, parsed.items, parsed.suppliers, parsed.matrix, `orcamento-${quote.id}`);
     } catch (err) {
         console.error('Export Saved PDF Error:', err);
-        res.status(500).json({ message: 'Erro ao gerar PDF da cotacao salva' });
+        res.status(500).json({ message: 'Erro ao gerar PDF da cotação salva' });
     }
 };
 
@@ -558,13 +558,13 @@ export const exportSavedQuoteExcel = async (req: Request, res: Response) => {
         });
 
         if (!quote) {
-            return res.status(404).json({ message: 'Cotacao nao encontrada' });
+            return res.status(404).json({ message: 'Cotação não encontrada' });
         }
 
         const parsed = parseStoredQuote(quote);
         await renderExcel(res, parsed.items, parsed.suppliers, parsed.matrix, `orcamento-${quote.id}`);
     } catch (err) {
         console.error('Export Saved Excel Error:', err);
-        res.status(500).json({ message: 'Erro ao gerar Excel da cotacao salva' });
+        res.status(500).json({ message: 'Erro ao gerar Excel da cotação salva' });
     }
 };

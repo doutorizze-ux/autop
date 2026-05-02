@@ -28,7 +28,7 @@ export const Clients = ({ onOpenAttendance }: ClientsProps) => {
     const raw = String(client.phone || '');
     const digits = raw.replace(/\D/g, '');
     const isTechnicalLid = raw.endsWith('@lid') || (digits.length >= 14 && !digits.startsWith('55'));
-    if (isTechnicalLid) return 'Telefone aguardando sincronizacao';
+    if (isTechnicalLid) return 'Telefone aguardando sincronização';
     if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
       return digits.slice(2);
     }

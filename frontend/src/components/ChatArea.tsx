@@ -65,7 +65,7 @@ const isTechnicalLid = (value: string) => {
 };
 const formatClientPhone = (client: Client) => {
   const raw = String(client.phone || '');
-  if (isTechnicalLid(raw)) return 'Telefone aguardando sincronizacao';
+  if (isTechnicalLid(raw)) return 'Telefone aguardando sincronização';
 
   const digits = raw.replace(/\D/g, '');
   if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
@@ -195,7 +195,7 @@ export const ChatArea = () => {
 
     const digits = phone.replace(/\D/g, '');
     if (digits.length < 10 || digits.length > 13) {
-      alert('Digite um telefone valido com DDD.');
+      alert('Digite um telefone válido com DDD.');
       return;
     }
 
