@@ -45,6 +45,14 @@ function isRealWhatsappJid(jid: string) {
     return String(jid || '').endsWith('@s.whatsapp.net');
 }
 
+function isDirectChatJid(jid: string) {
+    const raw = String(jid || '');
+    if (!raw) return false;
+    if (raw === 'status@broadcast' || raw.endsWith('@broadcast')) return false;
+    if (raw.endsWith('@g.us') || raw.endsWith('@newsletter')) return false;
+    return raw.endsWith('@s.whatsapp.net') || raw.endsWith('@lid');
+}
+
 function isTechnicalLidPhone(value: string) {
     const raw = String(value || '');
     const digits = raw.replace(/\D/g, '');
@@ -401,9 +409,14 @@ class WhatsAppService {
                     if (msg.key.fromMe) continue;
 
                     const sender = String(msg.key.remoteJid || '');
+                    if (!isDirectChatJid(sender)) continue;
+
                     const realJid = pickRealWhatsappJid(
                         sender,
                         msg.key?.participant,
+                        msg.key?.remoteJidAlt,
+                        msg.key?.participantPn,
+                        msg.key?.senderPn,
                         msg.participant,
                         findRealWhatsappJidDeep(msg)
                     );
@@ -438,6 +451,8 @@ class WhatsAppService {
                                 timestamp: msg.messageTimestamp,
                                 pushName,
                             });
+
+                            await this.requestPhoneNumberIfNeeded(client);
                         }
                     }
                 }
