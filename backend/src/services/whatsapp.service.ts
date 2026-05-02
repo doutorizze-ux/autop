@@ -53,12 +53,6 @@ function isDirectChatJid(jid: string) {
     return raw.endsWith('@s.whatsapp.net') || raw.endsWith('@lid');
 }
 
-function isTechnicalLidPhone(value: string) {
-    const raw = String(value || '');
-    const digits = raw.replace(/\D/g, '');
-    return raw.endsWith('@lid') || (digits.length >= 14 && !digits.startsWith('55'));
-}
-
 function pickRealWhatsappJid(...values: unknown[]) {
     for (const value of values) {
         const raw = String(value || '').trim();
@@ -226,9 +220,6 @@ async function appendClientMessage(clientId: string, message: StoredChatMessage)
         },
     });
 }
-
-const phoneRequestsSent = new Set<string>();
-const PHONE_REQUEST_TEXT = 'Para identificarmos seu atendimento, por favor compartilhe seu telefone pelo WhatsApp ou envie o número com DDD.';
 
 async function upsertClientFromWhatsapp(params: {
     jid: string;
@@ -452,7 +443,6 @@ class WhatsAppService {
                                 pushName,
                             });
 
-                            await this.requestPhoneNumberIfNeeded(client);
                         }
                     }
                 }
@@ -465,28 +455,6 @@ class WhatsAppService {
             io.emit('whatsapp_status', { status: 'disconnected' });
         } finally {
             this.initializing = false;
-        }
-    }
-
-    private async requestPhoneNumberIfNeeded(client: { id: string; phone: string; whatsappJid?: string | null }) {
-        if (!this.sock || !client.whatsappJid || !client.whatsappJid.endsWith('@lid')) return;
-        if (!isTechnicalLidPhone(client.phone)) return;
-        if (phoneRequestsSent.has(client.whatsappJid)) return;
-
-        phoneRequestsSent.add(client.whatsappJid);
-
-        try {
-            await this.sock.sendMessage(client.whatsappJid, { requestPhoneNumber: true } as any);
-            await this.sock.sendMessage(client.whatsappJid, { text: PHONE_REQUEST_TEXT });
-            await appendClientMessage(client.id, {
-                text: '__PHONE_REQUEST_SENT__',
-                fromMe: true,
-                timestamp: Math.floor(Date.now() / 1000),
-                system: true,
-            });
-        } catch (error) {
-            phoneRequestsSent.delete(client.whatsappJid);
-            console.error('Erro ao solicitar telefone do lead:', error);
         }
     }
 
