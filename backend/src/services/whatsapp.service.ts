@@ -95,6 +95,22 @@ function toDisplayPhone(jidOrPhone: string) {
     return digits;
 }
 
+function extractBrazilPhoneFromText(text: string) {
+    const matches = String(text || '').match(/(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?\d{4,5}[-\s]?\d{4}/g) || [];
+
+    for (const match of matches) {
+        let digits = match.replace(/\D/g, '');
+        if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+            digits = digits.slice(2);
+        }
+        if (digits.length === 10 || digits.length === 11) {
+            return digits;
+        }
+    }
+
+    return '';
+}
+
 function buildWhatsappJid(value: string) {
     const raw = String(value || '').trim();
     if (!raw) {
@@ -204,6 +220,7 @@ async function appendClientMessage(clientId: string, message: StoredChatMessage)
 }
 
 const phoneRequestsSent = new Set<string>();
+const PHONE_REQUEST_TEXT = 'Para identificarmos seu atendimento, por favor compartilhe seu telefone pelo WhatsApp ou envie o numero com DDD.';
 
 async function upsertClientFromWhatsapp(params: {
     jid: string;
@@ -391,13 +408,15 @@ class WhatsAppService {
                         findRealWhatsappJidDeep(msg)
                     );
                     const text = getWhatsappMessageText(msg.message);
-                    const displayPhone = toDisplayPhone(realJid || sender);
+                    const phoneFromText = extractBrazilPhoneFromText(text);
+                    const resolvedRealJid = realJid || (phoneFromText ? `${phoneFromText}@s.whatsapp.net` : '');
+                    const displayPhone = toDisplayPhone(resolvedRealJid || sender);
                     const pushName = msg.pushName || `Lead ${displayPhone}`;
 
                     if (sender) {
                         let client = await upsertClientFromWhatsapp({
                             jid: sender,
-                            realJid,
+                            realJid: resolvedRealJid,
                             name: pushName,
                             text,
                         });
@@ -443,6 +462,7 @@ class WhatsAppService {
 
         try {
             await this.sock.sendMessage(client.whatsappJid, { requestPhoneNumber: true } as any);
+            await this.sock.sendMessage(client.whatsappJid, { text: PHONE_REQUEST_TEXT });
             await appendClientMessage(client.id, {
                 text: '__PHONE_REQUEST_SENT__',
                 fromMe: true,
@@ -553,11 +573,9 @@ class WhatsAppService {
             },
         });
 
-                        if (client) {
-                            await this.requestPhoneNumberIfNeeded(client);
-
-                            client = await appendClientMessage(client.id, {
-                                text,
+        if (client) {
+            client = await appendClientMessage(client.id, {
+                text,
                 fromMe: true,
                 timestamp: Math.floor(Date.now() / 1000),
             }) || client;
