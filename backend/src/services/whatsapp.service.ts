@@ -53,6 +53,20 @@ function isDirectChatJid(jid: string) {
     return raw.endsWith('@s.whatsapp.net') || raw.endsWith('@lid');
 }
 
+function isStatusBroadcastJid(jid: string) {
+    return String(jid || '') === 'status@broadcast';
+}
+
+function isUnresolvedPhone(value: string) {
+    const raw = String(value || '');
+    const digits = raw.replace(/\D/g, '');
+    return raw.endsWith('@lid') || (digits.length >= 14 && !digits.startsWith('55'));
+}
+
+function normalizeContactName(value: string) {
+    return String(value || '').trim().toLowerCase();
+}
+
 function pickRealWhatsappJid(...values: unknown[]) {
     for (const value of values) {
         const raw = String(value || '').trim();
@@ -217,6 +231,39 @@ async function appendClientMessage(clientId: string, message: StoredChatMessage)
         data: {
             history: JSON.stringify(nextHistory),
             status: client.status === 'FINALIZADO' ? 'NOVO' : client.status,
+        },
+    });
+}
+
+async function enrichExistingClientPhoneFromWhatsappIdentity(params: {
+    realJid?: string;
+    name?: string;
+}) {
+    const realJid = normalizeWhatsappJid(params.realJid || '');
+    const realPhone = isRealWhatsappJid(realJid) ? toDisplayPhone(realJid) : '';
+    const contactName = normalizeContactName(params.name || '');
+
+    if (!realPhone || !contactName) return null;
+
+    const existingWithPhone = await prisma.client.findUnique({ where: { phone: realPhone } });
+    if (existingWithPhone) return existingWithPhone;
+
+    const clients = await prisma.client.findMany({
+        orderBy: { updatedAt: 'desc' },
+    });
+
+    const unresolvedClient = clients.find((client) =>
+        isUnresolvedPhone(client.phone) &&
+        normalizeContactName(client.name) === contactName
+    );
+
+    if (!unresolvedClient) return null;
+
+    return prisma.client.update({
+        where: { id: unresolvedClient.id },
+        data: {
+            phone: realPhone,
+            whatsappJid: unresolvedClient.whatsappJid || realJid,
         },
     });
 }
@@ -400,6 +447,25 @@ class WhatsAppService {
                     if (msg.key.fromMe) continue;
 
                     const sender = String(msg.key.remoteJid || '');
+                    if (isStatusBroadcastJid(sender)) {
+                        const statusRealJid = pickRealWhatsappJid(
+                            msg.key?.participant,
+                            msg.key?.remoteJidAlt,
+                            msg.key?.participantPn,
+                            msg.key?.senderPn,
+                            msg.participant,
+                            findRealWhatsappJidDeep(msg)
+                        );
+                        const enrichedClient = await enrichExistingClientPhoneFromWhatsappIdentity({
+                            realJid: statusRealJid,
+                            name: msg.pushName,
+                        });
+                        if (enrichedClient) {
+                            io.emit('client_upserted', enrichedClient);
+                        }
+                        continue;
+                    }
+
                     if (!isDirectChatJid(sender)) continue;
 
                     const realJid = pickRealWhatsappJid(
