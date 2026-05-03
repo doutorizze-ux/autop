@@ -86,6 +86,7 @@ export const Quotes = () => {
     const [history, setHistory] = useState<QuoteHistoryEntry[]>([]);
     const [isHistoryLoading, setIsHistoryLoading] = useState(false);
     const [historyError, setHistoryError] = useState('');
+    const [selectedHistoryIds, setSelectedHistoryIds] = useState<string[]>([]);
     const [currentQuoteId, setCurrentQuoteId] = useState('');
     const [currentCreatedAt, setCurrentCreatedAt] = useState('');
     const [activeHistoryId, setActiveHistoryId] = useState('');
@@ -346,12 +347,39 @@ export const Quotes = () => {
         }
     };
 
+    const toggleHistorySelection = (quoteId: string) => {
+        setSelectedHistoryIds((current) =>
+            current.includes(quoteId) ? current.filter((id) => id !== quoteId) : [...current, quoteId]
+        );
+    };
+
+    const handleExportSelectedHistoryPdf = async () => {
+        if (selectedHistoryIds.length === 0) {
+            alert('Selecione pelo menos um orçamento do histórico.');
+            return;
+        }
+
+        try {
+            const response = await axios.post(
+                `${apiBase}/api/quotes/history/export/pdf`,
+                { ids: selectedHistoryIds },
+                { responseType: 'blob' }
+            );
+
+            downloadBlob(response.data, `orcamentos-selecionados-${Date.now()}.pdf`);
+        } catch (error) {
+            console.error('Export Selected Quotes PDF Error:', error);
+            alert('Não foi possível gerar o PDF com os orçamentos selecionados.');
+        }
+    };
+
     const handleDeleteHistory = async (quoteId: string) => {
         const confirmed = window.confirm('Tem certeza que deseja excluir esta cotação salva?');
         if (!confirmed) return;
 
         try {
             await axios.delete(`${apiBase}/api/quotes/history/${quoteId}`);
+            setSelectedHistoryIds((current) => current.filter((id) => id !== quoteId));
 
             if (activeHistoryId === quoteId) {
                 setActiveHistoryId('');
@@ -584,10 +612,20 @@ export const Quotes = () => {
                         </h3>
                         <p>Consulte cotações anteriores por data e baixe PDF/Excel novamente.</p>
                     </div>
-                    <button className="history-refresh-btn" onClick={() => void loadHistory()} disabled={isHistoryLoading}>
-                        {isHistoryLoading ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
-                        Atualizar
-                    </button>
+                    <div className="history-header-actions">
+                        <button
+                            className="history-batch-btn"
+                            type="button"
+                            onClick={() => void handleExportSelectedHistoryPdf()}
+                            disabled={selectedHistoryIds.length === 0}
+                        >
+                            <FileText size={16} /> PDF selecionados ({selectedHistoryIds.length})
+                        </button>
+                        <button className="history-refresh-btn" onClick={() => void loadHistory()} disabled={isHistoryLoading}>
+                            {isHistoryLoading ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
+                            Atualizar
+                        </button>
+                    </div>
                 </div>
 
                 {historyError && <div className="history-error">{historyError}</div>}
@@ -601,6 +639,13 @@ export const Quotes = () => {
                                 key={entry.id}
                                 className={`history-card ${activeHistoryId === entry.id ? 'history-card-active' : ''}`}
                             >
+                                <label className="history-select">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedHistoryIds.includes(entry.id)}
+                                        onChange={() => toggleHistorySelection(entry.id)}
+                                    />
+                                </label>
                                 <div className="history-card-main">
                                     <div className="history-card-header">
                                         <span className="history-date">
@@ -787,8 +832,14 @@ export const Quotes = () => {
                     color: var(--text-muted);
                     font-size: 0.9rem;
                 }
+                .history-header-actions {
+                    display: flex;
+                    gap: 0.75rem;
+                    flex-wrap: wrap;
+                    align-items: center;
+                }
                 .export-actions, .history-card-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
-                .export-btn, .history-refresh-btn, .history-card-actions button {
+                .export-btn, .history-refresh-btn, .history-batch-btn, .history-card-actions button {
                     display: inline-flex;
                     align-items: center;
                     gap: 0.5rem;
@@ -803,10 +854,14 @@ export const Quotes = () => {
                 .export-btn.excel:hover { background: #059669; }
                 .export-btn.pdf { background: #ef4444; color: white; }
                 .export-btn.pdf:hover { background: #dc2626; }
-                .history-refresh-btn, .history-card-actions button {
+                .history-refresh-btn, .history-batch-btn, .history-card-actions button {
                     background: var(--panel-bg);
                     color: var(--text-main);
                     border: 1px solid var(--border-color);
+                }
+                .history-batch-btn:disabled {
+                    opacity: 0.55;
+                    cursor: not-allowed;
                 }
                 .history-card-actions .delete-history-button {
                     color: #dc2626;
@@ -894,6 +949,18 @@ export const Quotes = () => {
                     align-items: center;
                     background: var(--bg-color);
                 }
+                .history-select {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding-right: 0.25rem;
+                }
+                .history-select input {
+                    width: 18px;
+                    height: 18px;
+                    accent-color: var(--primary-color);
+                    cursor: pointer;
+                }
                 .history-card-active {
                     border-color: var(--primary-color);
                     box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.15);
@@ -951,6 +1018,7 @@ export const Quotes = () => {
                         align-items: stretch;
                     }
                     .add-part-form { grid-template-columns: 1fr; }
+                    .history-header-actions,
                     .export-actions, .history-card-actions { width: 100%; }
                     .quote-running-status {
                         flex-direction: column;

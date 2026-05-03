@@ -28,6 +28,14 @@ type ParsedStoredQuote = {
     matrix: QuoteMatrix;
 };
 
+type QuotePdfSection = {
+    title: string;
+    subtitle?: string;
+    items: QuoteItem[];
+    suppliers: string[];
+    matrix: QuoteMatrix;
+};
+
 type QuoteJobStatus = 'running' | 'completed' | 'failed' | 'cancelled';
 
 type QuoteJob = {
@@ -186,27 +194,14 @@ function parseStoredQuote(quote: { product: string; results: string; createdAt: 
     }
 }
 
-function renderPDF(res: Response, items: QuoteItem[], suppliers: string[], matrix: QuoteMatrix, filenamePrefix: string) {
-    const doc = new PDFDocument({ layout: 'landscape', margin: 30 });
-    const filename = `${filenamePrefix}-${Date.now()}.pdf`;
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
-
-    doc.pipe(res);
-
-    doc.fontSize(20).text('Planilha de Confronto de Preços', { align: 'center' });
-    doc.moveDown();
-    doc.fontSize(10).text(`Gerado em: ${new Date().toLocaleString()}`, { align: 'right' });
-    doc.moveDown();
-
+function drawPDFTableHeader(doc: PDFKit.PDFDocument, suppliers: string[]) {
     const firstColumnWidth = 220;
     const colWidth = suppliers.length > 0 ? (doc.page.width - (firstColumnWidth + 60)) / suppliers.length : 0;
     const startX = 30;
-    let currentY = doc.y;
+    const currentY = doc.y;
 
-    doc.fontSize(10).font('Helvetica-Bold');
-    doc.text('PEÇA / CÓDIGO', startX, currentY, { width: firstColumnWidth });
+    doc.fontSize(10).font('Helvetica-Bold').fillColor('black');
+    doc.text('PECA / CODIGO', startX, currentY, { width: firstColumnWidth });
 
     suppliers.forEach((supplier: string, index: number) => {
         doc.text(supplier.toUpperCase(), startX + firstColumnWidth + index * colWidth, currentY, {
@@ -219,58 +214,115 @@ function renderPDF(res: Response, items: QuoteItem[], suppliers: string[], matri
     doc.moveTo(startX, doc.y).lineTo(doc.page.width - 30, doc.y).stroke();
     doc.moveDown(0.5);
 
-    items.forEach((item) => {
-        currentY = doc.y;
-        if (currentY > doc.page.height - 70) {
+    return { firstColumnWidth, colWidth, startX };
+}
+
+function renderPDFSections(res: Response, sections: QuotePdfSection[], filenamePrefix: string) {
+    const doc = new PDFDocument({ layout: 'landscape', margin: 30 });
+    const filename = `${filenamePrefix}-${Date.now()}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+
+    doc.pipe(res);
+
+    sections.forEach((section, sectionIndex) => {
+        if (sectionIndex > 0) {
             doc.addPage({ layout: 'landscape', margin: 30 });
-            currentY = 30;
         }
 
-        doc.font('Helvetica-Bold').fontSize(9).text(item.query, startX, currentY, { width: firstColumnWidth });
-        if (item.description) {
-            doc.font('Helvetica').fontSize(8).fillColor('#666').text(item.description, startX, currentY + 11, {
+        doc.fontSize(20).font('Helvetica-Bold').fillColor('black').text(section.title, { align: 'center' });
+        doc.moveDown(0.4);
+
+        if (section.subtitle) {
+            doc.fontSize(10).font('Helvetica').fillColor('#4B5563').text(section.subtitle, { align: 'center' });
+            doc.moveDown(0.5);
+        }
+
+        doc.fontSize(10).font('Helvetica').fillColor('black').text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, {
+            align: 'right',
+        });
+        doc.moveDown();
+
+        let { firstColumnWidth, colWidth, startX } = drawPDFTableHeader(doc, section.suppliers);
+
+        section.items.forEach((item) => {
+            let currentY = doc.y;
+            if (currentY > doc.page.height - 70) {
+                doc.addPage({ layout: 'landscape', margin: 30 });
+                doc.fontSize(16).font('Helvetica-Bold').fillColor('black').text(section.title, { align: 'center' });
+                doc.moveDown(0.4);
+                if (section.subtitle) {
+                    doc.fontSize(9).font('Helvetica').fillColor('#4B5563').text(section.subtitle, { align: 'center' });
+                    doc.moveDown(0.5);
+                }
+                ({ firstColumnWidth, colWidth, startX } = drawPDFTableHeader(doc, section.suppliers));
+                currentY = doc.y;
+            }
+
+            doc.font('Helvetica-Bold').fontSize(9).fillColor('black').text(item.query, startX, currentY, {
                 width: firstColumnWidth,
             });
-            doc.fillColor('black');
-        }
-
-        const rowPrices = suppliers.map((supplier: string) => {
-            const result = matrix[item.query]?.find((entry: any) => entry.provider === supplier);
-            return result && !result.error ? parseFloat(result.price) : Infinity;
-        });
-        const minPrice = Math.min(...rowPrices);
-
-        suppliers.forEach((supplier: string, index: number) => {
-            const result = matrix[item.query]?.find((entry: any) => entry.provider === supplier);
-            const x = startX + firstColumnWidth + index * colWidth;
-
-            if (result && !result.error) {
-                const price = parseFloat(result.price);
-                if (price === minPrice && minPrice !== Infinity) {
-                    doc.save();
-                    doc.fillColor('#D1FAE5').rect(x, currentY - 2, colWidth, 24).fill();
-                    doc.restore();
-                    doc.font('Helvetica-Bold').fillColor('#065F46');
-                } else {
-                    doc.font('Helvetica').fillColor('#111827');
-                }
-
-                doc.text(`R$ ${price.toFixed(2)}`, x, currentY + 4, { width: colWidth, align: 'center' });
-            } else {
-                const errorText = result?.error ? 'Erro' : '---';
-                doc.font('Helvetica').fillColor('#9CA3AF').text(errorText, x, currentY + 4, {
-                    width: colWidth,
-                    align: 'center',
+            if (item.description) {
+                doc.font('Helvetica').fontSize(8).fillColor('#666').text(item.description, startX, currentY + 11, {
+                    width: firstColumnWidth,
                 });
+                doc.fillColor('black');
             }
-        });
 
-        doc.moveDown(item.description ? 1.6 : 1.1);
-        doc.fillColor('#E5E7EB').moveTo(startX, doc.y).lineTo(doc.page.width - 30, doc.y).stroke();
-        doc.fillColor('black').moveDown(0.3);
+            const rowPrices = section.suppliers.map((supplier: string) => {
+                const result = section.matrix[item.query]?.find((entry: any) => entry.provider === supplier);
+                return result && !result.error ? parseFloat(result.price) : Infinity;
+            });
+            const minPrice = Math.min(...rowPrices);
+
+            section.suppliers.forEach((supplier: string, index: number) => {
+                const result = section.matrix[item.query]?.find((entry: any) => entry.provider === supplier);
+                const x = startX + firstColumnWidth + index * colWidth;
+
+                if (result && !result.error) {
+                    const price = parseFloat(result.price);
+                    if (price === minPrice && minPrice !== Infinity) {
+                        doc.save();
+                        doc.fillColor('#D1FAE5').rect(x, currentY - 2, colWidth, 24).fill();
+                        doc.restore();
+                        doc.font('Helvetica-Bold').fillColor('#065F46');
+                    } else {
+                        doc.font('Helvetica').fillColor('#111827');
+                    }
+
+                    doc.text(`R$ ${price.toFixed(2)}`, x, currentY + 4, { width: colWidth, align: 'center' });
+                } else {
+                    const errorText = result?.error ? 'Erro' : '---';
+                    doc.font('Helvetica').fillColor('#9CA3AF').text(errorText, x, currentY + 4, {
+                        width: colWidth,
+                        align: 'center',
+                    });
+                }
+            });
+
+            doc.moveDown(item.description ? 1.6 : 1.1);
+            doc.fillColor('#E5E7EB').moveTo(startX, doc.y).lineTo(doc.page.width - 30, doc.y).stroke();
+            doc.fillColor('black').moveDown(0.3);
+        });
     });
 
     doc.end();
+}
+
+function renderPDF(res: Response, items: QuoteItem[], suppliers: string[], matrix: QuoteMatrix, filenamePrefix: string) {
+    renderPDFSections(
+        res,
+        [
+            {
+                title: 'Planilha de Confronto de Precos',
+                items,
+                suppliers,
+                matrix,
+            },
+        ],
+        filenamePrefix
+    );
 }
 
 async function renderExcel(res: Response, items: QuoteItem[], suppliers: string[], matrix: QuoteMatrix, filenamePrefix: string) {
@@ -278,8 +330,8 @@ async function renderExcel(res: Response, items: QuoteItem[], suppliers: string[
     const worksheet = workbook.addWorksheet('Confronto');
 
     worksheet.columns = [
-        { header: 'CÓDIGO', key: 'query', width: 24 },
-        { header: 'DESCRIÇÃO', key: 'description', width: 40 },
+        { header: 'CODIGO', key: 'query', width: 24 },
+        { header: 'DESCRICAO', key: 'description', width: 40 },
         ...suppliers.map((supplier) => ({ header: supplier, key: supplier, width: 18 })),
     ];
 
@@ -325,7 +377,7 @@ export const searchQuote = async (req: Request, res: Response) => {
         const items = normalizeQuoteItems(req.body);
 
         if (items.length === 0) {
-            return res.status(400).json({ message: 'Lista de produtos é obrigatória' });
+            return res.status(400).json({ message: 'Lista de produtos e obrigatoria' });
         }
 
         const job: QuoteJob = {
@@ -346,7 +398,7 @@ export const searchQuote = async (req: Request, res: Response) => {
         return res.status(202).json(serializeQuoteJob(job));
     } catch (err) {
         console.error('Start Quote Job Error:', err);
-        return res.status(500).json({ message: 'Erro ao iniciar cotação em lote' });
+        return res.status(500).json({ message: 'Erro ao iniciar cotacao em lote' });
     }
 };
 
@@ -409,7 +461,7 @@ async function runQuoteJob(job: QuoteJob, socketId?: string) {
     } catch (err) {
         console.error('Run Quote Job Error:', err);
         job.status = 'failed';
-        job.error = err instanceof Error ? err.message : 'Erro ao processar cotação em lote';
+        job.error = err instanceof Error ? err.message : 'Erro ao processar cotacao em lote';
         job.completedAt = new Date().toISOString();
         job.updatedAt = job.completedAt;
     }
@@ -419,7 +471,7 @@ export const getQuoteJob = async (req: Request, res: Response) => {
     const job = quoteJobs.get(req.params.jobId);
 
     if (!job) {
-        return res.status(404).json({ message: 'Orçamento em andamento não encontrado.' });
+        return res.status(404).json({ message: 'Orcamento em andamento nao encontrado.' });
     }
 
     return res.json(serializeQuoteJob(job));
@@ -429,7 +481,7 @@ export const cancelQuoteJob = async (req: Request, res: Response) => {
     const job = quoteJobs.get(req.params.jobId);
 
     if (!job) {
-        return res.status(404).json({ message: 'Orçamento em andamento não encontrado.' });
+        return res.status(404).json({ message: 'Orcamento em andamento nao encontrado.' });
     }
 
     if (job.status === 'running') {
@@ -462,18 +514,18 @@ export const listQuoteHistory = async (_req: Request, res: Response) => {
         res.json(history);
     } catch (err) {
         console.error('List Quote History Error:', err);
-        res.status(500).json({ message: 'Erro ao listar histórico de cotações' });
+        res.status(500).json({ message: 'Erro ao listar historico de cotacoes' });
     }
 };
 
 export const getQuoteHistoryById = async (req: Request, res: Response) => {
-  try {
-    const quote = await prisma.quote.findUnique({
-      where: { id: req.params.id },
-    });
+    try {
+        const quote = await prisma.quote.findUnique({
+            where: { id: req.params.id },
+        });
 
         if (!quote) {
-            return res.status(404).json({ message: 'Cotação não encontrada' });
+            return res.status(404).json({ message: 'Cotacao nao encontrada' });
         }
 
         const parsed = parseStoredQuote(quote);
@@ -487,30 +539,30 @@ export const getQuoteHistoryById = async (req: Request, res: Response) => {
         });
     } catch (err) {
         console.error('Get Quote History Error:', err);
-        res.status(500).json({ message: 'Erro ao carregar cotação salva' });
-  }
+        res.status(500).json({ message: 'Erro ao carregar cotacao salva' });
+    }
 };
 
 export const deleteQuoteHistory = async (req: Request, res: Response) => {
-  try {
-    const existingQuote = await prisma.quote.findUnique({
-      where: { id: req.params.id },
-      select: { id: true },
-    });
+    try {
+        const existingQuote = await prisma.quote.findUnique({
+            where: { id: req.params.id },
+            select: { id: true },
+        });
 
-    if (!existingQuote) {
-      return res.status(404).json({ error: 'Cotação não encontrada.' });
+        if (!existingQuote) {
+            return res.status(404).json({ error: 'Cotacao nao encontrada.' });
+        }
+
+        await prisma.quote.delete({
+            where: { id: req.params.id },
+        });
+
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('Erro ao excluir cotacao do historico:', error);
+        return res.status(500).json({ error: 'Erro interno do servidor' });
     }
-
-    await prisma.quote.delete({
-      where: { id: req.params.id },
-    });
-
-    return res.json({ success: true });
-  } catch (error) {
-    console.error('Erro ao excluir cotação do histórico:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor' });
-  }
 };
 
 export const exportPDF = async (req: Request, res: Response) => {
@@ -540,14 +592,55 @@ export const exportSavedQuotePDF = async (req: Request, res: Response) => {
         });
 
         if (!quote) {
-            return res.status(404).json({ message: 'Cotação não encontrada' });
+            return res.status(404).json({ message: 'Cotacao nao encontrada' });
         }
 
         const parsed = parseStoredQuote(quote);
         renderPDF(res, parsed.items, parsed.suppliers, parsed.matrix, `orcamento-${quote.id}`);
     } catch (err) {
         console.error('Export Saved PDF Error:', err);
-        res.status(500).json({ message: 'Erro ao gerar PDF da cotação salva' });
+        res.status(500).json({ message: 'Erro ao gerar PDF da cotacao salva' });
+    }
+};
+
+export const exportMultipleSavedQuotesPDF = async (req: Request, res: Response) => {
+    try {
+        const ids = Array.isArray(req.body?.ids)
+            ? req.body.ids.map((id: unknown) => String(id || '').trim()).filter(Boolean)
+            : [];
+
+        if (ids.length === 0) {
+            return res.status(400).json({ message: 'Selecione ao menos um orcamento para exportar.' });
+        }
+
+        const quotes = await prisma.quote.findMany({
+            where: { id: { in: ids } },
+        });
+
+        if (quotes.length === 0) {
+            return res.status(404).json({ message: 'Nenhuma cotacao encontrada para exportacao.' });
+        }
+
+        const orderMap = new Map<string, number>(ids.map((id: string, index: number) => [id, index]));
+        const orderedQuotes = [...quotes].sort(
+            (a, b) => (orderMap.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderMap.get(b.id) ?? Number.MAX_SAFE_INTEGER)
+        );
+
+        const sections: QuotePdfSection[] = orderedQuotes.map((quote, index) => {
+            const parsed = parseStoredQuote(quote);
+            return {
+                title: `Orcamento ${index + 1}`,
+                subtitle: `${new Date(quote.createdAt).toLocaleString('pt-BR')} | ${parsed.items.length} item(ns)`,
+                items: parsed.items,
+                suppliers: parsed.suppliers,
+                matrix: parsed.matrix,
+            };
+        });
+
+        renderPDFSections(res, sections, 'orcamentos-selecionados');
+    } catch (err) {
+        console.error('Export Multiple Saved PDFs Error:', err);
+        res.status(500).json({ message: 'Erro ao gerar PDF dos orcamentos selecionados' });
     }
 };
 
@@ -558,13 +651,13 @@ export const exportSavedQuoteExcel = async (req: Request, res: Response) => {
         });
 
         if (!quote) {
-            return res.status(404).json({ message: 'Cotação não encontrada' });
+            return res.status(404).json({ message: 'Cotacao nao encontrada' });
         }
 
         const parsed = parseStoredQuote(quote);
         await renderExcel(res, parsed.items, parsed.suppliers, parsed.matrix, `orcamento-${quote.id}`);
     } catch (err) {
         console.error('Export Saved Excel Error:', err);
-        res.status(500).json({ message: 'Erro ao gerar Excel da cotação salva' });
+        res.status(500).json({ message: 'Erro ao gerar Excel da cotacao salva' });
     }
 };

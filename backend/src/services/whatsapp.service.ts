@@ -18,6 +18,9 @@ import QRCode from 'qrcode';
 import { io } from '../index';
 
 const prisma = new PrismaClient();
+const whatsappIdentityMapPath = path.join(__dirname, '../../data/whatsapp-identity-map.json');
+const whatsappIdentityCache = new Map<string, string>();
+let whatsappIdentityCacheLoaded = false;
 
 type StoredChatMessage = {
     text: string;
@@ -55,6 +58,10 @@ function isRealWhatsappJid(jid: string) {
     return String(jid || '').endsWith('@s.whatsapp.net');
 }
 
+function isLidWhatsappJid(jid: string) {
+    return String(jid || '').endsWith('@lid');
+}
+
 function isDirectChatJid(jid: string) {
     const raw = String(jid || '');
     if (!raw) return false;
@@ -90,6 +97,58 @@ function pickRealWhatsappJid(...values: unknown[]) {
         if (isRealWhatsappJid(jid)) return jid;
     }
     return '';
+}
+
+async function loadWhatsappIdentityCache() {
+    if (whatsappIdentityCacheLoaded) return;
+    whatsappIdentityCacheLoaded = true;
+
+    try {
+        const raw = await fs.readFile(whatsappIdentityMapPath, 'utf8');
+        const data = JSON.parse(raw);
+        if (data && typeof data === 'object') {
+            for (const [lid, realJid] of Object.entries(data)) {
+                const normalizedLid = normalizeWhatsappJid(String(lid));
+                const normalizedRealJid = normalizeWhatsappJid(String(realJid));
+                if (isLidWhatsappJid(normalizedLid) && isRealWhatsappJid(normalizedRealJid)) {
+                    whatsappIdentityCache.set(normalizedLid, normalizedRealJid);
+                }
+            }
+        }
+    } catch (_) {}
+}
+
+async function saveWhatsappIdentityCache() {
+    await fs.mkdir(path.dirname(whatsappIdentityMapPath), { recursive: true });
+    await fs.writeFile(
+        whatsappIdentityMapPath,
+        JSON.stringify(Object.fromEntries(whatsappIdentityCache.entries()), null, 2),
+        'utf8'
+    );
+}
+
+async function rememberWhatsappIdentity(lid?: string, realJid?: string) {
+    const normalizedLid = normalizeWhatsappJid(lid || '');
+    const normalizedRealJid = normalizeWhatsappJid(realJid || '');
+
+    if (!isLidWhatsappJid(normalizedLid) || !isRealWhatsappJid(normalizedRealJid)) return '';
+
+    await loadWhatsappIdentityCache();
+    if (whatsappIdentityCache.get(normalizedLid) !== normalizedRealJid) {
+        whatsappIdentityCache.set(normalizedLid, normalizedRealJid);
+        await saveWhatsappIdentityCache();
+    }
+
+    return normalizedRealJid;
+}
+
+async function resolveRealJidFromIdentityMap(jid?: string) {
+    const normalizedJid = normalizeWhatsappJid(jid || '');
+    if (isRealWhatsappJid(normalizedJid)) return normalizedJid;
+    if (!isLidWhatsappJid(normalizedJid)) return '';
+
+    await loadWhatsappIdentityCache();
+    return whatsappIdentityCache.get(normalizedJid) || '';
 }
 
 function findRealWhatsappJidDeep(value: unknown, visited = new Set<unknown>()): string {
@@ -392,7 +451,8 @@ async function upsertClientFromWhatsapp(params: {
     text?: string;
 }) {
     const technicalJid = normalizeWhatsappJid(params.jid);
-    const realJid = normalizeWhatsappJid(params.realJid || '');
+    const mappedRealJid = await resolveRealJidFromIdentityMap(technicalJid);
+    const realJid = normalizeWhatsappJid(params.realJid || mappedRealJid || '');
     const realPhone = isRealWhatsappJid(realJid) ? toDisplayPhone(realJid) : '';
     const technicalPhone = normalizeWhatsappPhone(technicalJid);
     const fallbackPhone = isRealWhatsappJid(technicalJid) ? toDisplayPhone(technicalJid) : technicalPhone;
@@ -448,7 +508,7 @@ async function upsertClientFromWhatsapp(params: {
     const updateData = {
         name: params.name || existing?.name || `Lead ${phone}`,
         phone: keepExistingPhone ? existingPhone : phone,
-        whatsappJid: technicalJid || realJid || existing?.whatsappJid,
+        whatsappJid: realJid || technicalJid || existing?.whatsappJid,
         status: 'NOVO',
         history: existing?.history || null,
     };
@@ -550,6 +610,7 @@ class WhatsAppService {
 
             this.sock.ev.on('chats.phoneNumberShare', async ({ lid, jid }: { lid: string; jid: string }) => {
                 try {
+                    await rememberWhatsappIdentity(lid, jid);
                     const client = await upsertClientFromWhatsapp({
                         jid: lid,
                         realJid: jid,
@@ -598,7 +659,7 @@ class WhatsAppService {
 
                     if (!isDirectChatJid(sender)) continue;
 
-                    const realJid = pickRealWhatsappJid(
+                    const realJidFromMessage = pickRealWhatsappJid(
                         sender,
                         msg.key?.participant,
                         msg.key?.remoteJidAlt,
@@ -607,6 +668,10 @@ class WhatsAppService {
                         msg.participant,
                         findRealWhatsappJidDeep(msg)
                     );
+                    const realJid = realJidFromMessage || await resolveRealJidFromIdentityMap(sender);
+                    if (realJidFromMessage && sender) {
+                        await rememberWhatsappIdentity(sender, realJidFromMessage);
+                    }
                     const text = getWhatsappMessageText(msg.message);
                     const media = await saveWhatsappMedia(msg.message);
                     if (!text.trim() && !media) continue;
@@ -663,10 +728,13 @@ class WhatsAppService {
             try {
                 const contactJid = normalizeWhatsappJid(contact.id);
                 const lidJid = normalizeWhatsappJid(contact.lid);
-                const realJid = isRealWhatsappJid(contactJid) ? contactJid : findRealWhatsappJidDeep(contact);
+                const discoveredRealJid = isRealWhatsappJid(contactJid) ? contactJid : findRealWhatsappJidDeep(contact);
                 const technicalJid = lidJid || contactJid;
+                const realJid = discoveredRealJid || await resolveRealJidFromIdentityMap(technicalJid);
 
                 if (!technicalJid || !realJid || technicalJid === realJid) continue;
+
+                await rememberWhatsappIdentity(technicalJid, realJid);
 
                 const client = await upsertClientFromWhatsapp({
                     jid: technicalJid,

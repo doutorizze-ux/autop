@@ -10,6 +10,7 @@ import {
     getQuoteHistoryById,
     deleteQuoteHistory,
     exportSavedQuotePDF,
+    exportMultipleSavedQuotesPDF,
     exportSavedQuoteExcel,
 } from '../controllers/quote.controller';
 
@@ -25,6 +26,7 @@ router.post('/export/excel', exportExcel);
 router.get('/history', listQuoteHistory);
 router.get('/history/:id', getQuoteHistoryById);
 router.delete('/history/:id', deleteQuoteHistory);
+router.post('/history/export/pdf', exportMultipleSavedQuotesPDF);
 router.get('/history/:id/export/pdf', exportSavedQuotePDF);
 router.get('/history/:id/export/excel', exportSavedQuoteExcel);
 
