@@ -37,4 +37,13 @@ router.post('/send', async (req, res) => {
     }
 });
 
+router.post('/sync-phones', async (_req, res) => {
+    try {
+        const result = await whatsappService.syncUnresolvedClientPhones();
+        res.json({ success: true, ...result });
+    } catch (err: any) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
 export default router;

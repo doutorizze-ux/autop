@@ -6,6 +6,7 @@ import makeWASocket, {
     fetchLatestBaileysVersion,
     getContentType,
     makeCacheableSignalKeyStore,
+    makeInMemoryStore,
     useMultiFileAuthState,
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
@@ -21,6 +22,7 @@ const prisma = new PrismaClient();
 const whatsappIdentityMapPath = path.join(__dirname, '../../data/whatsapp-identity-map.json');
 const whatsappIdentityCache = new Map<string, string>();
 let whatsappIdentityCacheLoaded = false;
+const whatsappStore = makeInMemoryStore({});
 
 type StoredChatMessage = {
     text: string;
@@ -564,6 +566,8 @@ class WhatsAppService {
                 markOnlineOnConnect: false,
             });
 
+            whatsappStore.bind(this.sock.ev);
+
             this.sock.ev.on('connection.update', async (update: any) => {
                 if (generation !== this.generation) return;
                 const { connection, lastDisconnect, qr } = update;
@@ -601,6 +605,7 @@ class WhatsAppService {
                     this.status = 'connected';
                     this.qr = null;
                     this.lastError = null;
+                    await this.syncKnownContacts();
                     io.emit('whatsapp_status', { status: 'connected' });
                     console.log('WhatsApp connection opened');
                 }
@@ -748,6 +753,46 @@ class WhatsAppService {
                 console.error('Erro ao atualizar contato do WhatsApp:', error);
             }
         }
+    }
+
+    private async syncKnownContacts() {
+        const contacts = Object.values((whatsappStore as any).contacts || {});
+        if (contacts.length > 0) {
+            await this.syncContacts(contacts);
+        }
+    }
+
+    async syncUnresolvedClientPhones() {
+        if (!this.sock || this.status !== 'connected') {
+            throw new Error('WhatsApp nao conectado');
+        }
+
+        await this.syncKnownContacts();
+
+        const unresolvedClients = (await prisma.client.findMany({
+            orderBy: { updatedAt: 'desc' },
+        })).filter((client) => isUnresolvedPhone(client.phone));
+
+        let updated = 0;
+
+        for (const client of unresolvedClients) {
+            const realJid = await resolveRealJidFromIdentityMap(client.whatsappJid || client.phone);
+            if (!isRealWhatsappJid(realJid)) continue;
+
+            const realPhone = toDisplayPhone(realJid);
+            if (!realPhone) continue;
+
+            await prisma.client.update({
+                where: { id: client.id },
+                data: {
+                    phone: realPhone,
+                    whatsappJid: realJid,
+                },
+            });
+            updated += 1;
+        }
+
+        return { updated, inspected: unresolvedClients.length };
     }
 
     private closeSocket() {

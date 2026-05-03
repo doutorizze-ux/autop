@@ -109,22 +109,36 @@ export const ChatArea = () => {
   const [inputText, setInputText] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const hasAttemptedPhoneSyncRef = useRef(false);
 
   useEffect(() => {
     const fetchClients = async () => {
       try {
         const res = await axios.get(`${API_URL}/api/clients`);
-        setClients(res.data);
+        let currentClients = res.data as Client[];
+        setClients(currentClients);
+        const hasUnresolvedClients = currentClients.some((client: Client) => formatClientPhone(client).includes('aguardando'));
+        if (hasUnresolvedClients && !hasAttemptedPhoneSyncRef.current) {
+          hasAttemptedPhoneSyncRef.current = true;
+          try {
+            await axios.post(`${API_URL}/api/whatsapp/sync-phones`);
+            const refreshed = await axios.get(`${API_URL}/api/clients`);
+            currentClients = refreshed.data;
+            setClients(currentClients);
+          } catch (syncError) {
+            console.error('Erro ao sincronizar telefones pendentes:', syncError);
+          }
+        }
         setMessages(prev => {
           const next = { ...prev };
-          res.data.forEach((client: Client) => {
+          currentClients.forEach((client: Client) => {
             next[client.id] = mergeMessages(next[client.id], parseClientHistory(client));
           });
           return next;
         });
         const selectedId = localStorage.getItem('selected_attendance_client_id');
         if (selectedId) {
-          const client = res.data.find((item: Client) => item.id === selectedId);
+          const client = currentClients.find((item: Client) => item.id === selectedId);
           if (client) {
             setSelectedClient(client);
           }
