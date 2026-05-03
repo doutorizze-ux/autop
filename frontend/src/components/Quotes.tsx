@@ -695,6 +695,66 @@ export const Quotes = () => {
                     border-radius: 12px;
                 }
                 .search-box { padding: 1.5rem; }
+                .add-part-form {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr) auto;
+                    gap: 1rem;
+                    align-items: end;
+                }
+                .input-group {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.45rem;
+                    min-width: 0;
+                }
+                .input-group label {
+                    color: var(--text-main);
+                    font-size: 0.95rem;
+                    font-weight: 600;
+                }
+                .input-group-main {
+                    min-width: 0;
+                }
+                .input-group-description {
+                    min-width: 0;
+                }
+                .input-with-icon {
+                    position: relative;
+                    display: flex;
+                    align-items: center;
+                }
+                .search-icon {
+                    position: absolute;
+                    left: 0.9rem;
+                    color: var(--text-muted);
+                    pointer-events: none;
+                }
+                .part-input {
+                    width: 100%;
+                    min-width: 0;
+                    height: 52px;
+                    border-radius: 10px;
+                    border: 1px solid var(--border-color);
+                    background: var(--panel-bg);
+                    color: var(--text-main);
+                    padding: 0 1rem;
+                    font-size: 0.98rem;
+                    transition: border-color 0.2s, box-shadow 0.2s;
+                }
+                .input-with-icon .part-input {
+                    padding-left: 2.8rem;
+                }
+                .part-input::placeholder {
+                    color: var(--text-muted);
+                }
+                .part-input:focus {
+                    outline: none;
+                    border-color: var(--primary-color);
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+                }
+                .secondary-input {
+                    background: var(--bg-color);
+                }
                 .add-btn {
                     background: var(--text-main);
                     color: var(--panel-bg);
@@ -993,6 +1053,7 @@ export const Quotes = () => {
                         align-items: stretch;
                     }
                     .add-part-form { grid-template-columns: 1fr; }
+                    .add-btn { width: 100%; justify-content: center; }
                     .history-header-actions,
                     .export-actions, .history-card-actions { width: 100%; }
                     .quote-running-status {
