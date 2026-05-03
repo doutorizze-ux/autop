@@ -10,6 +10,7 @@ import {
   Search,
   ChevronRight,
   Sparkles,
+  Rocket,
 } from 'lucide-react';
 import { Clients } from '../components/Clients';
 import { WhatsAppConnect } from '../components/WhatsAppConnect';
@@ -17,12 +18,14 @@ import { ChatArea } from '../components/ChatArea';
 import { Suppliers } from '../components/Suppliers';
 import { Settings as SettingsComponent } from '../components/Settings';
 import { Quotes } from '../components/Quotes';
+import { Roadmap } from '../components/Roadmap';
 import { socket } from '../services/socket';
 
 const navItems = [
   { id: 'clientes', label: 'Clientes', icon: Users, caption: 'CRM e funil' },
   { id: 'atendimento', label: 'WhatsApp', icon: MessageSquare, caption: 'Conversas em tempo real' },
   { id: 'cotacoes', label: 'Orçamento Geral', icon: Search, caption: 'Códigos e confrontos' },
+  { id: 'roadmap', label: 'Versão e Roadmap', icon: Rocket, caption: 'Evolução do produto' },
   { id: 'fornecedores', label: 'Fornecedores', icon: Briefcase, caption: 'Integrações e logins', adminOnly: true },
   { id: 'config', label: 'Configurações', icon: Settings, caption: 'Preferências do sistema' },
 ];
@@ -181,6 +184,7 @@ export const Dashboard = () => {
           )}
           {activeTab === 'fornecedores' && <Suppliers />}
           {activeTab === 'cotacoes' && <Quotes />}
+          {activeTab === 'roadmap' && <Roadmap />}
           {activeTab === 'config' && <SettingsComponent />}
         </section>
       </main>
