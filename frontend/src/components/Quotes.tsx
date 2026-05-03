@@ -14,7 +14,7 @@ import {
     Clock3,
     Sparkles,
 } from 'lucide-react';
-import { searchPartsCatalog, type CatalogApplication, type CatalogSuggestion } from '../data/partsCatalog';
+import { partsCatalog, searchPartsCatalog, type CatalogApplication, type CatalogSuggestion } from '../data/partsCatalog';
 
 type QuoteItemInput = {
     query: string;
@@ -416,8 +416,12 @@ export const Quotes = () => {
     }, [partList, quoteMatrix]);
 
     const catalogSearchTerm = useMemo(() => `${newPart} ${newDescription}`.trim(), [newPart, newDescription]);
+    const hasCatalogData = partsCatalog.length > 0;
 
-    const catalogSuggestions = useMemo(() => searchPartsCatalog(catalogSearchTerm), [catalogSearchTerm]);
+    const catalogSuggestions = useMemo(
+        () => (hasCatalogData ? searchPartsCatalog(catalogSearchTerm) : []),
+        [catalogSearchTerm, hasCatalogData]
+    );
 
     const catalogResultCount = useMemo(
         () => catalogSuggestions.reduce((total, suggestion) => total + suggestion.applications.length, 0),
@@ -525,7 +529,14 @@ export const Quotes = () => {
                     </button>
                 </form>
 
-                {catalogTouched && catalogSuggestions.length > 0 && (
+                {!hasCatalogData && (
+                    <div className="catalog-empty-state">
+                        <strong>Catálogo interno ainda não configurado</strong>
+                        <span>Desativei as sugestões automáticas para evitar códigos errados. O orçamento continua funcionando normalmente por nome ou código digitado.</span>
+                    </div>
+                )}
+
+                {hasCatalogData && catalogTouched && catalogSuggestions.length > 0 && (
                     <div className="catalog-suggestions">
                         <div className="catalog-suggestions-header">
                             <strong>Sugestões do catálogo</strong>
@@ -880,6 +891,26 @@ export const Quotes = () => {
                 }
                 .input-with-icon .part-input { padding-left: 3rem; }
                 .part-input:focus { border-color: var(--primary-color); }
+                .catalog-empty-state {
+                    margin-top: 1rem;
+                    margin-bottom: 0.4rem;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.35rem;
+                    padding: 1rem 1.1rem;
+                    border-radius: 14px;
+                    background: rgba(245, 158, 11, 0.08);
+                    border: 1px solid rgba(245, 158, 11, 0.2);
+                    color: var(--text-main);
+                }
+                .catalog-empty-state strong {
+                    font-size: 0.95rem;
+                }
+                .catalog-empty-state span {
+                    color: var(--text-muted);
+                    line-height: 1.45;
+                    font-size: 0.88rem;
+                }
                 .catalog-suggestions {
                     margin-top: 1rem;
                     margin-bottom: 0.4rem;
