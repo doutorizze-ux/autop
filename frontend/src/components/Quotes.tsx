@@ -1062,6 +1062,28 @@ export const Quotes = () => {
                     .add-btn { width: 100%; justify-content: center; }
                     .history-header-actions,
                     .export-actions, .history-card-actions { width: 100%; }
+                    .history-card {
+                        gap: 0.85rem;
+                    }
+                    .history-select {
+                        justify-content: flex-start;
+                    }
+                    .history-card-main {
+                        width: 100%;
+                    }
+                    .history-card-header {
+                        flex-direction: row;
+                        align-items: center;
+                        justify-content: space-between;
+                        gap: 0.5rem;
+                    }
+                    .history-card-actions {
+                        justify-content: flex-start;
+                    }
+                    .history-card-actions button {
+                        flex: 1 1 calc(50% - 0.5rem);
+                        justify-content: center;
+                    }
                     .quote-running-status {
                         flex-direction: column;
                         align-items: stretch;
