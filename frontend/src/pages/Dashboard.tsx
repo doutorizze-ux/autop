@@ -21,6 +21,9 @@ import { Quotes } from '../components/Quotes';
 import { Roadmap } from '../components/Roadmap';
 import { socket } from '../services/socket';
 
+const suppliersAccessPassword = '080782';
+const suppliersAccessStorageKey = 'suppliers_access_granted';
+
 const navItems = [
   { id: 'clientes', label: 'Clientes', icon: Users, caption: 'CRM e funil' },
   { id: 'atendimento', label: 'WhatsApp', icon: MessageSquare, caption: 'Conversas em tempo real' },
@@ -35,6 +38,10 @@ export const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('clientes');
   const [wsStatus, setWsStatus] = useState<string>('connecting');
   const [themeLogo, setThemeLogo] = useState(() => localStorage.getItem('theme_logo') || '');
+  const [showSuppliersPasswordModal, setShowSuppliersPasswordModal] = useState(false);
+  const [suppliersPassword, setSuppliersPassword] = useState('');
+  const [suppliersPasswordError, setSuppliersPasswordError] = useState('');
+  const [suppliersUnlocked, setSuppliersUnlocked] = useState(() => sessionStorage.getItem(suppliersAccessStorageKey) === 'true');
 
   useEffect(() => {
     const applyTheme = (themeColor?: string, logo?: string) => {
@@ -74,6 +81,33 @@ export const Dashboard = () => {
       window.removeEventListener('storage', refreshTheme);
     };
   }, []);
+
+  const handleChangeTab = (tabId: string) => {
+    if (tabId === 'fornecedores' && !suppliersUnlocked) {
+      setSuppliersPassword('');
+      setSuppliersPasswordError('');
+      setShowSuppliersPasswordModal(true);
+      return;
+    }
+
+    setActiveTab(tabId);
+  };
+
+  const handleUnlockSuppliers = (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (suppliersPassword !== suppliersAccessPassword) {
+      setSuppliersPasswordError('Senha incorreta. Tente novamente.');
+      return;
+    }
+
+    sessionStorage.setItem(suppliersAccessStorageKey, 'true');
+    setSuppliersUnlocked(true);
+    setSuppliersPassword('');
+    setSuppliersPasswordError('');
+    setShowSuppliersPasswordModal(false);
+    setActiveTab('fornecedores');
+  };
 
   useEffect(() => {
     socket.on('whatsapp_status', (data: any) => {
@@ -128,7 +162,7 @@ export const Dashboard = () => {
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setActiveTab(item.id)}
+                  onClick={() => handleChangeTab(item.id)}
                   className={`nav-item ${isActive ? 'active' : ''}`}
                 >
                   <span className="nav-icon-wrap">
@@ -187,6 +221,65 @@ export const Dashboard = () => {
           {activeTab === 'roadmap' && <Roadmap />}
           {activeTab === 'config' && <SettingsComponent />}
         </section>
+
+        {showSuppliersPasswordModal && (
+          <div className="modal-overlay">
+            <div className="modal-content auth-card" style={{ maxWidth: '420px', width: '100%' }}>
+              <h2 style={{ marginBottom: '0.75rem' }}>Acesso protegido</h2>
+              <p style={{ color: 'var(--text-muted)', marginBottom: '1.25rem', lineHeight: 1.6 }}>
+                Digite a senha para abrir a área de fornecedores.
+              </p>
+
+              <form onSubmit={handleUnlockSuppliers}>
+                <div className="form-group">
+                  <label>Senha de acesso</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    value={suppliersPassword}
+                    onChange={(event) => {
+                      setSuppliersPassword(event.target.value);
+                      if (suppliersPasswordError) setSuppliersPasswordError('');
+                    }}
+                    autoFocus
+                  />
+                </div>
+
+                {suppliersPasswordError && (
+                  <div style={{ color: '#dc2626', marginBottom: '1rem', fontSize: '0.92rem' }}>
+                    {suppliersPasswordError}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button type="submit" className="btn-primary">
+                    Entrar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => {
+                      setShowSuppliersPasswordModal(false);
+                      setSuppliersPassword('');
+                      setSuppliersPasswordError('');
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '0.85rem',
+                      background: 'var(--bg-color)',
+                      color: 'var(--text-main)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
