@@ -978,8 +978,8 @@ export const Quotes = () => {
                     border: 1px solid var(--border-color);
                     border-radius: 12px;
                     padding: 1rem;
-                    display: flex;
-                    justify-content: space-between;
+                    display: grid;
+                    grid-template-columns: auto minmax(0, 1fr) auto;
                     gap: 1rem;
                     align-items: center;
                     background: var(--bg-color);
@@ -988,7 +988,7 @@ export const Quotes = () => {
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    padding-right: 0.25rem;
+                    align-self: center;
                 }
                 .history-select input {
                     width: 18px;
@@ -1005,6 +1005,7 @@ export const Quotes = () => {
                     flex-direction: column;
                     gap: 0.45rem;
                     min-width: 0;
+                    justify-self: start;
                 }
                 .history-card-header {
                     display: flex;
@@ -1036,6 +1037,10 @@ export const Quotes = () => {
                     border-radius: 999px;
                     padding: 0.25rem 0.6rem;
                 }
+                .history-card-actions {
+                    justify-content: flex-end;
+                    align-self: center;
+                }
                 .history-empty, .history-error {
                     padding: 1.5rem;
                     color: var(--text-muted);
@@ -1049,6 +1054,7 @@ export const Quotes = () => {
                     .results-header,
                     .history-panel-header,
                     .history-card {
+                        display: flex;
                         flex-direction: column;
                         align-items: stretch;
                     }
