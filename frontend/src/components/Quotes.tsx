@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { socket } from '../services/socket';
 import {
@@ -12,9 +12,7 @@ import {
     History,
     FolderOpen,
     Clock3,
-    Sparkles,
 } from 'lucide-react';
-import { partsCatalog, searchPartsCatalog, type CatalogApplication, type CatalogSuggestion } from '../data/partsCatalog';
 
 type QuoteItemInput = {
     query: string;
@@ -82,7 +80,6 @@ export const Quotes = () => {
     const [partList, setPartList] = useState<QuoteItemInput[]>([]);
     const [newPart, setNewPart] = useState('');
     const [newDescription, setNewDescription] = useState('');
-    const [catalogTouched, setCatalogTouched] = useState(false);
     const [quoteMatrix, setQuoteMatrix] = useState<QuoteMatrix>({});
     const [suppliers, setSuppliers] = useState<string[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -106,7 +103,7 @@ export const Quotes = () => {
             setHistory(response.data);
         } catch (error) {
             console.error('Load Quote History Error:', error);
-            setHistoryError('Não foi possível carregar o histórico agora.');
+            setHistoryError('NÃ£o foi possÃ­vel carregar o histÃ³rico agora.');
         } finally {
             setIsHistoryLoading(false);
         }
@@ -232,7 +229,6 @@ export const Quotes = () => {
 
         setNewPart('');
         setNewDescription('');
-        setCatalogTouched(false);
     };
 
     const handleRemovePart = (index: number) => {
@@ -266,7 +262,7 @@ export const Quotes = () => {
             await applyQuoteJob(response.data);
         } catch (error) {
             console.error('Search Quote Error:', error);
-            alert('Erro ao buscar preços. Verifique se os fornecedores estão configurados corretamente.');
+            alert('Erro ao buscar preÃ§os. Verifique se os fornecedores estÃ£o configurados corretamente.');
             setIsSearching(false);
             setQuoteJobStatus('');
         } finally {
@@ -284,7 +280,7 @@ export const Quotes = () => {
             localStorage.removeItem(activeQuoteJobStorageKey);
         } catch (error) {
             console.error('Cancel Quote Job Error:', error);
-            alert('Não foi possível cancelar este orçamento agora.');
+            alert('NÃ£o foi possÃ­vel cancelar este orÃ§amento agora.');
         }
     };
 
@@ -331,7 +327,7 @@ export const Quotes = () => {
             localStorage.removeItem(activeQuoteJobStorageKey);
         } catch (error) {
             console.error('Open Saved Quote Error:', error);
-            alert('Não foi possível abrir essa cotação salva.');
+            alert('NÃ£o foi possÃ­vel abrir essa cotaÃ§Ã£o salva.');
         }
     };
 
@@ -347,7 +343,7 @@ export const Quotes = () => {
             );
         } catch (error) {
             console.error('Export Saved Quote Error:', error);
-            alert('Não foi possível exportar a cotação salva.');
+            alert('NÃ£o foi possÃ­vel exportar a cotaÃ§Ã£o salva.');
         }
     };
 
@@ -359,7 +355,7 @@ export const Quotes = () => {
 
     const handleExportSelectedHistoryPdf = async () => {
         if (selectedHistoryIds.length === 0) {
-            alert('Selecione pelo menos um orçamento do histórico.');
+            alert('Selecione pelo menos um orÃ§amento do histÃ³rico.');
             return;
         }
 
@@ -373,12 +369,12 @@ export const Quotes = () => {
             downloadBlob(response.data, `orcamentos-selecionados-${Date.now()}.pdf`);
         } catch (error) {
             console.error('Export Selected Quotes PDF Error:', error);
-            alert('Não foi possível gerar o PDF com os orçamentos selecionados.');
+            alert('NÃ£o foi possÃ­vel gerar o PDF com os orÃ§amentos selecionados.');
         }
     };
 
     const handleDeleteHistory = async (quoteId: string) => {
-        const confirmed = window.confirm('Tem certeza que deseja excluir esta cotação salva?');
+        const confirmed = window.confirm('Tem certeza que deseja excluir esta cotaÃ§Ã£o salva?');
         if (!confirmed) return;
 
         try {
@@ -394,7 +390,7 @@ export const Quotes = () => {
             await loadHistory();
         } catch (error) {
             console.error('Delete Saved Quote Error:', error);
-            alert('Não foi possível excluir a cotação salva.');
+            alert('NÃ£o foi possÃ­vel excluir a cotaÃ§Ã£o salva.');
         }
     };
 
@@ -414,112 +410,42 @@ export const Quotes = () => {
 
         return resultMap;
     }, [partList, quoteMatrix]);
-
-    const catalogSearchTerm = useMemo(() => `${newPart} ${newDescription}`.trim(), [newPart, newDescription]);
-    const hasCatalogData = partsCatalog.length > 0;
-
-    const catalogSuggestions = useMemo(
-        () => (hasCatalogData ? searchPartsCatalog(catalogSearchTerm) : []),
-        [catalogSearchTerm, hasCatalogData]
-    );
-
-    const catalogResultCount = useMemo(
-        () => catalogSuggestions.reduce((total, suggestion) => total + suggestion.applications.length, 0),
-        [catalogSuggestions]
-    );
-
-    const exactCatalogMatch = useMemo(() => {
-        const suggestion = catalogSuggestions[0];
-        if (!suggestion || suggestion.applications.length === 0) return null;
-        return { ...suggestion, code: suggestion.applications[0].code, totalApplications: catalogResultCount };
-    }, [catalogResultCount, catalogSuggestions]);
-
-    const applyCatalogPart = (suggestion: CatalogSuggestion, application: CatalogApplication = suggestion.applications[0], autoAdd = false) => {
-        const summary = [suggestion.family.name, application.brand, application.model, application.years, application.engine].filter(Boolean).join(' • ');
-        void summary;
-        setNewPart(application.code);
-        const part = {
-            code: application.code,
-            name: suggestion.family.name,
-            application: [application.brand, application.model, application.years, application.engine].filter(Boolean).join(' â€¢ '),
-        };
-        setNewDescription(`${part.name} • ${part.application}`);
-        setCatalogTouched(false);
-
-        if (autoAdd) {
-            const labelDescription = `${part.name} • ${part.application}`;
-            const alreadyExists = partList.some((item) => item.query.toLowerCase() === part.code.toLowerCase());
-            if (!alreadyExists) {
-                setPartList((current) => [
-                    ...current,
-                    {
-                        query: part.code,
-                        description: labelDescription,
-                    },
-                ]);
-            }
-            setNewPart('');
-            setNewDescription('');
-        }
-    };
-
     return (
         <div className="quotes-container">
             <div className="quotes-header">
                 <div>
-                    <h1 className="page-title">Orçamento Simultâneo</h1>
+                    <h1 className="page-title">OrÃ§amento SimultÃ¢neo</h1>
                     <p className="page-subtitle">
-                        Pesquise uma peça em todos os fornecedores cadastrados ao mesmo tempo.
+                        Pesquise uma peÃ§a em todos os fornecedores cadastrados ao mesmo tempo.
                     </p>
                 </div>
             </div>
 
             <div className="search-box">
-                <div className="catalog-hero">
-                    <div>
-                        <span className="catalog-kicker">
-                            <Sparkles size={14} /> Localizador inteligente
-                        </span>
-                        <h3>Digite o nome completo da peça e deixe o sistema sugerir o código certo.</h3>
-                        <p>Use por nome, código ou aplicação para montar a cotação mais rápido e com menos erro manual.</p>
-                    </div>
-                    {exactCatalogMatch && (
-                        <button type="button" className="catalog-match-btn" onClick={() => applyCatalogPart(exactCatalogMatch)}>
-                            Aplicar código {exactCatalogMatch.code}
-                        </button>
-                    )}
-                </div>
-
                 <form onSubmit={handleAddPart} className="add-part-form">
                     <div className="input-group input-group-main">
-                        <label htmlFor="quote-query">Código ou nome da peça</label>
+                        <label htmlFor="quote-query">CÃ³digo ou nome da peÃ§a</label>
                         <div className="input-with-icon">
                             <Search className="search-icon" size={20} />
                             <input
                                 id="quote-query"
                                 type="text"
-                                placeholder="Digite o código ou nome da peça"
+                                placeholder="Digite o cÃ³digo ou nome da peÃ§a"
                                 value={newPart}
-                                onChange={(event) => {
-                                    setNewPart(event.target.value);
-                                    setCatalogTouched(true);
-                                }}
+                                onChange={(event) => setNewPart(event.target.value)}
                                 className="part-input"
                             />
                         </div>
                     </div>
 
                     <div className="input-group input-group-description">
-                        <label htmlFor="quote-description">Descrição opcional para a equipe</label>
+                        <label htmlFor="quote-description">DescriÃ§Ã£o opcional para a equipe</label>
                         <input
                             id="quote-description"
                             type="text"
                             placeholder="Ex: Pastilha dianteira Hilux 2022"
                             value={newDescription}
-                            onChange={(event) => {
-                                setNewDescription(event.target.value);
-                                setCatalogTouched(true);
-                            }}
+                            onChange={(event) => setNewDescription(event.target.value)}
                             className="part-input secondary-input"
                         />
                     </div>
@@ -529,65 +455,10 @@ export const Quotes = () => {
                     </button>
                 </form>
 
-                {!hasCatalogData && (
-                    <div className="catalog-empty-state">
-                        <strong>Catálogo interno ainda não configurado</strong>
-                        <span>Desativei as sugestões automáticas para evitar códigos errados. O orçamento continua funcionando normalmente por nome ou código digitado.</span>
-                    </div>
-                )}
-
-                {hasCatalogData && catalogTouched && catalogSuggestions.length > 0 && (
-                    <div className="catalog-suggestions">
-                        <div className="catalog-suggestions-header">
-                            <strong>Sugestões do catálogo</strong>
-                            <span>Selecione uma opção para trocar o nome pelo código correto.</span>
-                        </div>
-
-                        <div className="catalog-suggestions-list">
-                            {catalogSuggestions.map((suggestion) => (
-                                <article key={suggestion.family.id} className="catalog-family-card">
-                                    <div className="catalog-family-head">
-                                        <div>
-                                            <span className="catalog-family-kicker">{suggestion.family.category}</span>
-                                            <h4>{suggestion.family.name}</h4>
-                                        </div>
-                                        <span className="catalog-family-count">{suggestion.applications.length} aplicacoes</span>
-                                    </div>
-
-                                    <div className="catalog-family-meta">
-                                        {suggestion.family.position && <span>{suggestion.family.position}</span>}
-                                        <span>Marca, modelo, ano e motor</span>
-                                    </div>
-
-                                    <div className="catalog-application-list">
-                                        {suggestion.applications.map((application) => (
-                                            <button
-                                                key={application.code}
-                                                type="button"
-                                                className="catalog-application-row"
-                                                onClick={() => applyCatalogPart(suggestion, application)}
-                                            >
-                                                <div className="catalog-application-main">
-                                                    <strong>{application.code}</strong>
-                                                    <span>{application.brand} {application.model}</span>
-                                                </div>
-                                                <div className="catalog-application-meta">
-                                                    <span>Ano: {application.years}</span>
-                                                    {application.engine && <span>Motor: {application.engine}</span>}
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </article>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
                 {partList.length > 0 && (
                     <div className="part-list">
                         <div className="part-list-header">
-                            <h4>Lista de Cotação ({partList.length} itens)</h4>
+                            <h4>Lista de CotaÃ§Ã£o ({partList.length} itens)</h4>
                             {currentCreatedAt && (
                                 <span className="quote-meta">
                                     <Clock3 size={14} /> {formatDateTime(currentCreatedAt)}
@@ -620,25 +491,25 @@ export const Quotes = () => {
                                 </>
                             ) : (
                                 <>
-                                    <RefreshCw size={20} /> Iniciar Orçamento em Todos os Fornecedores
+                                    <RefreshCw size={20} /> Iniciar OrÃ§amento em Todos os Fornecedores
                                 </>
                             )}
                         </button>
                         {isSearching && (
                             <div className="quote-running-status">
                                 <span>
-                                    Orçamento em andamento. Pode trocar de menu ou atualizar a página que ele continua.
+                                    OrÃ§amento em andamento. Pode trocar de menu ou atualizar a pÃ¡gina que ele continua.
                                 </span>
                                 <button type="button" onClick={() => void handleCancelSearch()}>
-                                    Parar este orçamento
+                                    Parar este orÃ§amento
                                 </button>
                             </div>
                         )}
                         {quoteJobStatus === 'cancelled' && (
-                            <div className="quote-job-warning">Orçamento cancelado.</div>
+                            <div className="quote-job-warning">OrÃ§amento cancelado.</div>
                         )}
                         {quoteJobStatus === 'failed' && (
-                            <div className="quote-job-warning">{quoteJobError || 'Orçamento falhou.'}</div>
+                            <div className="quote-job-warning">{quoteJobError || 'OrÃ§amento falhou.'}</div>
                         )}
                     </div>
                 )}
@@ -648,10 +519,10 @@ export const Quotes = () => {
                 <div className="results-panel">
                     <div className="results-header">
                         <div>
-                            <h3>Quadro de Comparação de Preços</h3>
+                            <h3>Quadro de ComparaÃ§Ã£o de PreÃ§os</h3>
                             {currentQuoteId && (
                                 <p className="results-caption">
-                                    Cotação salva em {formatDateTime(currentCreatedAt)}
+                                    CotaÃ§Ã£o salva em {formatDateTime(currentCreatedAt)}
                                 </p>
                             )}
                         </div>
@@ -670,7 +541,7 @@ export const Quotes = () => {
                         <table className="matrix-table">
                             <thead>
                                 <tr>
-                                    <th>Peça / Produto</th>
+                                    <th>PeÃ§a / Produto</th>
                                     {suppliers.map((supplier) => (
                                         <th key={supplier}>{supplier}</th>
                                     ))}
@@ -712,7 +583,7 @@ export const Quotes = () => {
                                                                             title="Ver produto no site"
                                                                             className="visit-link"
                                                                         >
-                                                                            🔗
+                                                                            ðŸ”—
                                                                         </a>
                                                                     )}
                                                                 </div>
@@ -736,9 +607,9 @@ export const Quotes = () => {
                 <div className="history-panel-header">
                     <div>
                         <h3>
-                            <History size={18} /> Histórico de Orçamentos
+                            <History size={18} /> HistÃ³rico de OrÃ§amentos
                         </h3>
-                        <p>Consulte cotações anteriores por data e baixe PDF/Excel novamente.</p>
+                        <p>Consulte cotaÃ§Ãµes anteriores por data e baixe PDF/Excel novamente.</p>
                     </div>
                     <div className="history-header-actions">
                         <button
@@ -759,7 +630,7 @@ export const Quotes = () => {
                 {historyError && <div className="history-error">{historyError}</div>}
 
                 {history.length === 0 && !isHistoryLoading ? (
-                    <div className="history-empty">Nenhuma cotação salva ainda.</div>
+                    <div className="history-empty">Nenhuma cotaÃ§Ã£o salva ainda.</div>
                 ) : (
                     <div className="history-list">
                         {history.map((entry) => (
@@ -824,260 +695,6 @@ export const Quotes = () => {
                     border-radius: 12px;
                 }
                 .search-box { padding: 1.5rem; }
-                .catalog-hero {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: flex-start;
-                    gap: 1rem;
-                    padding: 1.1rem 1.2rem;
-                    margin-bottom: 1.25rem;
-                    border-radius: 16px;
-                    background:
-                        linear-gradient(135deg, rgba(0, 86, 179, 0.08), rgba(14, 165, 233, 0.08)),
-                        var(--bg-color);
-                    border: 1px solid rgba(0, 86, 179, 0.1);
-                }
-                .catalog-kicker {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 0.45rem;
-                    font-size: 0.78rem;
-                    text-transform: uppercase;
-                    letter-spacing: 0.12em;
-                    color: var(--primary-color);
-                    font-weight: 800;
-                    margin-bottom: 0.55rem;
-                }
-                .catalog-hero h3 {
-                    font-size: 1.05rem;
-                    margin-bottom: 0.35rem;
-                }
-                .catalog-hero p {
-                    color: var(--text-muted);
-                    max-width: 820px;
-                    line-height: 1.5;
-                }
-                .catalog-match-btn {
-                    border: none;
-                    border-radius: 12px;
-                    padding: 0.85rem 1rem;
-                    background: linear-gradient(135deg, var(--primary-color), #0c7ff2);
-                    color: #fff;
-                    font-weight: 700;
-                    cursor: pointer;
-                    white-space: nowrap;
-                }
-                .add-part-form {
-                    display: grid;
-                    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
-                    gap: 1rem;
-                    align-items: end;
-                }
-                .input-group { display: flex; flex-direction: column; gap: 0.5rem; }
-                .input-group label { color: var(--text-muted); font-size: 0.9rem; }
-                .input-with-icon { position: relative; }
-                .search-icon { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
-                .part-input {
-                    width: 100%;
-                    background: var(--bg-color);
-                    border: 1px solid var(--border-color);
-                    padding: 1rem;
-                    border-radius: 8px;
-                    color: var(--text-main);
-                    font-size: 1rem;
-                    outline: none;
-                    transition: border 0.2s;
-                    min-height: 52px;
-                }
-                .input-with-icon .part-input { padding-left: 3rem; }
-                .part-input:focus { border-color: var(--primary-color); }
-                .catalog-empty-state {
-                    margin-top: 1rem;
-                    margin-bottom: 0.4rem;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.35rem;
-                    padding: 1rem 1.1rem;
-                    border-radius: 14px;
-                    background: rgba(245, 158, 11, 0.08);
-                    border: 1px solid rgba(245, 158, 11, 0.2);
-                    color: var(--text-main);
-                }
-                .catalog-empty-state strong {
-                    font-size: 0.95rem;
-                }
-                .catalog-empty-state span {
-                    color: var(--text-muted);
-                    line-height: 1.45;
-                    font-size: 0.88rem;
-                }
-                .catalog-suggestions {
-                    margin-top: 1rem;
-                    margin-bottom: 0.4rem;
-                    border: 1px solid var(--border-color);
-                    border-radius: 16px;
-                    background: var(--bg-color);
-                    overflow: hidden;
-                }
-                .catalog-suggestions-header {
-                    display: flex;
-                    justify-content: space-between;
-                    gap: 1rem;
-                    padding: 0.95rem 1rem;
-                    border-bottom: 1px solid var(--border-color);
-                    color: var(--text-muted);
-                    font-size: 0.86rem;
-                    flex-wrap: wrap;
-                }
-                .catalog-suggestions-header strong {
-                    color: var(--text-main);
-                    font-size: 0.92rem;
-                }
-                .catalog-suggestions-list {
-                    display: grid;
-                    grid-template-columns: 1fr;
-                    gap: 0.8rem;
-                    padding: 1rem;
-                }
-                .catalog-summary-box {
-                    min-width: 170px;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.3rem;
-                    padding: 0.85rem 1rem;
-                    border-radius: 14px;
-                    background: rgba(255, 255, 255, 0.8);
-                    border: 1px solid rgba(0, 86, 179, 0.14);
-                    color: var(--text-main);
-                }
-                .catalog-summary-box strong {
-                    font-size: 1rem;
-                }
-                .catalog-summary-box span {
-                    color: var(--text-muted);
-                    font-size: 0.84rem;
-                }
-                .catalog-family-card {
-                    background: #fff;
-                    border: 1px solid var(--border-color);
-                    border-radius: 16px;
-                    padding: 1rem;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.9rem;
-                }
-                .catalog-family-head {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: flex-start;
-                    gap: 1rem;
-                }
-                .catalog-family-head h4 {
-                    font-size: 1rem;
-                    color: var(--text-main);
-                }
-                .catalog-family-kicker {
-                    display: inline-block;
-                    margin-bottom: 0.35rem;
-                    color: var(--primary-color);
-                    font-size: 0.76rem;
-                    font-weight: 800;
-                    text-transform: uppercase;
-                    letter-spacing: 0.08em;
-                }
-                .catalog-family-count {
-                    white-space: nowrap;
-                    color: var(--text-muted);
-                    font-size: 0.84rem;
-                    font-weight: 700;
-                }
-                .catalog-family-meta {
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 0.55rem;
-                    color: var(--text-muted);
-                    font-size: 0.82rem;
-                }
-                .catalog-family-meta span {
-                    background: var(--bg-color);
-                    border: 1px solid var(--border-color);
-                    border-radius: 999px;
-                    padding: 0.28rem 0.65rem;
-                }
-                .catalog-application-list {
-                    display: grid;
-                    gap: 0.65rem;
-                }
-                .catalog-application-row {
-                    width: 100%;
-                    display: flex;
-                    justify-content: space-between;
-                    gap: 1rem;
-                    text-align: left;
-                    background: var(--bg-color);
-                    border: 1px solid var(--border-color);
-                    border-radius: 14px;
-                    padding: 0.85rem 0.9rem;
-                    cursor: pointer;
-                    transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
-                }
-                .catalog-application-row:hover {
-                    transform: translateY(-1px);
-                    border-color: rgba(0, 86, 179, 0.22);
-                    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
-                }
-                .catalog-application-main,
-                .catalog-application-meta {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.25rem;
-                    min-width: 0;
-                }
-                .catalog-application-main strong {
-                    color: var(--primary-color);
-                    font-size: 0.93rem;
-                }
-                .catalog-application-main span {
-                    font-weight: 700;
-                    color: var(--text-main);
-                }
-                .catalog-application-meta {
-                    align-items: flex-end;
-                    color: var(--text-muted);
-                    font-size: 0.82rem;
-                }
-                .catalog-suggestion-card {
-                    text-align: left;
-                    background: #fff;
-                    border: 1px solid var(--border-color);
-                    border-radius: 14px;
-                    padding: 0.9rem;
-                    cursor: pointer;
-                    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
-                }
-                .catalog-suggestion-card:hover {
-                    transform: translateY(-2px);
-                    border-color: rgba(0, 86, 179, 0.22);
-                    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
-                }
-                .catalog-suggestion-top {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.22rem;
-                    margin-bottom: 0.45rem;
-                }
-                .catalog-suggestion-top strong {
-                    color: var(--primary-color);
-                    font-size: 0.92rem;
-                }
-                .catalog-suggestion-top span {
-                    font-weight: 700;
-                    color: var(--text-main);
-                }
-                .catalog-suggestion-card small {
-                    color: var(--text-muted);
-                    line-height: 1.45;
-                }
                 .add-btn {
                     background: var(--text-main);
                     color: var(--panel-bg);
@@ -1369,7 +986,6 @@ export const Quotes = () => {
 
                 @media (max-width: 980px) {
                     .quotes-header,
-                    .catalog-hero,
                     .results-header,
                     .history-panel-header,
                     .history-card {
@@ -1388,3 +1004,4 @@ export const Quotes = () => {
         </div>
     );
 };
+
