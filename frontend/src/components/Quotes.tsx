@@ -103,7 +103,7 @@ export const Quotes = () => {
             setHistory(response.data);
         } catch (error) {
             console.error('Load Quote History Error:', error);
-            setHistoryError('NÃ£o foi possÃ­vel carregar o histÃ³rico agora.');
+            setHistoryError('Não foi possível carregar o histórico agora.');
         } finally {
             setIsHistoryLoading(false);
         }
@@ -262,7 +262,7 @@ export const Quotes = () => {
             await applyQuoteJob(response.data);
         } catch (error) {
             console.error('Search Quote Error:', error);
-            alert('Erro ao buscar preÃ§os. Verifique se os fornecedores estÃ£o configurados corretamente.');
+            alert('Erro ao buscar preços. Verifique se os fornecedores estão configurados corretamente.');
             setIsSearching(false);
             setQuoteJobStatus('');
         } finally {
@@ -280,7 +280,7 @@ export const Quotes = () => {
             localStorage.removeItem(activeQuoteJobStorageKey);
         } catch (error) {
             console.error('Cancel Quote Job Error:', error);
-            alert('NÃ£o foi possÃ­vel cancelar este orÃ§amento agora.');
+            alert('Não foi possível cancelar este orçamento agora.');
         }
     };
 
@@ -327,7 +327,7 @@ export const Quotes = () => {
             localStorage.removeItem(activeQuoteJobStorageKey);
         } catch (error) {
             console.error('Open Saved Quote Error:', error);
-            alert('NÃ£o foi possÃ­vel abrir essa cotaÃ§Ã£o salva.');
+            alert('Não foi possível abrir essa cotação salva.');
         }
     };
 
@@ -343,7 +343,7 @@ export const Quotes = () => {
             );
         } catch (error) {
             console.error('Export Saved Quote Error:', error);
-            alert('NÃ£o foi possÃ­vel exportar a cotaÃ§Ã£o salva.');
+            alert('Não foi possível exportar a cotação salva.');
         }
     };
 
@@ -355,7 +355,7 @@ export const Quotes = () => {
 
     const handleExportSelectedHistoryPdf = async () => {
         if (selectedHistoryIds.length === 0) {
-            alert('Selecione pelo menos um orÃ§amento do histÃ³rico.');
+            alert('Selecione pelo menos um orçamento do histórico.');
             return;
         }
 
@@ -369,12 +369,12 @@ export const Quotes = () => {
             downloadBlob(response.data, `orcamentos-selecionados-${Date.now()}.pdf`);
         } catch (error) {
             console.error('Export Selected Quotes PDF Error:', error);
-            alert('NÃ£o foi possÃ­vel gerar o PDF com os orÃ§amentos selecionados.');
+            alert('Não foi possível gerar o PDF com os orçamentos selecionados.');
         }
     };
 
     const handleDeleteHistory = async (quoteId: string) => {
-        const confirmed = window.confirm('Tem certeza que deseja excluir esta cotaÃ§Ã£o salva?');
+        const confirmed = window.confirm('Tem certeza que deseja excluir esta cotação salva?');
         if (!confirmed) return;
 
         try {
@@ -390,7 +390,7 @@ export const Quotes = () => {
             await loadHistory();
         } catch (error) {
             console.error('Delete Saved Quote Error:', error);
-            alert('NÃ£o foi possÃ­vel excluir a cotaÃ§Ã£o salva.');
+            alert('Não foi possível excluir a cotação salva.');
         }
     };
 
@@ -414,9 +414,9 @@ export const Quotes = () => {
         <div className="quotes-container">
             <div className="quotes-header">
                 <div>
-                    <h1 className="page-title">OrÃ§amento SimultÃ¢neo</h1>
+                    <h1 className="page-title">Orçamento Simultâneo</h1>
                     <p className="page-subtitle">
-                        Pesquise uma peÃ§a em todos os fornecedores cadastrados ao mesmo tempo.
+                        Pesquise uma peça em todos os fornecedores cadastrados ao mesmo tempo.
                     </p>
                 </div>
             </div>
@@ -424,13 +424,13 @@ export const Quotes = () => {
             <div className="search-box">
                 <form onSubmit={handleAddPart} className="add-part-form">
                     <div className="input-group input-group-main">
-                        <label htmlFor="quote-query">CÃ³digo ou nome da peÃ§a</label>
+                        <label htmlFor="quote-query">Código ou nome da peça</label>
                         <div className="input-with-icon">
                             <Search className="search-icon" size={20} />
                             <input
                                 id="quote-query"
                                 type="text"
-                                placeholder="Digite o cÃ³digo ou nome da peÃ§a"
+                                placeholder="Digite o código ou nome da peça"
                                 value={newPart}
                                 onChange={(event) => setNewPart(event.target.value)}
                                 className="part-input"
@@ -439,7 +439,7 @@ export const Quotes = () => {
                     </div>
 
                     <div className="input-group input-group-description">
-                        <label htmlFor="quote-description">DescriÃ§Ã£o opcional para a equipe</label>
+                        <label htmlFor="quote-description">Descrição opcional para a equipe</label>
                         <input
                             id="quote-description"
                             type="text"
@@ -458,7 +458,7 @@ export const Quotes = () => {
                 {partList.length > 0 && (
                     <div className="part-list">
                         <div className="part-list-header">
-                            <h4>Lista de CotaÃ§Ã£o ({partList.length} itens)</h4>
+                            <h4>Lista de Cotação ({partList.length} itens)</h4>
                             {currentCreatedAt && (
                                 <span className="quote-meta">
                                     <Clock3 size={14} /> {formatDateTime(currentCreatedAt)}
@@ -491,25 +491,25 @@ export const Quotes = () => {
                                 </>
                             ) : (
                                 <>
-                                    <RefreshCw size={20} /> Iniciar OrÃ§amento em Todos os Fornecedores
+                                    <RefreshCw size={20} /> Iniciar Orçamento em Todos os Fornecedores
                                 </>
                             )}
                         </button>
                         {isSearching && (
                             <div className="quote-running-status">
                                 <span>
-                                    OrÃ§amento em andamento. Pode trocar de menu ou atualizar a pÃ¡gina que ele continua.
+                                    Orçamento em andamento. Pode trocar de menu ou atualizar a página que ele continua.
                                 </span>
                                 <button type="button" onClick={() => void handleCancelSearch()}>
-                                    Parar este orÃ§amento
+                                    Parar este orçamento
                                 </button>
                             </div>
                         )}
                         {quoteJobStatus === 'cancelled' && (
-                            <div className="quote-job-warning">OrÃ§amento cancelado.</div>
+                            <div className="quote-job-warning">Orçamento cancelado.</div>
                         )}
                         {quoteJobStatus === 'failed' && (
-                            <div className="quote-job-warning">{quoteJobError || 'OrÃ§amento falhou.'}</div>
+                            <div className="quote-job-warning">{quoteJobError || 'Orçamento falhou.'}</div>
                         )}
                     </div>
                 )}
@@ -519,10 +519,10 @@ export const Quotes = () => {
                 <div className="results-panel">
                     <div className="results-header">
                         <div>
-                            <h3>Quadro de ComparaÃ§Ã£o de PreÃ§os</h3>
+                            <h3>Quadro de Comparação de Preços</h3>
                             {currentQuoteId && (
                                 <p className="results-caption">
-                                    CotaÃ§Ã£o salva em {formatDateTime(currentCreatedAt)}
+                                    Cotação salva em {formatDateTime(currentCreatedAt)}
                                 </p>
                             )}
                         </div>
@@ -541,7 +541,7 @@ export const Quotes = () => {
                         <table className="matrix-table">
                             <thead>
                                 <tr>
-                                    <th>PeÃ§a / Produto</th>
+                                    <th>Peça / Produto</th>
                                     {suppliers.map((supplier) => (
                                         <th key={supplier}>{supplier}</th>
                                     ))}
@@ -583,7 +583,7 @@ export const Quotes = () => {
                                                                             title="Ver produto no site"
                                                                             className="visit-link"
                                                                         >
-                                                                            ðŸ”—
+                                                                            🔗
                                                                         </a>
                                                                     )}
                                                                 </div>
@@ -607,9 +607,9 @@ export const Quotes = () => {
                 <div className="history-panel-header">
                     <div>
                         <h3>
-                            <History size={18} /> HistÃ³rico de OrÃ§amentos
+                            <History size={18} /> Histórico de Orçamentos
                         </h3>
-                        <p>Consulte cotaÃ§Ãµes anteriores por data e baixe PDF/Excel novamente.</p>
+                        <p>Consulte cotações anteriores por data e baixe PDF/Excel novamente.</p>
                     </div>
                     <div className="history-header-actions">
                         <button
@@ -630,7 +630,7 @@ export const Quotes = () => {
                 {historyError && <div className="history-error">{historyError}</div>}
 
                 {history.length === 0 && !isHistoryLoading ? (
-                    <div className="history-empty">Nenhuma cotaÃ§Ã£o salva ainda.</div>
+                    <div className="history-empty">Nenhuma cotação salva ainda.</div>
                 ) : (
                     <div className="history-list">
                         {history.map((entry) => (
