@@ -736,6 +736,17 @@ class WhatsAppService {
                 const discoveredRealJid = isRealWhatsappJid(contactJid) ? contactJid : findRealWhatsappJidDeep(contact);
                 const technicalJid = lidJid || contactJid;
                 const realJid = discoveredRealJid || await resolveRealJidFromIdentityMap(technicalJid);
+                const contactName = contact.name || contact.notify || contact.verifiedName;
+
+                if (realJid && contactName) {
+                    const enrichedClient = await enrichExistingClientPhoneFromWhatsappIdentity({
+                        realJid,
+                        name: contactName,
+                    });
+                    if (enrichedClient) {
+                        io.emit('client_upserted', enrichedClient);
+                    }
+                }
 
                 if (!technicalJid || !realJid || technicalJid === realJid) continue;
 
@@ -744,7 +755,7 @@ class WhatsAppService {
                 const client = await upsertClientFromWhatsapp({
                     jid: technicalJid,
                     realJid,
-                    name: contact.name || contact.notify || contact.verifiedName,
+                    name: contactName,
                 });
                 if (client) {
                     io.emit('client_upserted', client);
