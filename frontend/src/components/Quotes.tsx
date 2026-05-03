@@ -14,7 +14,7 @@ import {
     Clock3,
     Sparkles,
 } from 'lucide-react';
-import { searchPartsCatalog, type CatalogPart } from '../data/partsCatalog';
+import { searchPartsCatalog, type CatalogApplication, type CatalogSuggestion } from '../data/partsCatalog';
 
 type QuoteItemInput = {
     query: string;
@@ -419,20 +419,26 @@ export const Quotes = () => {
 
     const catalogSuggestions = useMemo(() => searchPartsCatalog(catalogSearchTerm), [catalogSearchTerm]);
 
-    const exactCatalogMatch = useMemo(() => {
-        if (!catalogSearchTerm.trim()) return null;
-        return catalogSuggestions.find((part) => {
-            const normalizedTerm = catalogSearchTerm.trim().toLowerCase();
-            return (
-                part.name.toLowerCase() === normalizedTerm ||
-                part.code.toLowerCase() === normalizedTerm ||
-                (part.aliases || []).some((alias) => alias.toLowerCase() === normalizedTerm)
-            );
-        }) || null;
-    }, [catalogSearchTerm, catalogSuggestions]);
+    const catalogResultCount = useMemo(
+        () => catalogSuggestions.reduce((total, suggestion) => total + suggestion.applications.length, 0),
+        [catalogSuggestions]
+    );
 
-    const applyCatalogPart = (part: CatalogPart, autoAdd = false) => {
-        setNewPart(part.code);
+    const exactCatalogMatch = useMemo(() => {
+        const suggestion = catalogSuggestions[0];
+        if (!suggestion || suggestion.applications.length === 0) return null;
+        return { ...suggestion, code: suggestion.applications[0].code, totalApplications: catalogResultCount };
+    }, [catalogResultCount, catalogSuggestions]);
+
+    const applyCatalogPart = (suggestion: CatalogSuggestion, application: CatalogApplication = suggestion.applications[0], autoAdd = false) => {
+        const summary = [suggestion.family.name, application.brand, application.model, application.years, application.engine].filter(Boolean).join(' • ');
+        void summary;
+        setNewPart(application.code);
+        const part = {
+            code: application.code,
+            name: suggestion.family.name,
+            application: [application.brand, application.model, application.years, application.engine].filter(Boolean).join(' â€¢ '),
+        };
         setNewDescription(`${part.name} • ${part.application}`);
         setCatalogTouched(false);
 
@@ -527,19 +533,41 @@ export const Quotes = () => {
                         </div>
 
                         <div className="catalog-suggestions-list">
-                            {catalogSuggestions.map((part) => (
-                                <button
-                                    key={`${part.code}-${part.application}`}
-                                    type="button"
-                                    className="catalog-suggestion-card"
-                                    onClick={() => applyCatalogPart(part)}
-                                >
-                                    <div className="catalog-suggestion-top">
-                                        <strong>{part.code}</strong>
-                                        <span>{part.name}</span>
+                            {catalogSuggestions.map((suggestion) => (
+                                <article key={suggestion.family.id} className="catalog-family-card">
+                                    <div className="catalog-family-head">
+                                        <div>
+                                            <span className="catalog-family-kicker">{suggestion.family.category}</span>
+                                            <h4>{suggestion.family.name}</h4>
+                                        </div>
+                                        <span className="catalog-family-count">{suggestion.applications.length} aplicacoes</span>
                                     </div>
-                                    <small>{part.application}</small>
-                                </button>
+
+                                    <div className="catalog-family-meta">
+                                        {suggestion.family.position && <span>{suggestion.family.position}</span>}
+                                        <span>Marca, modelo, ano e motor</span>
+                                    </div>
+
+                                    <div className="catalog-application-list">
+                                        {suggestion.applications.map((application) => (
+                                            <button
+                                                key={application.code}
+                                                type="button"
+                                                className="catalog-application-row"
+                                                onClick={() => applyCatalogPart(suggestion, application)}
+                                            >
+                                                <div className="catalog-application-main">
+                                                    <strong>{application.code}</strong>
+                                                    <span>{application.brand} {application.model}</span>
+                                                </div>
+                                                <div className="catalog-application-meta">
+                                                    <span>Ano: {application.years}</span>
+                                                    {application.engine && <span>Motor: {application.engine}</span>}
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </article>
                             ))}
                         </div>
                     </div>
@@ -876,9 +904,116 @@ export const Quotes = () => {
                 }
                 .catalog-suggestions-list {
                     display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                    grid-template-columns: 1fr;
                     gap: 0.8rem;
                     padding: 1rem;
+                }
+                .catalog-summary-box {
+                    min-width: 170px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.3rem;
+                    padding: 0.85rem 1rem;
+                    border-radius: 14px;
+                    background: rgba(255, 255, 255, 0.8);
+                    border: 1px solid rgba(0, 86, 179, 0.14);
+                    color: var(--text-main);
+                }
+                .catalog-summary-box strong {
+                    font-size: 1rem;
+                }
+                .catalog-summary-box span {
+                    color: var(--text-muted);
+                    font-size: 0.84rem;
+                }
+                .catalog-family-card {
+                    background: #fff;
+                    border: 1px solid var(--border-color);
+                    border-radius: 16px;
+                    padding: 1rem;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.9rem;
+                }
+                .catalog-family-head {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    gap: 1rem;
+                }
+                .catalog-family-head h4 {
+                    font-size: 1rem;
+                    color: var(--text-main);
+                }
+                .catalog-family-kicker {
+                    display: inline-block;
+                    margin-bottom: 0.35rem;
+                    color: var(--primary-color);
+                    font-size: 0.76rem;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    letter-spacing: 0.08em;
+                }
+                .catalog-family-count {
+                    white-space: nowrap;
+                    color: var(--text-muted);
+                    font-size: 0.84rem;
+                    font-weight: 700;
+                }
+                .catalog-family-meta {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 0.55rem;
+                    color: var(--text-muted);
+                    font-size: 0.82rem;
+                }
+                .catalog-family-meta span {
+                    background: var(--bg-color);
+                    border: 1px solid var(--border-color);
+                    border-radius: 999px;
+                    padding: 0.28rem 0.65rem;
+                }
+                .catalog-application-list {
+                    display: grid;
+                    gap: 0.65rem;
+                }
+                .catalog-application-row {
+                    width: 100%;
+                    display: flex;
+                    justify-content: space-between;
+                    gap: 1rem;
+                    text-align: left;
+                    background: var(--bg-color);
+                    border: 1px solid var(--border-color);
+                    border-radius: 14px;
+                    padding: 0.85rem 0.9rem;
+                    cursor: pointer;
+                    transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+                }
+                .catalog-application-row:hover {
+                    transform: translateY(-1px);
+                    border-color: rgba(0, 86, 179, 0.22);
+                    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+                }
+                .catalog-application-main,
+                .catalog-application-meta {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.25rem;
+                    min-width: 0;
+                }
+                .catalog-application-main strong {
+                    color: var(--primary-color);
+                    font-size: 0.93rem;
+                }
+                .catalog-application-main span {
+                    font-weight: 700;
+                    color: var(--text-main);
+                }
+                .catalog-application-meta {
+                    align-items: flex-end;
+                    color: var(--text-muted);
+                    font-size: 0.82rem;
                 }
                 .catalog-suggestion-card {
                     text-align: left;
