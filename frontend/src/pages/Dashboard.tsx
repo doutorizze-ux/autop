@@ -41,7 +41,9 @@ export const Dashboard = () => {
   const [showSuppliersPasswordModal, setShowSuppliersPasswordModal] = useState(false);
   const [suppliersPassword, setSuppliersPassword] = useState('');
   const [suppliersPasswordError, setSuppliersPasswordError] = useState('');
-  const [suppliersUnlocked, setSuppliersUnlocked] = useState(() => sessionStorage.getItem(suppliersAccessStorageKey) === 'true');
+  const [suppliersUnlocked, setSuppliersUnlocked] = useState(
+    () => sessionStorage.getItem(suppliersAccessStorageKey) === 'true'
+  );
 
   useEffect(() => {
     const applyTheme = (themeColor?: string, logo?: string) => {
@@ -50,6 +52,7 @@ export const Dashboard = () => {
       document.documentElement.style.setProperty('--primary-color', color);
       setThemeLogo(savedLogo);
       localStorage.setItem('theme_color', color);
+
       if (savedLogo) {
         localStorage.setItem('theme_logo', savedLogo);
       } else {
@@ -82,6 +85,24 @@ export const Dashboard = () => {
     };
   }, []);
 
+  useEffect(() => {
+    socket.on('whatsapp_status', (data: any) => {
+      setWsStatus(data.status);
+    });
+
+    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/whatsapp/status`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        setWsStatus(data.status);
+      });
+
+    return () => {
+      socket.off('whatsapp_status');
+    };
+  }, []);
+
   const handleChangeTab = (tabId: string) => {
     if (tabId === 'fornecedores' && !suppliersUnlocked) {
       setSuppliersPassword('');
@@ -108,24 +129,6 @@ export const Dashboard = () => {
     setShowSuppliersPasswordModal(false);
     setActiveTab('fornecedores');
   };
-
-  useEffect(() => {
-    socket.on('whatsapp_status', (data: any) => {
-      setWsStatus(data.status);
-    });
-
-    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/whatsapp/status`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        setWsStatus(data.status);
-      });
-
-    return () => {
-      socket.off('whatsapp_status');
-    };
-  }, []);
 
   const visibleNavItems = navItems.filter((item) => !item.adminOnly || user?.role === 'ADMIN');
   const activeItem = visibleNavItems.find((item) => item.id === activeTab) || visibleNavItems[0];
@@ -207,6 +210,7 @@ export const Dashboard = () => {
               }}
             />
           )}
+
           {activeTab === 'atendimento' && (
             <div className="dashboard-section">
               <div className="section-heading">
@@ -216,6 +220,7 @@ export const Dashboard = () => {
               {wsStatus === 'connected' ? <ChatArea /> : <WhatsAppConnect />}
             </div>
           )}
+
           {activeTab === 'fornecedores' && <Suppliers />}
           {activeTab === 'cotacoes' && <Quotes />}
           {activeTab === 'roadmap' && <Roadmap />}

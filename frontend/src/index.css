@@ -124,6 +124,25 @@ button {
   filter: saturate(1.05);
 }
 
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  z-index: 1000;
+  backdrop-filter: blur(3px);
+}
+
+.modal-content {
+  position: relative;
+  width: 100%;
+  max-height: calc(100vh - 2.5rem);
+  overflow-y: auto;
+}
+
 .error-message {
   color: #b42318;
   background: rgba(255, 77, 77, 0.1);
