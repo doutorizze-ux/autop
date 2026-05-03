@@ -9,6 +9,7 @@ import makeWASocket, {
     makeInMemoryStore,
     useMultiFileAuthState,
 } from '@whiskeysockets/baileys';
+import { downloadHistory } from '@whiskeysockets/baileys/lib/Utils/history';
 import { Boom } from '@hapi/boom';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
@@ -58,6 +59,11 @@ function normalizeWhatsappJid(jid: string) {
 
 function isRealWhatsappJid(jid: string) {
     return String(jid || '').endsWith('@s.whatsapp.net');
+}
+
+function isProbablyPhoneNumberJid(jid: string) {
+    const normalized = normalizeWhatsappJid(jid);
+    return isRealWhatsappJid(normalized) && normalizeWhatsappPhone(normalized).length >= 12;
 }
 
 function isLidWhatsappJid(jid: string) {
@@ -151,6 +157,33 @@ async function resolveRealJidFromIdentityMap(jid?: string) {
 
     await loadWhatsappIdentityCache();
     return whatsappIdentityCache.get(normalizedJid) || '';
+}
+
+async function applyIdentityMappingsToUnresolvedClients() {
+    const unresolvedClients = (await prisma.client.findMany({
+        orderBy: { updatedAt: 'desc' },
+    })).filter((client) => isUnresolvedPhone(client.phone));
+
+    let updated = 0;
+
+    for (const client of unresolvedClients) {
+        const realJid = await resolveRealJidFromIdentityMap(client.whatsappJid || client.phone);
+        if (!isRealWhatsappJid(realJid)) continue;
+
+        const realPhone = toDisplayPhone(realJid);
+        if (!realPhone) continue;
+
+        await prisma.client.update({
+            where: { id: client.id },
+            data: {
+                phone: realPhone,
+                whatsappJid: realJid,
+            },
+        });
+        updated += 1;
+    }
+
+    return { updated, inspected: unresolvedClients.length };
 }
 
 function findRealWhatsappJidDeep(value: unknown, visited = new Set<unknown>()): string {
@@ -527,6 +560,45 @@ async function upsertClientFromWhatsapp(params: {
     });
 }
 
+async function syncHistoryPhoneMappings(historySync: any) {
+    const mappings = Array.isArray(historySync?.phoneNumberToLidMappings)
+        ? historySync.phoneNumberToLidMappings
+        : [];
+
+    let remembered = 0;
+
+    for (const mapping of mappings) {
+        const lidJid = normalizeWhatsappJid(mapping?.lidJid || '');
+        const pnJid = normalizeWhatsappJid(mapping?.pnJid || '');
+        if (!isLidWhatsappJid(lidJid) || !isProbablyPhoneNumberJid(pnJid)) continue;
+
+        const saved = await rememberWhatsappIdentity(lidJid, pnJid);
+        if (saved) remembered += 1;
+    }
+
+    const chats = Array.isArray(historySync?.conversations) ? historySync.conversations : [];
+    for (const chat of chats) {
+        const lidJid = normalizeWhatsappJid(chat?.lidJid || '');
+        const realJid = normalizeWhatsappJid(chat?.id || '');
+        if (!isLidWhatsappJid(lidJid) || !isProbablyPhoneNumberJid(realJid)) continue;
+
+        const saved = await rememberWhatsappIdentity(lidJid, realJid);
+        if (saved) remembered += 1;
+    }
+
+    if (remembered > 0) {
+        const result = await applyIdentityMappingsToUnresolvedClients();
+        if (result.updated > 0) {
+            const refreshedClients = await prisma.client.findMany({
+                orderBy: { updatedAt: 'desc' },
+            });
+            refreshedClients
+                .filter((client) => !isUnresolvedPhone(client.phone))
+                .forEach((client) => io.emit('client_upserted', client));
+        }
+    }
+}
+
 class WhatsAppService {
     public sock: any = null;
     public qr: string | null = null;
@@ -636,10 +708,51 @@ class WhatsAppService {
                 await this.syncContacts(contacts);
             });
 
+            this.sock.ev.on('messaging-history.set', async (payload: any) => {
+                try {
+                    const chats = Array.isArray(payload?.chats) ? payload.chats : [];
+                    for (const chat of chats) {
+                        const lidJid = normalizeWhatsappJid(chat?.lidJid || '');
+                        const realJid = normalizeWhatsappJid(chat?.id || '');
+                        if (!isLidWhatsappJid(lidJid) || !isProbablyPhoneNumberJid(realJid)) continue;
+
+                        await rememberWhatsappIdentity(lidJid, realJid);
+
+                        const client = await upsertClientFromWhatsapp({
+                            jid: lidJid,
+                            realJid,
+                            name: chat?.name,
+                        });
+                        if (client) {
+                            io.emit('client_upserted', client);
+                        }
+                    }
+
+                    const contacts = Array.isArray(payload?.contacts) ? payload.contacts : [];
+                    if (contacts.length > 0) {
+                        await this.syncContacts(contacts);
+                    }
+
+                    await applyIdentityMappingsToUnresolvedClients();
+                } catch (error) {
+                    console.error('Erro ao processar historico do WhatsApp:', error);
+                }
+            });
+
             this.sock.ev.on('messages.upsert', async (m: any) => {
                 if (m.type !== 'notify') return;
 
                 for (const msg of m.messages) {
+                    const historySyncNotification = msg.message?.protocolMessage?.historySyncNotification;
+                    if (historySyncNotification) {
+                        try {
+                            const historySync = await downloadHistory(historySyncNotification, {});
+                            await syncHistoryPhoneMappings(historySync);
+                        } catch (error) {
+                            console.error('Erro ao processar mapeamentos do historico do WhatsApp:', error);
+                        }
+                    }
+
                     if (msg.key.fromMe) continue;
 
                     const sender = String(msg.key.remoteJid || '');
@@ -779,31 +892,7 @@ class WhatsAppService {
         }
 
         await this.syncKnownContacts();
-
-        const unresolvedClients = (await prisma.client.findMany({
-            orderBy: { updatedAt: 'desc' },
-        })).filter((client) => isUnresolvedPhone(client.phone));
-
-        let updated = 0;
-
-        for (const client of unresolvedClients) {
-            const realJid = await resolveRealJidFromIdentityMap(client.whatsappJid || client.phone);
-            if (!isRealWhatsappJid(realJid)) continue;
-
-            const realPhone = toDisplayPhone(realJid);
-            if (!realPhone) continue;
-
-            await prisma.client.update({
-                where: { id: client.id },
-                data: {
-                    phone: realPhone,
-                    whatsappJid: realJid,
-                },
-            });
-            updated += 1;
-        }
-
-        return { updated, inspected: unresolvedClients.length };
+        return applyIdentityMappingsToUnresolvedClients();
     }
 
     private closeSocket() {

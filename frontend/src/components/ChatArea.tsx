@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import { Paperclip, Search, Send, User, MoreVertical } from 'lucide-react';
+import { ArrowLeft, Paperclip, Search, Send, User, Users2 } from 'lucide-react';
 import { socket } from '../services/socket';
 
 interface Client {
@@ -26,61 +26,83 @@ interface Message {
 }
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const normalizeContactKey = (value: string) => value.replace(/@(s\.whatsapp\.net|lid)$/, '');
+
 const getClientMessageKeys = (client: Client) => {
   const keys = [client.id, client.whatsappJid, client.phone]
     .filter(Boolean)
-    .map(value => normalizeContactKey(String(value)));
+    .map((value) => normalizeContactKey(String(value)));
   return Array.from(new Set(keys));
 };
+
 const parseClientHistory = (client: Client): Message[] => {
   if (!client.history) return [];
 
   try {
     const parsed = JSON.parse(client.history);
     if (Array.isArray(parsed)) {
-      return parsed.filter((item): item is Message =>
-        item &&
-        typeof item.text === 'string' &&
-        typeof item.fromMe === 'boolean' &&
-        typeof item.timestamp === 'number' &&
-        !item.system &&
-        (!!item.text.trim() || !!item.media) &&
-        item.text !== '__PHONE_REQUEST_SENT__'
+      return parsed.filter(
+        (item): item is Message =>
+          item &&
+          typeof item.text === 'string' &&
+          typeof item.fromMe === 'boolean' &&
+          typeof item.timestamp === 'number' &&
+          !item.system &&
+          (!!item.text.trim() || !!item.media) &&
+          item.text !== '__PHONE_REQUEST_SENT__'
       );
     }
   } catch (_) {}
 
   return client.history ? [{ text: client.history, fromMe: false, timestamp: Math.floor(Date.now() / 1000) }] : [];
 };
+
 const mergeMessages = (current: Message[] = [], incoming: Message[] = []) => {
   const all = [...current, ...incoming];
   return all
-    .filter((message, index, list) =>
-      list.findIndex(item =>
-        item.timestamp === message.timestamp &&
-        item.fromMe === message.fromMe &&
-        item.text === message.text &&
-        (item.media?.url || '') === (message.media?.url || '')
-      ) === index
+    .filter(
+      (message, index, list) =>
+        list.findIndex(
+          (item) =>
+            item.timestamp === message.timestamp &&
+            item.fromMe === message.fromMe &&
+            item.text === message.text &&
+            (item.media?.url || '') === (message.media?.url || '')
+        ) === index
     )
     .sort((a, b) => a.timestamp - b.timestamp);
 };
+
 const isTechnicalLid = (value: string) => {
   const raw = String(value || '');
   const digits = raw.replace(/\D/g, '');
   return raw.endsWith('@lid') || (digits.length >= 14 && !digits.startsWith('55'));
 };
-const formatClientPhone = (client: Client) => {
-  const raw = String(client.phone || '');
-  if (isTechnicalLid(raw)) return 'Telefone aguardando sincronização';
 
-  const digits = raw.replace(/\D/g, '');
+const formatDigitsAsPhone = (value: string) => {
+  const digits = String(value || '').replace(/\D/g, '');
   if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
     return digits.slice(2);
   }
-  return raw;
+  return digits || String(value || '');
 };
+
+const getResolvedClientPhone = (client: Client) => {
+  const rawPhone = String(client.phone || '');
+  if (!isTechnicalLid(rawPhone)) {
+    return formatDigitsAsPhone(rawPhone);
+  }
+
+  const whatsappJid = String(client.whatsappJid || '');
+  if (whatsappJid.endsWith('@s.whatsapp.net')) {
+    return formatDigitsAsPhone(whatsappJid);
+  }
+
+  return '';
+};
+
+const formatClientPhone = (client: Client) => getResolvedClientPhone(client) || 'Telefone aguardando sincronização';
 
 const resolveMediaUrl = (url?: string) => {
   if (!url) return '';
@@ -108,8 +130,25 @@ export const ChatArea = () => {
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
   const [inputText, setInputText] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [isMobileLayout, setIsMobileLayout] = useState(() => window.innerWidth <= 768);
+  const [showClientListOnMobile, setShowClientListOnMobile] = useState(() => window.innerWidth <= 768);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const hasAttemptedPhoneSyncRef = useRef(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth <= 768;
+      setIsMobileLayout(mobile);
+      if (!mobile) {
+        setShowClientListOnMobile(true);
+      } else if (!selectedClient) {
+        setShowClientListOnMobile(true);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [selectedClient]);
 
   useEffect(() => {
     const fetchClients = async () => {
@@ -117,7 +156,8 @@ export const ChatArea = () => {
         const res = await axios.get(`${API_URL}/api/clients`);
         let currentClients = res.data as Client[];
         setClients(currentClients);
-        const hasUnresolvedClients = currentClients.some((client: Client) => formatClientPhone(client).includes('aguardando'));
+
+        const hasUnresolvedClients = currentClients.some((client) => formatClientPhone(client).includes('aguardando'));
         if (hasUnresolvedClients && !hasAttemptedPhoneSyncRef.current) {
           hasAttemptedPhoneSyncRef.current = true;
           try {
@@ -129,18 +169,23 @@ export const ChatArea = () => {
             console.error('Erro ao sincronizar telefones pendentes:', syncError);
           }
         }
-        setMessages(prev => {
+
+        setMessages((prev) => {
           const next = { ...prev };
-          currentClients.forEach((client: Client) => {
+          currentClients.forEach((client) => {
             next[client.id] = mergeMessages(next[client.id], parseClientHistory(client));
           });
           return next;
         });
+
         const selectedId = localStorage.getItem('selected_attendance_client_id');
         if (selectedId) {
-          const client = currentClients.find((item: Client) => item.id === selectedId);
+          const client = currentClients.find((item) => item.id === selectedId);
           if (client) {
             setSelectedClient(client);
+            if (window.innerWidth <= 768) {
+              setShowClientListOnMobile(false);
+            }
           }
           localStorage.removeItem('selected_attendance_client_id');
         }
@@ -149,25 +194,23 @@ export const ChatArea = () => {
       }
     };
 
-    fetchClients();
+    void fetchClients();
 
     socket.on('incoming_message', (data: any) => {
       const contactKey = normalizeContactKey(data.clientId || data.whatsappJid || data.from);
-      setMessages(prev => ({
+      setMessages((prev) => ({
         ...prev,
         [contactKey]: [
           ...(prev[contactKey] || []),
-          { text: data.text, fromMe: false, timestamp: data.timestamp, media: data.media || null }
-        ]
+          { text: data.text, fromMe: false, timestamp: data.timestamp, media: data.media || null },
+        ],
       }));
     });
 
     socket.on('client_upserted', (client: Client) => {
-      setClients(prev => {
-        const existingIndex = prev.findIndex(item =>
-          item.id === client.id ||
-          item.phone === client.phone ||
-          (!!item.whatsappJid && item.whatsappJid === client.whatsappJid)
+      setClients((prev) => {
+        const existingIndex = prev.findIndex(
+          (item) => item.id === client.id || item.phone === client.phone || (!!item.whatsappJid && item.whatsappJid === client.whatsappJid)
         );
         if (existingIndex >= 0) {
           const next = [...prev];
@@ -176,32 +219,34 @@ export const ChatArea = () => {
         }
         return [client, ...prev];
       });
-      setMessages(prev => ({
+
+      setMessages((prev) => ({
         ...prev,
-        [client.id]: mergeMessages(prev[client.id], parseClientHistory(client))
+        [client.id]: mergeMessages(prev[client.id], parseClientHistory(client)),
       }));
-      setSelectedClient(current => {
+
+      setSelectedClient((current) => {
         if (!current) return current;
         const currentKeys = getClientMessageKeys(current);
         const incomingKeys = getClientMessageKeys(client);
-        const sameClient = current.id === client.id || currentKeys.some(key => incomingKeys.includes(key));
+        const sameClient = current.id === client.id || currentKeys.some((key) => incomingKeys.includes(key));
         return sameClient ? client : current;
       });
     });
 
     socket.on('client_deleted', (payload: { id: string }) => {
-      setClients(prev => prev.filter(client => client.id !== payload.id));
-      setSelectedClient(current => current?.id === payload.id ? null : current);
+      setClients((prev) => prev.filter((client) => client.id !== payload.id));
+      setSelectedClient((current) => (current?.id === payload.id ? null : current));
     });
 
     socket.on('message_sent', (data: any) => {
       const contactKey = normalizeContactKey(data.clientId || data.to);
-      setMessages(prev => ({
+      setMessages((prev) => ({
         ...prev,
         [contactKey]: [
           ...(prev[contactKey] || []),
-          { text: data.text, fromMe: true, timestamp: data.timestamp, media: data.media || null }
-        ]
+          { text: data.text, fromMe: true, timestamp: data.timestamp, media: data.media || null },
+        ],
       }));
     });
 
@@ -227,7 +272,7 @@ export const ChatArea = () => {
     try {
       await axios.post(`${API_URL}/api/whatsapp/send`, {
         to: selectedClient.whatsappJid || selectedClient.phone,
-        text
+        text,
       });
     } catch (err: any) {
       alert(err.response?.data?.message || err.message || 'Erro ao enviar mensagem');
@@ -252,162 +297,196 @@ export const ChatArea = () => {
         phone: digits,
       });
       const updatedClient = response.data as Client;
-      setClients(prev => prev.map(client => client.id === updatedClient.id ? updatedClient : client));
+      setClients((prev) => prev.map((client) => (client.id === updatedClient.id ? updatedClient : client)));
       setSelectedClient(updatedClient);
     } catch (err: any) {
       alert(err.response?.data?.message || 'Erro ao corrigir telefone do lead');
     }
   };
 
-  const filteredClients = clients.filter(client => {
+  const handleSelectClient = (client: Client) => {
+    setSelectedClient(client);
+    if (isMobileLayout) {
+      setShowClientListOnMobile(false);
+    }
+  };
+
+  const filteredClients = clients.filter((client) => {
     const term = searchTerm.toLowerCase();
     return client.name.toLowerCase().includes(term) || formatClientPhone(client).includes(searchTerm);
   });
 
   const selectedMessages = selectedClient
     ? getClientMessageKeys(selectedClient)
-        .flatMap(key => messages[key] || [])
+        .flatMap((key) => messages[key] || [])
         .reduce((acc, message) => mergeMessages(acc, [message]), [] as Message[])
     : [];
 
+  const isSidebarVisible = !isMobileLayout || showClientListOnMobile;
+  const isChatVisible = !isMobileLayout || (!showClientListOnMobile && !!selectedClient);
+
   return (
-    <div className="chat-layout">
-      <aside className="chat-sidebar">
-        <div className="sidebar-search">
-          <Search size={16} className="search-icon" />
-          <input
-            type="text"
-            placeholder="Buscar contato..."
-            value={searchTerm}
-            onChange={event => setSearchTerm(event.target.value)}
-          />
-        </div>
+    <div className={`chat-layout ${isMobileLayout ? 'chat-layout-mobile' : ''}`}>
+      {isSidebarVisible && (
+        <aside className="chat-sidebar">
+          <div className="sidebar-search">
+            <Search size={16} className="search-icon" />
+            <input
+              type="text"
+              placeholder="Buscar contato..."
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </div>
 
-        <div className="conversations-list">
-          {filteredClients.map(client => (
-            <button
-              key={client.id}
-              type="button"
-              className={`conversation-item ${selectedClient?.id === client.id ? 'active' : ''}`}
-              onClick={() => setSelectedClient(client)}
-            >
-              <span className="avatar">
-                <User size={20} />
-              </span>
-              <span className="conv-info">
-                <span className="conv-header">
-                  <span className="conv-name">{client.name}</span>
-                  <span className="conv-time">{client.status}</span>
+          <div className="mobile-list-caption">
+            <span>{filteredClients.length} cliente(s)</span>
+            <small>Toque para abrir a conversa</small>
+          </div>
+
+          <div className="conversations-list">
+            {filteredClients.map((client) => (
+              <button
+                key={client.id}
+                type="button"
+                className={`conversation-item ${selectedClient?.id === client.id ? 'active' : ''}`}
+                onClick={() => handleSelectClient(client)}
+              >
+                <span className="avatar">
+                  <User size={20} />
                 </span>
-                <span className="conv-last-msg">{formatClientPhone(client)}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      </aside>
+                <span className="conv-info">
+                  <span className="conv-header">
+                    <span className="conv-name">{client.name}</span>
+                    <span className="conv-time">{client.status}</span>
+                  </span>
+                  <span className="conv-last-msg">{formatClientPhone(client)}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </aside>
+      )}
 
-      <section className="chat-main">
-        {selectedClient ? (
-          <>
-            <header className="chat-header">
+      {isChatVisible && selectedClient && (
+        <section className="chat-main">
+          <header className="chat-header">
+            <div className="chat-header-main">
+              {isMobileLayout && (
+                <button type="button" className="mobile-switch-btn" onClick={() => setShowClientListOnMobile(true)}>
+                  <ArrowLeft size={18} />
+                  <span>Clientes</span>
+                </button>
+              )}
+
               <div className="chat-user-info">
                 <span className="chat-user-name">{selectedClient.name}</span>
                 <span className="chat-user-status">WhatsApp: {formatClientPhone(selectedClient)}</span>
               </div>
-              <div className="chat-header-actions">
-                {isTechnicalLid(selectedClient.phone) && (
-                  <button type="button" className="fix-phone-btn" onClick={handleFixSelectedPhone}>
-                    Corrigir telefone
-                  </button>
-                )}
-                <button type="button" className="header-icon-btn" title="Opções">
-                  <MoreVertical size={20} />
-                </button>
-              </div>
-            </header>
-
-            <div className="messages-area">
-              {selectedMessages.map((message, index) => (
-                <div key={`${message.timestamp}-${index}`} className={`message-wrapper ${message.fromMe ? 'sent' : 'received'}`}>
-                  <div className="message-bubble">
-                    {message.media?.type === 'image' || message.media?.type === 'sticker' ? (
-                      <img
-                        className="message-image"
-                        src={resolveMediaUrl(message.media.url)}
-                        alt={message.media.fileName || 'Imagem recebida'}
-                      />
-                    ) : null}
-                    {message.media?.type === 'video' ? (
-                      <video className="message-video" controls src={resolveMediaUrl(message.media.url)} />
-                    ) : null}
-                    {message.media?.type === 'audio' ? (
-                      <audio className="message-audio" controls src={resolveMediaUrl(message.media.url)} />
-                    ) : null}
-                    {message.media?.type === 'document' ? (
-                      <a
-                        className="message-document"
-                        href={resolveMediaUrl(message.media.url)}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {message.media.fileName || 'Abrir documento'}
-                      </a>
-                    ) : null}
-                    {shouldShowMessageText(message) ? <p>{message.text}</p> : null}
-                    <span className="msg-time">
-                      {new Date(message.timestamp * 1000).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </span>
-                  </div>
-                </div>
-              ))}
-              <div ref={chatEndRef} />
             </div>
 
-            <form className="chat-input-area" onSubmit={handleSendMessage}>
-              <button type="button" className="icon-btn" title="Anexar">
-                <Paperclip size={20} />
-              </button>
-              <input
-                type="text"
-                placeholder="Digite uma mensagem..."
-                value={inputText}
-                onChange={event => setInputText(event.target.value)}
-              />
-              <button type="submit" className="send-btn" disabled={!inputText.trim()} title="Enviar">
-                <Send size={20} />
-              </button>
-            </form>
-          </>
-        ) : (
+            <div className="chat-header-actions">
+              {!getResolvedClientPhone(selectedClient) && (
+                <button type="button" className="fix-phone-btn" onClick={handleFixSelectedPhone}>
+                  Corrigir telefone
+                </button>
+              )}
+              {isMobileLayout && (
+                <button type="button" className="client-drawer-btn" onClick={() => setShowClientListOnMobile(true)}>
+                  <Users2 size={18} />
+                </button>
+              )}
+            </div>
+          </header>
+
+          <div className="messages-area">
+            {selectedMessages.map((message, index) => (
+              <div key={`${message.timestamp}-${index}`} className={`message-wrapper ${message.fromMe ? 'sent' : 'received'}`}>
+                <div className="message-bubble">
+                  {message.media?.type === 'image' || message.media?.type === 'sticker' ? (
+                    <img className="message-image" src={resolveMediaUrl(message.media.url)} alt={message.media.fileName || 'Imagem recebida'} />
+                  ) : null}
+                  {message.media?.type === 'video' ? <video className="message-video" controls src={resolveMediaUrl(message.media.url)} /> : null}
+                  {message.media?.type === 'audio' ? <audio className="message-audio" controls src={resolveMediaUrl(message.media.url)} /> : null}
+                  {message.media?.type === 'document' ? (
+                    <a className="message-document" href={resolveMediaUrl(message.media.url)} target="_blank" rel="noreferrer">
+                      {message.media.fileName || 'Abrir documento'}
+                    </a>
+                  ) : null}
+                  {shouldShowMessageText(message) ? <p>{message.text}</p> : null}
+                  <span className="msg-time">
+                    {new Date(message.timestamp * 1000).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+              </div>
+            ))}
+            <div ref={chatEndRef} />
+          </div>
+
+          <form className="chat-input-area" onSubmit={handleSendMessage}>
+            <button type="button" className="icon-btn" title="Anexar">
+              <Paperclip size={20} />
+            </button>
+            <input
+              type="text"
+              placeholder="Digite uma mensagem..."
+              value={inputText}
+              onChange={(event) => setInputText(event.target.value)}
+            />
+            <button type="submit" className="send-btn" disabled={!inputText.trim()} title="Enviar">
+              <Send size={20} />
+            </button>
+          </form>
+        </section>
+      )}
+
+      {!selectedClient && !isMobileLayout && (
+        <section className="chat-main">
           <div className="empty-chat">
             <User size={64} />
             <h3>Selecione um cliente para conversar</h3>
             <p>WhatsApp conectado e pronto para atendimento.</p>
           </div>
-        )}
-      </section>
+        </section>
+      )}
+
+      {!selectedClient && isMobileLayout && !showClientListOnMobile && (
+        <section className="chat-main">
+          <div className="empty-chat">
+            <User size={54} />
+            <h3>Escolha um cliente</h3>
+            <p>Abra a lista para continuar o atendimento.</p>
+            <button type="button" className="mobile-switch-btn mobile-switch-btn-solid" onClick={() => setShowClientListOnMobile(true)}>
+              <Users2 size={18} />
+              <span>Ver clientes</span>
+            </button>
+          </div>
+        </section>
+      )}
 
       <style>{`
         .chat-layout {
           display: flex;
-          height: calc(100dvh - 180px);
-          min-height: 460px;
-          background-color: var(--panel-bg);
+          height: calc(100dvh - 240px);
+          min-height: 560px;
+          background: var(--panel-bg);
           border: 1px solid var(--border-color);
-          border-radius: 12px;
+          border-radius: 24px;
           overflow: hidden;
+          box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
         }
 
         .chat-sidebar {
-          width: 350px;
-          min-width: 280px;
+          width: 360px;
+          min-width: 300px;
           display: flex;
           flex-direction: column;
           min-height: 0;
-          background: var(--sidebar-bg);
+          background:
+            linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(241, 245, 249, 0.96));
           border-right: 1px solid var(--border-color);
         }
 
@@ -428,13 +507,29 @@ export const ChatArea = () => {
 
         .sidebar-search input {
           width: 100%;
-          min-height: 42px;
-          padding: 0.65rem 0.75rem 0.65rem 2.5rem;
+          min-height: 44px;
+          padding: 0.72rem 0.85rem 0.72rem 2.7rem;
           color: var(--text-main);
-          background: var(--bg-color);
+          background: #fff;
           border: 1px solid var(--border-color);
-          border-radius: 8px;
+          border-radius: 14px;
           outline: none;
+        }
+
+        .mobile-list-caption {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 0.8rem 1rem;
+          color: var(--text-muted);
+          font-size: 0.8rem;
+          border-bottom: 1px solid rgba(215, 222, 231, 0.7);
+        }
+
+        .mobile-list-caption span {
+          font-weight: 700;
+          color: var(--text-main);
         }
 
         .conversations-list {
@@ -452,31 +547,31 @@ export const ChatArea = () => {
           color: var(--text-main);
           background: transparent;
           border: 0;
-          border-bottom: 1px solid var(--border-color);
+          border-bottom: 1px solid rgba(215, 222, 231, 0.7);
           cursor: pointer;
           text-align: left;
-          transition: background 0.2s;
+          transition: background 0.2s ease, transform 0.2s ease;
         }
 
         .conversation-item:hover,
         .conversation-item.active {
-          background: var(--sidebar-hover);
+          background: rgba(0, 86, 179, 0.05);
         }
 
         .conversation-item.active {
-          border-left: 3px solid var(--primary-color);
+          box-shadow: inset 3px 0 0 var(--primary-color);
         }
 
         .avatar {
-          width: 48px;
-          height: 48px;
-          flex: 0 0 48px;
+          width: 46px;
+          height: 46px;
+          flex: 0 0 46px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          color: var(--text-muted);
-          background: var(--bg-color);
-          border-radius: 50%;
+          color: var(--primary-color);
+          background: rgba(0, 86, 179, 0.08);
+          border-radius: 16px;
         }
 
         .conv-info {
@@ -488,7 +583,7 @@ export const ChatArea = () => {
           display: flex;
           justify-content: space-between;
           gap: 0.75rem;
-          margin-bottom: 4px;
+          margin-bottom: 0.25rem;
         }
 
         .conv-name,
@@ -500,7 +595,7 @@ export const ChatArea = () => {
         }
 
         .conv-name {
-          font-weight: 600;
+          font-weight: 700;
         }
 
         .conv-time,
@@ -523,10 +618,17 @@ export const ChatArea = () => {
           align-items: center;
           justify-content: space-between;
           gap: 1rem;
-          padding: 0.85rem 1.5rem;
-          background: var(--bg-color);
+          padding: 1rem 1.4rem;
+          background: rgba(255, 255, 255, 0.95);
           border-bottom: 1px solid var(--border-color);
           flex-shrink: 0;
+        }
+
+        .chat-header-main {
+          display: flex;
+          align-items: center;
+          gap: 0.9rem;
+          min-width: 0;
         }
 
         .chat-user-info {
@@ -542,49 +644,65 @@ export const ChatArea = () => {
         }
 
         .chat-user-name {
-          font-weight: 700;
+          font-weight: 800;
         }
 
         .chat-user-status {
           color: var(--text-muted);
-          font-size: 0.78rem;
+          font-size: 0.8rem;
         }
 
         .chat-header-actions {
           display: flex;
           align-items: center;
-          gap: 0.5rem;
+          gap: 0.55rem;
         }
 
-        .fix-phone-btn {
-          min-height: 36px;
-          padding: 0 0.8rem;
+        .fix-phone-btn,
+        .mobile-switch-btn,
+        .client-drawer-btn {
+          min-height: 38px;
+          padding: 0 0.9rem;
           border: 1px solid var(--border-color);
-          border-radius: 6px;
+          border-radius: 12px;
           color: var(--text-main);
           background: #fff;
           cursor: pointer;
-          font-weight: 600;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.45rem;
         }
 
-        .header-icon-btn,
+        .mobile-switch-btn-solid {
+          background: var(--primary-color);
+          color: #fff;
+          border-color: var(--primary-color);
+          margin-top: 1rem;
+        }
+
+        .client-drawer-btn {
+          width: 40px;
+          padding: 0;
+        }
+
         .icon-btn,
         .send-btn {
-          width: 44px;
-          height: 44px;
-          flex: 0 0 44px;
+          width: 46px;
+          height: 46px;
+          flex: 0 0 46px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
           border: 0;
-          border-radius: 50%;
+          border-radius: 16px;
           cursor: pointer;
         }
 
-        .header-icon-btn,
         .icon-btn {
           color: var(--text-muted);
-          background: transparent;
+          background: #eef4fb;
         }
 
         .messages-area {
@@ -592,11 +710,12 @@ export const ChatArea = () => {
           min-height: 0;
           display: flex;
           flex-direction: column;
-          gap: 0.5rem;
-          padding: 2rem;
+          gap: 0.6rem;
+          padding: 1.5rem;
           overflow-y: auto;
-          background-color: #f5f7f9;
-          background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
+          background:
+            linear-gradient(rgba(248, 250, 252, 0.92), rgba(248, 250, 252, 0.92)),
+            url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
         }
 
         .message-wrapper {
@@ -613,27 +732,28 @@ export const ChatArea = () => {
         }
 
         .message-bubble {
-          max-width: 65%;
-          padding: 0.65rem 1rem;
-          border-radius: 8px;
-          box-shadow: 0 1px 1px rgba(0, 0, 0, 0.14);
+          max-width: 68%;
+          padding: 0.75rem 1rem;
+          border-radius: 18px;
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
         }
 
         .sent .message-bubble {
           color: #fff;
-          background: var(--primary-color);
-          border-top-right-radius: 2px;
+          background: linear-gradient(135deg, var(--primary-color), #0c7ff2);
+          border-top-right-radius: 4px;
         }
 
         .received .message-bubble {
-          color: #333;
-          background: #e9edef;
-          border-top-left-radius: 2px;
+          color: #243041;
+          background: #ffffff;
+          border-top-left-radius: 4px;
         }
 
         .message-bubble p {
           word-break: break-word;
           white-space: pre-wrap;
+          line-height: 1.45;
         }
 
         .message-image,
@@ -642,7 +762,7 @@ export const ChatArea = () => {
           max-width: min(320px, 100%);
           max-height: 360px;
           object-fit: contain;
-          border-radius: 6px;
+          border-radius: 10px;
           background: rgba(0, 0, 0, 0.08);
         }
 
@@ -657,30 +777,30 @@ export const ChatArea = () => {
           max-width: 100%;
           padding: 0.55rem 0.7rem;
           color: inherit;
-          background: rgba(255, 255, 255, 0.28);
-          border-radius: 6px;
+          background: rgba(255, 255, 255, 0.24);
+          border-radius: 10px;
           text-decoration: underline;
           word-break: break-word;
         }
 
         .msg-time {
           float: right;
-          margin-top: 4px;
+          margin-top: 6px;
           margin-left: 8px;
           color: rgba(0, 0, 0, 0.45);
           font-size: 0.68rem;
         }
 
         .sent .msg-time {
-          color: rgba(255, 255, 255, 0.76);
+          color: rgba(255, 255, 255, 0.78);
         }
 
         .chat-input-area {
           display: flex;
           align-items: center;
           gap: 0.75rem;
-          padding: 1rem;
-          background: var(--bg-color);
+          padding: 1rem 1.2rem 1.2rem;
+          background: rgba(255, 255, 255, 0.95);
           border-top: 1px solid var(--border-color);
           flex-shrink: 0;
         }
@@ -688,8 +808,8 @@ export const ChatArea = () => {
         .chat-input-area input {
           flex: 1;
           min-width: 0;
-          min-height: 44px;
-          padding: 0.75rem 1rem;
+          min-height: 46px;
+          padding: 0.8rem 1rem;
           color: var(--text-main);
           background: #fff;
           border: 1px solid var(--border-color);
@@ -699,7 +819,7 @@ export const ChatArea = () => {
 
         .send-btn {
           color: #fff;
-          background: var(--primary-color);
+          background: linear-gradient(135deg, var(--primary-color), #0c7ff2);
         }
 
         .send-btn:disabled {
@@ -713,7 +833,7 @@ export const ChatArea = () => {
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          padding: 1rem;
+          padding: 1.5rem;
           color: var(--text-muted);
           text-align: center;
         }
@@ -725,47 +845,28 @@ export const ChatArea = () => {
 
         @media (max-width: 768px) {
           .chat-layout {
-            height: calc(100dvh - 168px);
-            min-height: 0;
-            flex-direction: column;
-            border-radius: 8px;
+            height: calc(100dvh - 242px);
+            min-height: 520px;
+            border-radius: 20px;
           }
 
-          .chat-sidebar {
+          .chat-sidebar,
+          .chat-main {
             width: 100%;
             min-width: 0;
-            height: 34%;
-            min-height: 150px;
-            max-height: 230px;
-            border-right: none;
-            border-bottom: 1px solid var(--border-color);
           }
 
-          .sidebar-search {
-            padding: 0.75rem;
-          }
-
-          .search-icon {
-            left: 1.4rem;
-          }
-
-          .conversation-item {
-            padding: 0.75rem;
-            gap: 0.75rem;
-          }
-
-          .avatar {
-            width: 40px;
-            height: 40px;
-            flex-basis: 40px;
-          }
-
-          .chat-main {
-            flex: 1;
+          .mobile-list-caption {
+            display: flex;
           }
 
           .chat-header {
-            padding: 0.75rem 1rem;
+            padding: 0.9rem 1rem;
+          }
+
+          .chat-header-main {
+            flex: 1;
+            min-width: 0;
           }
 
           .messages-area {
@@ -773,46 +874,43 @@ export const ChatArea = () => {
           }
 
           .message-bubble {
-            max-width: 86%;
-            padding: 0.55rem 0.8rem;
+            max-width: 88%;
+            padding: 0.65rem 0.85rem;
           }
 
           .chat-input-area {
-            position: sticky;
-            bottom: 0;
-            gap: 0.5rem;
-            padding: 0.75rem;
+            gap: 0.55rem;
+            padding: 0.8rem;
           }
 
-          .header-icon-btn,
           .icon-btn,
           .send-btn {
-            width: 40px;
-            height: 40px;
-            flex-basis: 40px;
+            width: 42px;
+            height: 42px;
+            flex-basis: 42px;
           }
 
           .chat-input-area input {
-            min-height: 40px;
+            min-height: 42px;
           }
         }
 
         @media (max-width: 480px) {
           .chat-layout {
-            height: calc(100dvh - 152px);
+            height: calc(100dvh - 224px);
+            min-height: 500px;
           }
 
-          .chat-sidebar {
-            height: 31%;
-            min-height: 132px;
+          .conversation-item {
+            padding: 0.85rem 0.9rem;
           }
 
           .conv-time {
             display: none;
           }
 
-          .empty-chat h3 {
-            font-size: 1rem;
+          .fix-phone-btn {
+            display: none;
           }
         }
       `}</style>

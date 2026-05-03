@@ -1,7 +1,16 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { Users, MessageSquare, Briefcase, Settings, LogOut, Search } from 'lucide-react';
+import {
+  Users,
+  MessageSquare,
+  Briefcase,
+  Settings,
+  LogOut,
+  Search,
+  ChevronRight,
+  Sparkles,
+} from 'lucide-react';
 import { Clients } from '../components/Clients';
 import { WhatsAppConnect } from '../components/WhatsAppConnect';
 import { ChatArea } from '../components/ChatArea';
@@ -10,7 +19,13 @@ import { Settings as SettingsComponent } from '../components/Settings';
 import { Quotes } from '../components/Quotes';
 import { socket } from '../services/socket';
 
-
+const navItems = [
+  { id: 'clientes', label: 'Clientes', icon: Users, caption: 'CRM e funil' },
+  { id: 'atendimento', label: 'WhatsApp', icon: MessageSquare, caption: 'Conversas em tempo real' },
+  { id: 'cotacoes', label: 'Orçamento Geral', icon: Search, caption: 'Códigos e confrontos' },
+  { id: 'fornecedores', label: 'Fornecedores', icon: Briefcase, caption: 'Integrações e logins', adminOnly: true },
+  { id: 'config', label: 'Configurações', icon: Settings, caption: 'Preferências do sistema' },
+];
 
 export const Dashboard = () => {
   const { user, logout } = useAuth();
@@ -21,12 +36,12 @@ export const Dashboard = () => {
   useEffect(() => {
     const applyTheme = (themeColor?: string, logo?: string) => {
       const color = themeColor || localStorage.getItem('theme_color') || '#0056b3';
-      const themeLogo = logo ?? localStorage.getItem('theme_logo') ?? '';
+      const savedLogo = logo ?? localStorage.getItem('theme_logo') ?? '';
       document.documentElement.style.setProperty('--primary-color', color);
-      setThemeLogo(themeLogo);
+      setThemeLogo(savedLogo);
       localStorage.setItem('theme_color', color);
-      if (themeLogo) {
-        localStorage.setItem('theme_logo', themeLogo);
+      if (savedLogo) {
+        localStorage.setItem('theme_logo', savedLogo);
       } else {
         localStorage.removeItem('theme_logo');
       }
@@ -36,7 +51,7 @@ export const Dashboard = () => {
       try {
         const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/config`);
         applyTheme(response.data.themeColor, response.data.themeLogo || '');
-      } catch (error) {
+      } catch {
         applyTheme();
       }
     };
@@ -61,84 +76,87 @@ export const Dashboard = () => {
     socket.on('whatsapp_status', (data: any) => {
       setWsStatus(data.status);
     });
-    
-    // Buscar status inicial
+
     fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/whatsapp/status`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     })
-    .then(r => r.json())
-    .then(data => {
-        console.log('WhatsApp Initial Status:', data.status);
+      .then((r) => r.json())
+      .then((data) => {
         setWsStatus(data.status);
-    });
+      });
 
     return () => {
       socket.off('whatsapp_status');
     };
   }, []);
 
+  const visibleNavItems = navItems.filter((item) => !item.adminOnly || user?.role === 'ADMIN');
+  const activeItem = visibleNavItems.find((item) => item.id === activeTab) || visibleNavItems[0];
+
   return (
     <div className="layout-container">
       <aside className="sidebar">
-        <div className="sidebar-header">
-          {themeLogo ? (
-            <img src={themeLogo} alt="Logo" className="logo-image" />
-          ) : (
-            <h2>Auto<span>CRM</span></h2>
-          )}
+        <div className="sidebar-shell">
+          <div className="sidebar-header">
+            <div className="brand-mark">
+              {themeLogo ? (
+                <img src={themeLogo} alt="Logo" className="logo-image" />
+              ) : (
+                <div className="brand-fallback">
+                  <span className="brand-kicker">Autopeças</span>
+                  <h2>AutoCRM</h2>
+                </div>
+              )}
+            </div>
+            <div className="sidebar-summary">
+              <span className="sidebar-chip">
+                <Sparkles size={14} /> Operação ativa
+              </span>
+              <p>Fluxo centralizado de atendimento, cotações e fornecedores.</p>
+            </div>
+          </div>
+
+          <nav className="sidebar-nav">
+            {visibleNavItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveTab(item.id)}
+                  className={`nav-item ${isActive ? 'active' : ''}`}
+                >
+                  <span className="nav-icon-wrap">
+                    <Icon size={18} />
+                  </span>
+                  <span className="nav-copy">
+                    <strong>{item.label}</strong>
+                    <small>{item.caption}</small>
+                  </span>
+                  <ChevronRight size={16} className="nav-chevron" />
+                </button>
+              );
+            })}
+          </nav>
         </div>
-        <nav className="sidebar-nav">
-          <button 
-            onClick={() => setActiveTab('clientes')} 
-            className={`nav-item ${activeTab === 'clientes' ? 'active' : ''}`}
-            style={{ background: 'none', border: 'none', width: '100%', cursor: 'pointer', textAlign: 'left' }}
-          >
-            <Users size={20} />
-            <span>Clientes</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('atendimento')} 
-            className={`nav-item ${activeTab === 'atendimento' ? 'active' : ''}`}
-            style={{ background: 'none', border: 'none', width: '100%', cursor: 'pointer', textAlign: 'left' }}
-          >
-            <MessageSquare size={20} />
-            <span>Atendimento (WhatsApp)</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('cotacoes')} 
-            className={`nav-item ${activeTab === 'cotacoes' ? 'active' : ''}`}
-            style={{ background: 'none', border: 'none', width: '100%', cursor: 'pointer', textAlign: 'left' }}
-          >
-            <Search size={20} />
-            <span>Orçamento Geral</span>
-          </button>
-          {user?.role === 'ADMIN' && (
-            <button 
-              onClick={() => setActiveTab('fornecedores')} 
-              className={`nav-item ${activeTab === 'fornecedores' ? 'active' : ''}`}
-              style={{ background: 'none', border: 'none', width: '100%', cursor: 'pointer', textAlign: 'left' }}
-            >
-              <Briefcase size={20} />
-              <span>Fornecedores</span>
-            </button>
-          )}
-          <button 
-            onClick={() => setActiveTab('config')} 
-            className={`nav-item ${activeTab === 'config' ? 'active' : ''}`}
-            style={{ background: 'none', border: 'none', width: '100%', cursor: 'pointer', textAlign: 'left' }}
-          >
-            <Settings size={20} />
-            <span>Configurações</span>
-          </button>
-        </nav>
       </aside>
 
       <main className="main-content">
         <header className="topbar">
+          <div className="topbar-context">
+            <span className="topbar-label">Painel operacional</span>
+            <h1>{activeItem?.label || 'Dashboard'}</h1>
+          </div>
+
           <div className="user-profile">
-            <span>Olá, {user?.name} ({user?.role})</span>
+            <div className="user-badge">
+              <span className="user-badge-label">Sessão atual</span>
+              <span className="user-badge-name">{user?.name} ({user?.role})</span>
+            </div>
             <button className="logout-btn" onClick={logout} title="Sair">
-              <LogOut size={20} />
+              <LogOut size={18} />
             </button>
           </div>
         </header>
@@ -153,21 +171,17 @@ export const Dashboard = () => {
             />
           )}
           {activeTab === 'atendimento' && (
-            <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <h1 className="page-title">Atendimento WhatsApp</h1>
+            <div className="dashboard-section">
+              <div className="section-heading">
+                <h2 className="page-title">Atendimento WhatsApp</h2>
+                <p>Converse, troque de cliente no celular com mais facilidade e mantenha o time rápido no balcão.</p>
+              </div>
               {wsStatus === 'connected' ? <ChatArea /> : <WhatsAppConnect />}
             </div>
           )}
-          {activeTab === 'fornecedores' && (
-            <Suppliers />
-          )}
-          {activeTab === 'cotacoes' && (
-            <Quotes />
-          )}
-          {activeTab === 'config' && (
-            <SettingsComponent />
-          )}
-
+          {activeTab === 'fornecedores' && <Suppliers />}
+          {activeTab === 'cotacoes' && <Quotes />}
+          {activeTab === 'config' && <SettingsComponent />}
         </section>
       </main>
     </div>

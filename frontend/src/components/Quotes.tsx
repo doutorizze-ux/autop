@@ -12,7 +12,9 @@ import {
     History,
     FolderOpen,
     Clock3,
+    Sparkles,
 } from 'lucide-react';
+import { searchPartsCatalog, type CatalogPart } from '../data/partsCatalog';
 
 type QuoteItemInput = {
     query: string;
@@ -80,6 +82,7 @@ export const Quotes = () => {
     const [partList, setPartList] = useState<QuoteItemInput[]>([]);
     const [newPart, setNewPart] = useState('');
     const [newDescription, setNewDescription] = useState('');
+    const [catalogTouched, setCatalogTouched] = useState(false);
     const [quoteMatrix, setQuoteMatrix] = useState<QuoteMatrix>({});
     const [suppliers, setSuppliers] = useState<string[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -229,6 +232,7 @@ export const Quotes = () => {
 
         setNewPart('');
         setNewDescription('');
+        setCatalogTouched(false);
     };
 
     const handleRemovePart = (index: number) => {
@@ -411,6 +415,44 @@ export const Quotes = () => {
         return resultMap;
     }, [partList, quoteMatrix]);
 
+    const catalogSearchTerm = useMemo(() => `${newPart} ${newDescription}`.trim(), [newPart, newDescription]);
+
+    const catalogSuggestions = useMemo(() => searchPartsCatalog(catalogSearchTerm), [catalogSearchTerm]);
+
+    const exactCatalogMatch = useMemo(() => {
+        if (!catalogSearchTerm.trim()) return null;
+        return catalogSuggestions.find((part) => {
+            const normalizedTerm = catalogSearchTerm.trim().toLowerCase();
+            return (
+                part.name.toLowerCase() === normalizedTerm ||
+                part.code.toLowerCase() === normalizedTerm ||
+                (part.aliases || []).some((alias) => alias.toLowerCase() === normalizedTerm)
+            );
+        }) || null;
+    }, [catalogSearchTerm, catalogSuggestions]);
+
+    const applyCatalogPart = (part: CatalogPart, autoAdd = false) => {
+        setNewPart(part.code);
+        setNewDescription(`${part.name} • ${part.application}`);
+        setCatalogTouched(false);
+
+        if (autoAdd) {
+            const labelDescription = `${part.name} • ${part.application}`;
+            const alreadyExists = partList.some((item) => item.query.toLowerCase() === part.code.toLowerCase());
+            if (!alreadyExists) {
+                setPartList((current) => [
+                    ...current,
+                    {
+                        query: part.code,
+                        description: labelDescription,
+                    },
+                ]);
+            }
+            setNewPart('');
+            setNewDescription('');
+        }
+    };
+
     return (
         <div className="quotes-container">
             <div className="quotes-header">
@@ -423,6 +465,21 @@ export const Quotes = () => {
             </div>
 
             <div className="search-box">
+                <div className="catalog-hero">
+                    <div>
+                        <span className="catalog-kicker">
+                            <Sparkles size={14} /> Localizador inteligente
+                        </span>
+                        <h3>Digite o nome completo da peça e deixe o sistema sugerir o código certo.</h3>
+                        <p>Use por nome, código ou aplicação para montar a cotação mais rápido e com menos erro manual.</p>
+                    </div>
+                    {exactCatalogMatch && (
+                        <button type="button" className="catalog-match-btn" onClick={() => applyCatalogPart(exactCatalogMatch)}>
+                            Aplicar código {exactCatalogMatch.code}
+                        </button>
+                    )}
+                </div>
+
                 <form onSubmit={handleAddPart} className="add-part-form">
                     <div className="input-group input-group-main">
                         <label htmlFor="quote-query">Código ou nome da peça</label>
@@ -433,7 +490,10 @@ export const Quotes = () => {
                                 type="text"
                                 placeholder="Digite o código ou nome da peça"
                                 value={newPart}
-                                onChange={(event) => setNewPart(event.target.value)}
+                                onChange={(event) => {
+                                    setNewPart(event.target.value);
+                                    setCatalogTouched(true);
+                                }}
                                 className="part-input"
                             />
                         </div>
@@ -446,7 +506,10 @@ export const Quotes = () => {
                             type="text"
                             placeholder="Ex: Pastilha dianteira Hilux 2022"
                             value={newDescription}
-                            onChange={(event) => setNewDescription(event.target.value)}
+                            onChange={(event) => {
+                                setNewDescription(event.target.value);
+                                setCatalogTouched(true);
+                            }}
                             className="part-input secondary-input"
                         />
                     </div>
@@ -455,6 +518,32 @@ export const Quotes = () => {
                         <Plus size={18} /> Adicionar
                     </button>
                 </form>
+
+                {catalogTouched && catalogSuggestions.length > 0 && (
+                    <div className="catalog-suggestions">
+                        <div className="catalog-suggestions-header">
+                            <strong>Sugestões do catálogo</strong>
+                            <span>Selecione uma opção para trocar o nome pelo código correto.</span>
+                        </div>
+
+                        <div className="catalog-suggestions-list">
+                            {catalogSuggestions.map((part) => (
+                                <button
+                                    key={`${part.code}-${part.application}`}
+                                    type="button"
+                                    className="catalog-suggestion-card"
+                                    onClick={() => applyCatalogPart(part)}
+                                >
+                                    <div className="catalog-suggestion-top">
+                                        <strong>{part.code}</strong>
+                                        <span>{part.name}</span>
+                                    </div>
+                                    <small>{part.application}</small>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {partList.length > 0 && (
                     <div className="part-list">
@@ -696,6 +785,49 @@ export const Quotes = () => {
                     border-radius: 12px;
                 }
                 .search-box { padding: 1.5rem; }
+                .catalog-hero {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    gap: 1rem;
+                    padding: 1.1rem 1.2rem;
+                    margin-bottom: 1.25rem;
+                    border-radius: 16px;
+                    background:
+                        linear-gradient(135deg, rgba(0, 86, 179, 0.08), rgba(14, 165, 233, 0.08)),
+                        var(--bg-color);
+                    border: 1px solid rgba(0, 86, 179, 0.1);
+                }
+                .catalog-kicker {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.45rem;
+                    font-size: 0.78rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.12em;
+                    color: var(--primary-color);
+                    font-weight: 800;
+                    margin-bottom: 0.55rem;
+                }
+                .catalog-hero h3 {
+                    font-size: 1.05rem;
+                    margin-bottom: 0.35rem;
+                }
+                .catalog-hero p {
+                    color: var(--text-muted);
+                    max-width: 820px;
+                    line-height: 1.5;
+                }
+                .catalog-match-btn {
+                    border: none;
+                    border-radius: 12px;
+                    padding: 0.85rem 1rem;
+                    background: linear-gradient(135deg, var(--primary-color), #0c7ff2);
+                    color: #fff;
+                    font-weight: 700;
+                    cursor: pointer;
+                    white-space: nowrap;
+                }
                 .add-part-form {
                     display: grid;
                     grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
@@ -720,6 +852,66 @@ export const Quotes = () => {
                 }
                 .input-with-icon .part-input { padding-left: 3rem; }
                 .part-input:focus { border-color: var(--primary-color); }
+                .catalog-suggestions {
+                    margin-top: 1rem;
+                    margin-bottom: 0.4rem;
+                    border: 1px solid var(--border-color);
+                    border-radius: 16px;
+                    background: var(--bg-color);
+                    overflow: hidden;
+                }
+                .catalog-suggestions-header {
+                    display: flex;
+                    justify-content: space-between;
+                    gap: 1rem;
+                    padding: 0.95rem 1rem;
+                    border-bottom: 1px solid var(--border-color);
+                    color: var(--text-muted);
+                    font-size: 0.86rem;
+                    flex-wrap: wrap;
+                }
+                .catalog-suggestions-header strong {
+                    color: var(--text-main);
+                    font-size: 0.92rem;
+                }
+                .catalog-suggestions-list {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                    gap: 0.8rem;
+                    padding: 1rem;
+                }
+                .catalog-suggestion-card {
+                    text-align: left;
+                    background: #fff;
+                    border: 1px solid var(--border-color);
+                    border-radius: 14px;
+                    padding: 0.9rem;
+                    cursor: pointer;
+                    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+                }
+                .catalog-suggestion-card:hover {
+                    transform: translateY(-2px);
+                    border-color: rgba(0, 86, 179, 0.22);
+                    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+                }
+                .catalog-suggestion-top {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.22rem;
+                    margin-bottom: 0.45rem;
+                }
+                .catalog-suggestion-top strong {
+                    color: var(--primary-color);
+                    font-size: 0.92rem;
+                }
+                .catalog-suggestion-top span {
+                    font-weight: 700;
+                    color: var(--text-main);
+                }
+                .catalog-suggestion-card small {
+                    color: var(--text-muted);
+                    line-height: 1.45;
+                }
                 .add-btn {
                     background: var(--text-main);
                     color: var(--panel-bg);
@@ -1011,6 +1203,7 @@ export const Quotes = () => {
 
                 @media (max-width: 980px) {
                     .quotes-header,
+                    .catalog-hero,
                     .results-header,
                     .history-panel-header,
                     .history-card {
