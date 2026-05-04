@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     ports:
-      - "3521:5000"
+      - "${BACKEND_PORT:-3521}:5000"
     volumes:
       - ./backend/sessions:/app/backend/sessions
       - ./backend/data:/app/backend/data
@@ -17,7 +17,7 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "3520:80"
+      - "${FRONTEND_PORT:-3520}:80"
     depends_on:
       - backend
     restart: unless-stopped
