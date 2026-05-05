@@ -14,6 +14,13 @@ const headless = String(process.env.HEADLESS || 'false').trim() === 'true';
 
 const sessionRoot = path.resolve(__dirname, 'browser-profiles');
 const assistSessions = new Map();
+const knownBrowserExecutables = [
+    process.env.LOCAL_AGENT_BROWSER_PATH,
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+].filter(Boolean);
 
 if (!backendUrl) {
     throw new Error('Defina LOCAL_AGENT_BACKEND_URL antes de iniciar o agente local.');
@@ -40,6 +47,15 @@ function supplierSlug(value) {
 
 function getSupplierProfilePath(supplierName) {
     return path.join(sessionRoot, supplierSlug(supplierName));
+}
+
+function resolveBrowserExecutable() {
+    for (const candidate of knownBrowserExecutables) {
+        if (candidate && fs.existsSync(candidate)) {
+            return candidate;
+        }
+    }
+    return null;
 }
 
 async function postJson(url, body) {
@@ -133,14 +149,23 @@ async function getOrCreateAssistSession(supplier) {
         ],
     };
 
+    const executablePath = resolveBrowserExecutable();
     let context;
     try {
-        context = await chromium.launchPersistentContext(profilePath, {
-            ...browserOptions,
-            channel: 'chrome',
-        });
+        if (executablePath) {
+            console.log(`[Local Agent] Abrindo navegador local: ${executablePath}`);
+            context = await chromium.launchPersistentContext(profilePath, {
+                ...browserOptions,
+                executablePath,
+            });
+        } else {
+            context = await chromium.launchPersistentContext(profilePath, {
+                ...browserOptions,
+                channel: 'chrome',
+            });
+        }
     } catch (error) {
-        console.error(`[Local Agent] Chrome real indisponivel, usando Chromium: ${error instanceof Error ? error.message : error}`);
+        console.error(`[Local Agent] Navegador local preferido indisponivel, usando Chromium: ${error instanceof Error ? error.message : error}`);
         context = await chromium.launchPersistentContext(profilePath, browserOptions);
     }
 
