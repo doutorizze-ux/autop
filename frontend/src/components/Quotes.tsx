@@ -79,6 +79,37 @@ const normalizeVariantKey = (value?: string) =>
         .replace(/[^a-z0-9]+/g, ' ')
         .trim();
 
+const normalizeCodeValue = (value?: string) =>
+    String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .trim();
+
+const parsePriceValue = (value?: string | number) => {
+    if (value === undefined || value === null || value === '') return Number.POSITIVE_INFINITY;
+    if (typeof value === 'number') return value;
+
+    const normalized = String(value)
+        .replace(/\s/g, '')
+        .replace(/\./g, '')
+        .replace(',', '.')
+        .replace(/[^\d.-]/g, '');
+
+    const parsed = Number.parseFloat(normalized);
+    return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
+};
+
+const getMatchType = (result: QuoteResult, normalizedQueryCode: string, hasExactMatch: boolean) => {
+    const normalizedResultCode = normalizeCodeValue(result.code);
+    if (normalizedResultCode && normalizedResultCode === normalizedQueryCode) {
+        return 'exact' as const;
+    }
+    if (!normalizedResultCode) {
+        return hasExactMatch ? ('missing-code' as const) : ('similar' as const);
+    }
+    return 'similar' as const;
+};
+
 const downloadBlob = (blob: BlobPart, filename: string) => {
     const url = window.URL.createObjectURL(new Blob([blob]));
     const link = document.createElement('a');
@@ -518,12 +549,15 @@ export const Quotes = () => {
         const map = new Map<string, QuoteResult | null>();
 
         partList.forEach((item) => {
-            const candidates = (filteredResultsByQuery[item.query] || [])
+            const normalizedQueryCode = normalizeCodeValue(item.query);
+            const source = filteredResultsByQuery[item.query] || [];
+            const exactCandidates = source.filter((entry) => normalizeCodeValue(entry.code) === normalizedQueryCode);
+            const candidates = (exactCandidates.length > 0 ? exactCandidates : source)
                 .filter((entry) => !entry.error && entry.price !== undefined && entry.price !== null && entry.price !== '');
 
             const sorted = [...candidates].sort((a, b) => {
-                const priceA = parseFloat(String(a.price).replace(',', '.'));
-                const priceB = parseFloat(String(b.price).replace(',', '.'));
+                const priceA = parsePriceValue(a.price);
+                const priceB = parsePriceValue(b.price);
                 return priceA - priceB;
             });
 
@@ -674,7 +708,7 @@ export const Quotes = () => {
                                 className={`results-tab ${activeResultView === 'summary' ? 'active' : ''}`}
                                 onClick={() => setActiveResultView('summary')}
                             >
-                                Menor valor
+                                Resumo geral
                             </button>
                             {suppliers.map((supplier) => (
                                 <button
@@ -693,9 +727,36 @@ export const Quotes = () => {
                             const variants = variantOptionsByQuery[item.query] || [];
                             const currentResults = filteredResultsByQuery[item.query] || [];
                             const bestResult = bestResultByQuery.get(item.query);
+                            const normalizedQueryCode = normalizeCodeValue(item.query);
+                            const hasExactMatch = currentResults.some((entry) => normalizeCodeValue(entry.code) === normalizedQueryCode);
                             const selectedSupplierResults = activeResultView === 'summary'
-                                ? (bestResult ? [bestResult] : [])
+                                ? [...currentResults]
                                 : currentResults.filter((entry) => entry.provider === activeResultView);
+                            const sortedSelectedSupplierResults = [...selectedSupplierResults].sort((a, b) => {
+                                if (a.error && !b.error) return 1;
+                                if (!a.error && b.error) return -1;
+
+                                const matchRank = { exact: 0, similar: 1, 'missing-code': 2 } as const;
+                                const aMatch = getMatchType(a, normalizedQueryCode, hasExactMatch);
+                                const bMatch = getMatchType(b, normalizedQueryCode, hasExactMatch);
+                                if (matchRank[aMatch] !== matchRank[bMatch]) {
+                                    return matchRank[aMatch] - matchRank[bMatch];
+                                }
+
+                                const priceA = parsePriceValue(a.price);
+                                const priceB = parsePriceValue(b.price);
+                                if (priceA !== priceB) {
+                                    return priceA - priceB;
+                                }
+
+                                const providerCompare = String(a.provider).localeCompare(String(b.provider), 'pt-BR');
+                                if (providerCompare !== 0) return providerCompare;
+
+                                const brandCompare = String(a.brand || '').localeCompare(String(b.brand || ''), 'pt-BR');
+                                if (brandCompare !== 0) return brandCompare;
+
+                                return String(a.code || '').localeCompare(String(b.code || ''), 'pt-BR');
+                            });
 
                             return (
                                 <div key={item.query} className="quote-item-card">
@@ -703,12 +764,17 @@ export const Quotes = () => {
                                         <div className="part-cell-main">{item.query}</div>
                                         {bestResult && (
                                             <div className="best-offer-badge">
-                                                Melhor oferta atual: {bestResult.provider} • R$ {bestResult.price}
+                                                {hasExactMatch ? 'Melhor oferta exata atual' : 'Melhor similar atual'}: {bestResult.provider} • R$ {bestResult.price}
                                             </div>
                                         )}
                                     </div>
 
                                     {item.description && <div className="part-cell-description">{item.description}</div>}
+                                    <div className="quote-item-helper">
+                                        {hasExactMatch
+                                            ? 'Mostrando primeiro as ofertas reais do código exato pesquisado.'
+                                            : 'Código exato não apareceu. Abaixo estão os similares reais retornados pelos fornecedores.'}
+                                    </div>
 
                                     {variants.length > 1 && (
                                         <div className="variant-selector">
@@ -754,14 +820,21 @@ export const Quotes = () => {
                                     )}
 
                                     <div className="supplier-results-grid">
-                                        {selectedSupplierResults.length > 0 ? (
-                                            selectedSupplierResults.map((supplierResult, index) => {
+                                        {sortedSelectedSupplierResults.length > 0 ? (
+                                            sortedSelectedSupplierResults.map((supplierResult, index) => {
                                                 const isBestOffer =
                                                     !!bestResult &&
                                                     !supplierResult.error &&
                                                     supplierResult.provider === bestResult.provider &&
                                                     supplierResult.price === bestResult.price &&
                                                     supplierResult.code === bestResult.code;
+                                                const matchType = getMatchType(supplierResult, normalizedQueryCode, hasExactMatch);
+                                                const matchLabel =
+                                                    matchType === 'exact'
+                                                        ? 'Código exato'
+                                                        : matchType === 'similar'
+                                                            ? 'Similar real'
+                                                            : 'Código não informado';
 
                                                 return (
                                                     <div
@@ -775,7 +848,12 @@ export const Quotes = () => {
 
                                                         {isBestOffer && (
                                                             <div className="supplier-card-badge">
-                                                                Menor valor
+                                                                Menor valor real
+                                                            </div>
+                                                        )}
+                                                        {!supplierResult.error && (
+                                                            <div className={`supplier-card-match ${matchType}`}>
+                                                                {matchLabel}
                                                             </div>
                                                         )}
 
@@ -793,9 +871,13 @@ export const Quotes = () => {
                                                                         </div>
                                                                     </>
                                                                 )}
-                                                                {supplierResult.code && (
+                                                                {supplierResult.code ? (
                                                                     <div className="supplier-result-meta">
                                                                         Código: {supplierResult.code}
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="supplier-result-meta">
+                                                                        Código: não informado pelo fornecedor
                                                                     </div>
                                                                 )}
                                                                 {supplierResult.brand && (
@@ -1153,6 +1235,11 @@ export const Quotes = () => {
                     gap: 1rem;
                     flex-wrap: wrap;
                 }
+                .quote-item-helper {
+                    color: var(--text-muted);
+                    font-size: 0.85rem;
+                    line-height: 1.4;
+                }
                 .best-offer-badge {
                     background: rgba(16, 185, 129, 0.12);
                     color: #047857;
@@ -1204,6 +1291,32 @@ export const Quotes = () => {
                     font-weight: 800;
                     text-transform: uppercase;
                     letter-spacing: 0.04em;
+                }
+                .supplier-card-match {
+                    display: inline-flex;
+                    align-items: center;
+                    margin-bottom: 0.7rem;
+                    border-radius: 999px;
+                    padding: 0.35rem 0.7rem;
+                    font-size: 0.76rem;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    letter-spacing: 0.04em;
+                }
+                .supplier-card-match.exact {
+                    background: rgba(37, 99, 235, 0.12);
+                    color: #1d4ed8;
+                    border: 1px solid rgba(37, 99, 235, 0.16);
+                }
+                .supplier-card-match.similar {
+                    background: rgba(245, 158, 11, 0.12);
+                    color: #b45309;
+                    border: 1px solid rgba(245, 158, 11, 0.18);
+                }
+                .supplier-card-match.missing-code {
+                    background: rgba(107, 114, 128, 0.12);
+                    color: #4b5563;
+                    border: 1px solid rgba(107, 114, 128, 0.16);
                 }
                 .supplier-view-error {
                     color: #dc2626;
