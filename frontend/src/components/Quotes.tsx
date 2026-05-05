@@ -683,19 +683,22 @@ export const Quotes = () => {
                                                                                 [item.query]: variant.key,
                                                                             }))
                                                                         }
-                                                                    >
-                                                                        <div className="variant-option-title">
-                                                                            {variant.product}
-                                                                        </div>
+	                                                                    >
+	                                                                        <div className="variant-option-label">
+	                                                                            Veículo / Aplicação
+	                                                                        </div>
+	                                                                        <div className="variant-option-title">
+	                                                                            {variant.product}
+	                                                                        </div>
                                                                         <div className="variant-option-meta">
                                                                             {variant.code ? `Código: ${variant.code}` : 'Código não informado'}
                                                                             {variant.brand ? ` | Fabricante: ${variant.brand}` : ''}
                                                                         </div>
-                                                                        {variant.application && (
-                                                                            <div className="variant-option-meta">
-                                                                                Aplicação: {variant.application}
-                                                                            </div>
-                                                                        )}
+	                                                                        {variant.application && (
+	                                                                            <div className="variant-option-meta">
+	                                                                                Obs técnica: {variant.application}
+	                                                                            </div>
+	                                                                        )}
                                                                         <div className="variant-option-meta">
                                                                             {variant.count} oferta(s) encontrada(s)
                                                                         </div>
@@ -726,12 +729,17 @@ export const Quotes = () => {
                                                                     {result.error}
                                                                 </span>
                                                             ) : (
-                                                                <div className="supplier-result-card">
-                                                                    {result.product && (
-                                                                        <div className="supplier-result-title">
-                                                                            {result.product}
-                                                                        </div>
-                                                                    )}
+	                                                                <div className="supplier-result-card">
+	                                                                    {result.product && (
+	                                                                        <>
+	                                                                            <div className="supplier-result-label">
+	                                                                                Veículo / Aplicação
+	                                                                            </div>
+	                                                                            <div className="supplier-result-title">
+	                                                                                {result.product}
+	                                                                            </div>
+	                                                                        </>
+	                                                                    )}
                                                                     {result.code && (
                                                                         <div className="supplier-result-meta">
                                                                             Codigo: {result.code}
@@ -742,11 +750,11 @@ export const Quotes = () => {
                                                                             Fabricante: {result.brand}
                                                                         </div>
                                                                     )}
-                                                                    {result.application && (
-                                                                        <div className="supplier-result-meta">
-                                                                            Aplicacao: {result.application}
-                                                                        </div>
-                                                                    )}
+	                                                                    {result.application && (
+	                                                                        <div className="supplier-result-meta">
+	                                                                            Obs técnica: {result.application}
+	                                                                        </div>
+	                                                                    )}
                                                                     {result.stock !== undefined && (
                                                                         <div className="supplier-result-meta">
                                                                             Estoque: {result.stockText || result.stock}
@@ -1181,6 +1189,14 @@ export const Quotes = () => {
                     line-height: 1.35;
                     margin-bottom: 0.25rem;
                 }
+                .variant-option-label {
+                    color: var(--text-muted);
+                    font-size: 0.72rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 0.04em;
+                    margin-bottom: 0.2rem;
+                }
                 .variant-option-meta {
                     font-size: 0.78rem;
                     color: var(--text-muted);
@@ -1194,6 +1210,13 @@ export const Quotes = () => {
                 }
                 .price-tag { display: flex; align-items: center; gap: 0.8rem; color: var(--text-main); }
                 .supplier-result-card { display: flex; flex-direction: column; gap: 0.35rem; }
+                .supplier-result-label {
+                    color: var(--text-muted);
+                    font-size: 0.72rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 0.04em;
+                }
                 .supplier-result-title {
                     color: var(--text-main);
                     font-size: 0.92rem;
