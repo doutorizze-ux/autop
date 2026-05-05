@@ -108,6 +108,7 @@ export const Quotes = () => {
     const [quoteJobStatus, setQuoteJobStatus] = useState('');
     const [quoteJobError, setQuoteJobError] = useState('');
     const [selectedVariantByQuery, setSelectedVariantByQuery] = useState<Record<string, string>>({});
+    const [activeResultView, setActiveResultView] = useState<'summary' | string>('summary');
 
     const loadHistory = async () => {
         setIsHistoryLoading(true);
@@ -499,25 +500,45 @@ export const Quotes = () => {
         });
     }, [partList, variantOptionsByQuery]);
 
-    const bestPriceByQuery = useMemo(() => {
-        const resultMap = new Map<string, number>();
+    const filteredResultsByQuery = useMemo(() => {
+        const map: Record<string, QuoteResult[]> = {};
 
         partList.forEach((item) => {
-            const values = (quoteMatrix[item.query] || [])
-                .filter((entry) => {
-                    const selectedKey = selectedVariantByQuery[item.query];
-                    if (!selectedKey) return true;
-                    return normalizeVariantKey(entry.variantKey || `${entry.product || ''} ${entry.application || ''}`) === selectedKey;
-                })
-                .filter((entry) => !entry.error && entry.price !== undefined && entry.price !== null && entry.price !== '')
-                .map((entry) => parseFloat(String(entry.price).replace(',', '.')))
-                .filter((value) => !Number.isNaN(value));
-
-            resultMap.set(item.query, values.length > 0 ? Math.min(...values) : Infinity);
+            const selectedKey = selectedVariantByQuery[item.query];
+            map[item.query] = (quoteMatrix[item.query] || []).filter((entry) => {
+                if (!selectedKey) return true;
+                return normalizeVariantKey(entry.variantKey || `${entry.product || ''} ${entry.application || ''}`) === selectedKey;
+            });
         });
 
-        return resultMap;
+        return map;
     }, [partList, quoteMatrix, selectedVariantByQuery]);
+
+    const bestResultByQuery = useMemo(() => {
+        const map = new Map<string, QuoteResult | null>();
+
+        partList.forEach((item) => {
+            const candidates = (filteredResultsByQuery[item.query] || [])
+                .filter((entry) => !entry.error && entry.price !== undefined && entry.price !== null && entry.price !== '');
+
+            const sorted = [...candidates].sort((a, b) => {
+                const priceA = parseFloat(String(a.price).replace(',', '.'));
+                const priceB = parseFloat(String(b.price).replace(',', '.'));
+                return priceA - priceB;
+            });
+
+            map.set(item.query, sorted[0] || null);
+        });
+
+        return map;
+    }, [partList, filteredResultsByQuery]);
+
+    useEffect(() => {
+        if (activeResultView === 'summary') return;
+        if (!suppliers.includes(activeResultView)) {
+            setActiveResultView('summary');
+        }
+    }, [activeResultView, suppliers]);
     return (
         <div className="quotes-container">
             <div className="quotes-header">
@@ -627,7 +648,7 @@ export const Quotes = () => {
                 <div className="results-panel">
                     <div className="results-header">
                         <div>
-                            <h3>Quadro de Comparação de Preços</h3>
+                            <h3>Resultados por Fornecedor</h3>
                             {currentQuoteId && (
                                 <p className="results-caption">
                                     Cotação salva em {formatDateTime(currentCreatedAt)}
@@ -645,148 +666,160 @@ export const Quotes = () => {
                         </div>
                     </div>
 
-                    <div className="table-responsive">
-                        <table className="matrix-table">
-                            <thead>
-                                <tr>
-                                    <th>Peça / Produto</th>
-                                    {suppliers.map((supplier) => (
-                                        <th key={supplier}>{supplier}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {partList.map((item) => {
-                                    const minPrice = bestPriceByQuery.get(item.query) ?? Infinity;
-                                    const selectedVariantKey = selectedVariantByQuery[item.query];
-                                    const variants = variantOptionsByQuery[item.query] || [];
+                    <div className="results-tabs">
+                        <button
+                            type="button"
+                            className={`results-tab ${activeResultView === 'summary' ? 'active' : ''}`}
+                            onClick={() => setActiveResultView('summary')}
+                        >
+                            Menor valor
+                        </button>
+                        {suppliers.map((supplier) => (
+                            <button
+                                key={supplier}
+                                type="button"
+                                className={`results-tab ${activeResultView === supplier ? 'active' : ''}`}
+                                onClick={() => setActiveResultView(supplier)}
+                            >
+                                {supplier}
+                            </button>
+                        ))}
+                    </div>
 
-                                    return (
-                                        <tr key={item.query}>
-                                            <td className="part-name-cell">
-                                                <div className="part-cell-main">{item.query}</div>
-                                                {item.description && <div className="part-cell-description">{item.description}</div>}
-                                                {variants.length > 1 && (
-                                                    <div className="variant-selector">
-                                                        <label>{variants.length} peças encontradas no código. Escolha a correta:</label>
-                                                        <div className="variant-options-list">
-                                                            {variants.map((variant) => {
-                                                                const isSelected = (selectedVariantKey || variants[0]?.key || '') === variant.key;
-                                                                return (
-                                                                    <button
-                                                                        key={variant.key}
-                                                                        type="button"
-                                                                        className={`variant-option-card ${isSelected ? 'selected' : ''}`}
-                                                                        onClick={() =>
-                                                                            setSelectedVariantByQuery((current) => ({
-                                                                                ...current,
-                                                                                [item.query]: variant.key,
-                                                                            }))
-                                                                        }
-	                                                                    >
-	                                                                        <div className="variant-option-label">
-	                                                                            Veículo / Aplicação
-	                                                                        </div>
-	                                                                        <div className="variant-option-title">
-	                                                                            {variant.product}
-	                                                                        </div>
-                                                                        <div className="variant-option-meta">
-                                                                            {variant.code ? `Código: ${variant.code}` : 'Código não informado'}
-                                                                            {variant.brand ? ` | Fabricante: ${variant.brand}` : ''}
-                                                                        </div>
-	                                                                        {variant.application && (
-	                                                                            <div className="variant-option-meta">
-	                                                                                Obs técnica: {variant.application}
-	                                                                            </div>
-	                                                                        )}
-                                                                        <div className="variant-option-meta">
-                                                                            {variant.count} oferta(s) encontrada(s)
-                                                                        </div>
-                                                                    </button>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </td>
+                    <div className="results-list">
+                        {partList.map((item) => {
+                            const selectedVariantKey = selectedVariantByQuery[item.query];
+                            const variants = variantOptionsByQuery[item.query] || [];
+                            const currentResults = filteredResultsByQuery[item.query] || [];
+                            const bestResult = bestResultByQuery.get(item.query);
+                            const supplierResult = activeResultView === 'summary'
+                                ? bestResult
+                                : currentResults.find((entry) => entry.provider === activeResultView) || null;
 
-                                            {suppliers.map((supplier) => {
-                                                const result = quoteMatrix[item.query]?.find((entry) => {
-                                                    if (entry.provider !== supplier) return false;
-                                                    if (!selectedVariantKey) return true;
-                                                    return normalizeVariantKey(entry.variantKey || `${entry.product || ''} ${entry.application || ''}`) === selectedVariantKey;
-                                                });
-                                                const parsedPrice = result && !result.error && result.price !== undefined
-                                                    ? parseFloat(String(result.price).replace(',', '.'))
-                                                    : Infinity;
-                                                const isBestPrice = parsedPrice === minPrice && minPrice !== Infinity;
+                            return (
+                                <div key={item.query} className="quote-item-card">
+                                    <div className="quote-item-header">
+                                        <div className="part-cell-main">{item.query}</div>
+                                        {bestResult && (
+                                            <div className="best-offer-badge">
+                                                Melhor oferta atual: {bestResult.provider} • R$ {bestResult.price}
+                                            </div>
+                                        )}
+                                    </div>
 
-                                                return (
-                                                    <td key={supplier} className={isBestPrice ? 'best-price' : ''}>
-                                                        {result ? (
-                                                            result.error ? (
-                                                                <span className="error-text" title={result.error}>
-                                                                    {result.error}
-                                                                </span>
-                                                            ) : (
-	                                                                <div className="supplier-result-card">
-	                                                                    {result.product && (
-	                                                                        <>
-	                                                                            <div className="supplier-result-label">
-	                                                                                Veículo / Aplicação
-	                                                                            </div>
-	                                                                            <div className="supplier-result-title">
-	                                                                                {result.product}
-	                                                                            </div>
-	                                                                        </>
-	                                                                    )}
-                                                                    {result.code && (
-                                                                        <div className="supplier-result-meta">
-                                                                            Codigo: {result.code}
-                                                                        </div>
-                                                                    )}
-                                                                    {result.brand && (
-                                                                        <div className="supplier-result-meta">
-                                                                            Fabricante: {result.brand}
-                                                                        </div>
-                                                                    )}
-	                                                                    {result.application && (
-	                                                                        <div className="supplier-result-meta">
-	                                                                            Obs técnica: {result.application}
-	                                                                        </div>
-	                                                                    )}
-                                                                    {result.stock !== undefined && (
-                                                                        <div className="supplier-result-meta">
-                                                                            Estoque: {result.stockText || result.stock}
-                                                                        </div>
-                                                                    )}
-                                                                    <div className="price-tag">
-                                                                        <span>R$ {result.price}</span>
-                                                                        {result.link && (
-                                                                            <a
-                                                                                href={result.link}
-                                                                                target="_blank"
-                                                                                rel="noreferrer"
-                                                                                title="Ver produto no site"
-                                                                                className="visit-link"
-                                                                            >
-                                                                                🔗
-                                                                            </a>
-                                                                        )}
-                                                                    </div>
+                                    {item.description && <div className="part-cell-description">{item.description}</div>}
+
+                                    {variants.length > 1 && (
+                                        <div className="variant-selector">
+                                            <label>{variants.length} peças encontradas no código. Escolha a correta:</label>
+                                            <div className="variant-options-list">
+                                                {variants.map((variant) => {
+                                                    const isSelected = (selectedVariantKey || variants[0]?.key || '') === variant.key;
+                                                    return (
+                                                        <button
+                                                            key={variant.key}
+                                                            type="button"
+                                                            className={`variant-option-card ${isSelected ? 'selected' : ''}`}
+                                                            onClick={() =>
+                                                                setSelectedVariantByQuery((current) => ({
+                                                                    ...current,
+                                                                    [item.query]: variant.key,
+                                                                }))
+                                                            }
+                                                        >
+                                                            <div className="variant-option-label">
+                                                                Veículo / Aplicação
+                                                            </div>
+                                                            <div className="variant-option-title">
+                                                                {variant.product}
+                                                            </div>
+                                                            <div className="variant-option-meta">
+                                                                {variant.code ? `Código: ${variant.code}` : 'Código não informado'}
+                                                                {variant.brand ? ` | Fabricante: ${variant.brand}` : ''}
+                                                            </div>
+                                                            {variant.application && (
+                                                                <div className="variant-option-meta">
+                                                                    Obs técnica: {variant.application}
                                                                 </div>
-                                                            )
-                                                        ) : (
-                                                            <span className="not-found">---</span>
+                                                            )}
+                                                            <div className="variant-option-meta">
+                                                                {variant.count} oferta(s) encontrada(s)
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="supplier-view-card">
+                                        <div className="supplier-view-header">
+                                            <strong>{activeResultView === 'summary' ? (supplierResult?.provider || 'Menor valor') : activeResultView}</strong>
+                                            {supplierResult && !supplierResult.error && <span>R$ {supplierResult.price}</span>}
+                                        </div>
+
+                                        {supplierResult ? (
+                                            supplierResult.error ? (
+                                                <div className="supplier-view-error">{supplierResult.error}</div>
+                                            ) : (
+                                                <div className="supplier-result-card">
+                                                    {supplierResult.product && (
+                                                        <>
+                                                            <div className="supplier-result-label">
+                                                                Veículo / Aplicação
+                                                            </div>
+                                                            <div className="supplier-result-title">
+                                                                {supplierResult.product}
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                    {supplierResult.code && (
+                                                        <div className="supplier-result-meta">
+                                                            Código: {supplierResult.code}
+                                                        </div>
+                                                    )}
+                                                    {supplierResult.brand && (
+                                                        <div className="supplier-result-meta">
+                                                            Fabricante: {supplierResult.brand}
+                                                        </div>
+                                                    )}
+                                                    {supplierResult.application && (
+                                                        <div className="supplier-result-meta">
+                                                            Obs técnica: {supplierResult.application}
+                                                        </div>
+                                                    )}
+                                                    {supplierResult.stock !== undefined && (
+                                                        <div className="supplier-result-meta">
+                                                            Estoque: {supplierResult.stockText || supplierResult.stock}
+                                                        </div>
+                                                    )}
+                                                    <div className="price-tag">
+                                                        <span>R$ {supplierResult.price}</span>
+                                                        {supplierResult.link && (
+                                                            <a
+                                                                href={supplierResult.link}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                title="Ver produto no site"
+                                                                className="visit-link"
+                                                            >
+                                                                🔗
+                                                            </a>
                                                         )}
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                                                    </div>
+                                                </div>
+                                            )
+                                        ) : (
+                                            <span className="not-found">
+                                                {activeResultView === 'summary'
+                                                    ? 'Nenhuma oferta válida encontrada para a peça selecionada.'
+                                                    : 'Este fornecedor não retornou essa peça selecionada.'}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             )}
@@ -1055,6 +1088,86 @@ export const Quotes = () => {
                     color: var(--text-muted);
                     font-size: 0.9rem;
                 }
+                .results-tabs {
+                    display: flex;
+                    gap: 0.75rem;
+                    flex-wrap: wrap;
+                    padding: 1rem 1.5rem 0;
+                    background: var(--panel-bg);
+                }
+                .results-tab {
+                    border: 1px solid var(--border-color);
+                    background: var(--bg-color);
+                    color: var(--text-main);
+                    border-radius: 999px;
+                    padding: 0.6rem 1rem;
+                    font-weight: 700;
+                    cursor: pointer;
+                    transition: all 0.18s ease;
+                }
+                .results-tab.active {
+                    background: var(--primary-color);
+                    color: white;
+                    border-color: var(--primary-color);
+                }
+                .results-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1rem;
+                    padding: 1.25rem 1.5rem 1.5rem;
+                }
+                .quote-item-card {
+                    border: 1px solid var(--border-color);
+                    border-radius: 12px;
+                    padding: 1rem;
+                    background: var(--bg-color);
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.9rem;
+                }
+                .quote-item-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 1rem;
+                    flex-wrap: wrap;
+                }
+                .best-offer-badge {
+                    background: rgba(16, 185, 129, 0.12);
+                    color: #047857;
+                    border: 1px solid rgba(16, 185, 129, 0.18);
+                    border-radius: 999px;
+                    padding: 0.45rem 0.75rem;
+                    font-size: 0.82rem;
+                    font-weight: 700;
+                }
+                .supplier-view-card {
+                    border: 1px solid var(--border-color);
+                    border-radius: 10px;
+                    background: var(--panel-bg);
+                    padding: 1rem;
+                }
+                .supplier-view-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 0.75rem;
+                    flex-wrap: wrap;
+                    margin-bottom: 0.75rem;
+                    color: var(--text-main);
+                }
+                .supplier-view-header strong {
+                    font-size: 0.95rem;
+                }
+                .supplier-view-error {
+                    color: #dc2626;
+                    background: rgba(239, 68, 68, 0.06);
+                    border: 1px solid rgba(239, 68, 68, 0.14);
+                    border-radius: 8px;
+                    padding: 0.85rem 0.95rem;
+                    font-size: 0.88rem;
+                    line-height: 1.45;
+                }
                 .history-header-actions {
                     display: flex;
                     gap: 0.75rem;
@@ -1092,42 +1205,6 @@ export const Quotes = () => {
                 }
                 .history-card-actions .delete-history-button:hover {
                     background: rgba(220, 38, 38, 0.08);
-                }
-                .table-responsive { 
-                    overflow-x: auto; 
-                    -webkit-overflow-scrolling: touch; 
-                    width: 100%;
-                    padding-bottom: 0.5rem;
-                }
-                .table-responsive::-webkit-scrollbar {
-                    height: 8px;
-                }
-                .table-responsive::-webkit-scrollbar-track {
-                    background: var(--bg-color);
-                    border-radius: 4px;
-                }
-                .table-responsive::-webkit-scrollbar-thumb {
-                    background: var(--border-color);
-                    border-radius: 4px;
-                }
-                .table-responsive::-webkit-scrollbar-thumb:hover {
-                    background: var(--text-muted);
-                }
-                .matrix-table { width: 100%; border-collapse: collapse; text-align: left; }
-                .matrix-table th {
-                    padding: 1rem 1.5rem;
-                    color: var(--text-muted);
-                    font-size: 0.9rem;
-                    font-weight: 600;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                    border-bottom: 2px solid var(--border-color);
-                    white-space: nowrap;
-                }
-                .matrix-table td {
-                    padding: 1.2rem 1.5rem;
-                    border-bottom: 1px solid var(--border-color);
-                    vertical-align: middle;
                 }
                 .part-name-cell { min-width: 240px; }
                 .part-cell-main {
@@ -1201,12 +1278,6 @@ export const Quotes = () => {
                     font-size: 0.78rem;
                     color: var(--text-muted);
                     line-height: 1.35;
-                }
-                .best-price {
-                    background: rgba(16, 185, 129, 0.05);
-                    border-left: 3px solid #10b981 !important;
-                    color: #10b981;
-                    font-weight: bold;
                 }
                 .price-tag { display: flex; align-items: center; gap: 0.8rem; color: var(--text-main); }
                 .supplier-result-card { display: flex; flex-direction: column; gap: 0.35rem; }
@@ -1329,6 +1400,13 @@ export const Quotes = () => {
                     }
                     .add-part-form { grid-template-columns: 1fr; }
                     .add-btn { width: 100%; justify-content: center; }
+                    .results-list { padding: 1rem; }
+                    .results-tabs { padding: 1rem 1rem 0; }
+                    .quote-item-header,
+                    .supplier-view-header {
+                        flex-direction: column;
+                        align-items: flex-start;
+                    }
                     .history-header-actions,
                     .export-actions, .history-card-actions { width: 100%; }
                     .history-card {
