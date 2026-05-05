@@ -14,18 +14,21 @@ type QuoteItem = {
 };
 
 type QuoteMatrix = Record<string, any[]>;
+type SelectedOffersMatrix = Record<string, Record<string, any | null>>;
 
 type StoredQuotePayload = {
     version: number;
     items: QuoteItem[];
     suppliers: string[];
     matrix: QuoteMatrix;
+    selectedOffers?: SelectedOffersMatrix;
 };
 
 type ParsedStoredQuote = {
     items: QuoteItem[];
     suppliers: string[];
     matrix: QuoteMatrix;
+    selectedOffers?: SelectedOffersMatrix;
 };
 
 type QuotePdfSection = {
@@ -34,6 +37,7 @@ type QuotePdfSection = {
     items: QuoteItem[];
     suppliers: string[];
     matrix: QuoteMatrix;
+    selectedOffers: SelectedOffersMatrix;
 };
 
 type QuoteJobStatus = 'running' | 'completed' | 'failed' | 'cancelled';
@@ -144,6 +148,66 @@ function extractSuppliersFromMatrix(matrix: QuoteMatrix) {
     ) as string[];
 }
 
+function pickBestResultForExport(results: any[], query: string) {
+    const normalizeCode = (value: unknown) =>
+        String(value || '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '')
+            .trim();
+
+    const parsePrice = (value: unknown) => {
+        if (value === undefined || value === null || value === '') return Number.POSITIVE_INFINITY;
+        if (typeof value === 'number') return value;
+
+        const normalized = String(value)
+            .replace(/\s/g, '')
+            .replace(/\./g, '')
+            .replace(',', '.')
+            .replace(/[^\d.-]/g, '');
+
+        const parsed = Number.parseFloat(normalized);
+        return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
+    };
+
+    const normalizedQuery = normalizeCode(query);
+    const validResults = results.filter((entry) => entry && !entry.error);
+    const hasExact = validResults.some((entry) => normalizeCode(entry.code) === normalizedQuery);
+
+    return [...validResults].sort((a, b) => {
+        const aExact = normalizeCode(a.code) === normalizedQuery;
+        const bExact = normalizeCode(b.code) === normalizedQuery;
+        if (aExact !== bExact) return aExact ? -1 : 1;
+        if (hasExact && aExact !== bExact) return aExact ? -1 : 1;
+        return parsePrice(a.price) - parsePrice(b.price);
+    })[0] || null;
+}
+
+function buildSelectedOffersMatrix(
+    matrix: QuoteMatrix,
+    suppliers: string[],
+    queries: string[],
+    rawSelectedOffers?: any
+): SelectedOffersMatrix {
+    const selectedOffers: SelectedOffersMatrix = {};
+
+    queries.forEach((query) => {
+        selectedOffers[query] = {};
+
+        suppliers.forEach((supplier) => {
+            const explicitSelection = rawSelectedOffers?.[query]?.[supplier];
+            if (explicitSelection && !explicitSelection.error) {
+                selectedOffers[query][supplier] = explicitSelection;
+                return;
+            }
+
+            const supplierResults = (matrix[query] || []).filter((entry) => entry?.provider === supplier);
+            selectedOffers[query][supplier] = pickBestResultForExport(supplierResults, query);
+        });
+    });
+
+    return selectedOffers;
+}
+
 function normalizeExportData(body: any) {
     const matrix = (body?.matrix || {}) as QuoteMatrix;
     const items = normalizeQuoteItems(body);
@@ -161,7 +225,14 @@ function normalizeExportData(body: any) {
             ? body.suppliers
             : extractSuppliersFromMatrix(matrix);
 
-    return { items: normalizedItems, suppliers, matrix };
+    const selectedOffers = buildSelectedOffersMatrix(
+        matrix,
+        suppliers,
+        normalizedItems.map((item: QuoteItem) => item.query),
+        body?.selectedOffers
+    );
+
+    return { items: normalizedItems, suppliers, matrix, selectedOffers };
 }
 
 function parseStoredQuote(quote: { product: string; results: string; createdAt: Date }): ParsedStoredQuote {
@@ -184,6 +255,7 @@ function parseStoredQuote(quote: { product: string; results: string; createdAt: 
                 items,
                 suppliers: Array.isArray(parsed.suppliers) ? parsed.suppliers : extractSuppliersFromMatrix(parsed.matrix),
                 matrix: parsed.matrix as QuoteMatrix,
+                selectedOffers: parsed.selectedOffers as SelectedOffersMatrix | undefined,
             };
         }
 
@@ -212,13 +284,13 @@ function parseStoredQuote(quote: { product: string; results: string; createdAt: 
 }
 
 function drawPDFTableHeader(doc: PDFKit.PDFDocument, suppliers: string[]) {
-    const firstColumnWidth = 220;
+    const firstColumnWidth = 180;
     const colWidth = suppliers.length > 0 ? (doc.page.width - (firstColumnWidth + 60)) / suppliers.length : 0;
     const startX = 30;
     const currentY = doc.y;
 
     doc.fontSize(10).font('Helvetica-Bold').fillColor('black');
-    doc.text('PECA / CODIGO', startX, currentY, { width: firstColumnWidth });
+    doc.text('PESQUISA', startX, currentY, { width: firstColumnWidth });
 
     suppliers.forEach((supplier: string, index: number) => {
         doc.text(supplier.toUpperCase(), startX + firstColumnWidth + index * colWidth, currentY, {
@@ -277,48 +349,64 @@ function renderPDFSections(res: Response, sections: QuotePdfSection[], filenameP
                 currentY = doc.y;
             }
 
-            doc.font('Helvetica-Bold').fontSize(9).fillColor('black').text(item.query, startX, currentY, {
-                width: firstColumnWidth,
-            });
+            doc.font('Helvetica-Bold').fontSize(9).fillColor('black').text(item.query, startX, currentY, { width: firstColumnWidth });
             if (item.description) {
-                doc.font('Helvetica').fontSize(8).fillColor('#666').text(item.description, startX, currentY + 11, {
-                    width: firstColumnWidth,
-                });
-                doc.fillColor('black');
+                doc.font('Helvetica').fontSize(8).fillColor('#666').text(item.description, startX, currentY + 11, { width: firstColumnWidth });
             }
 
-            const rowPrices = section.suppliers.map((supplier: string) => {
-                const result = section.matrix[item.query]?.find((entry: any) => entry.provider === supplier);
-                return result && !result.error ? parseFloat(result.price) : Infinity;
-            });
+            const selectedResults = section.suppliers.map((supplier: string) => section.selectedOffers[item.query]?.[supplier] || null);
+            const rowPrices = selectedResults.map((result) => (result && !result.error ? Number.parseFloat(String(result.price)) : Infinity));
             const minPrice = Math.min(...rowPrices);
+            const rowHeight = item.description ? 66 : 56;
 
             section.suppliers.forEach((supplier: string, index: number) => {
-                const result = section.matrix[item.query]?.find((entry: any) => entry.provider === supplier);
+                const result = section.selectedOffers[item.query]?.[supplier] || null;
                 const x = startX + firstColumnWidth + index * colWidth;
 
                 if (result && !result.error) {
-                    const price = parseFloat(result.price);
+                    const price = Number.parseFloat(String(result.price));
                     if (price === minPrice && minPrice !== Infinity) {
                         doc.save();
-                        doc.fillColor('#D1FAE5').rect(x, currentY - 2, colWidth, 24).fill();
+                        doc.fillColor('#D1FAE5').rect(x, currentY - 2, colWidth, rowHeight).fill();
                         doc.restore();
                         doc.font('Helvetica-Bold').fillColor('#065F46');
                     } else {
                         doc.font('Helvetica').fillColor('#111827');
                     }
 
-                    doc.text(`R$ ${price.toFixed(2)}`, x, currentY + 4, { width: colWidth, align: 'center' });
+                    doc.fontSize(9).text(`R$ ${price.toFixed(2)}`, x + 4, currentY + 3, { width: colWidth - 8, align: 'center' });
+                    doc.fontSize(7).fillColor('#111827').text(`${result.brand || 'Sem fabricante'}${result.code ? ` • ${result.code}` : ''}`, x + 4, currentY + 16, {
+                        width: colWidth - 8,
+                        align: 'center',
+                    });
+                    doc.fontSize(7).fillColor('#4B5563').text(String(result.product || 'Peça sem descrição'), x + 4, currentY + 27, {
+                        width: colWidth - 8,
+                        align: 'center',
+                        height: 18,
+                        ellipsis: true,
+                    });
+                    if (result.application) {
+                        doc.fontSize(6.5).fillColor('#6B7280').text(`Obs: ${String(result.application)}`, x + 4, currentY + 39, {
+                            width: colWidth - 8,
+                            align: 'center',
+                            height: 14,
+                            ellipsis: true,
+                        });
+                    }
+                    doc.fontSize(6.5).fillColor('#6B7280').text(`Estoque: ${result.stockText || result.stock || 0}`, x + 4, currentY + rowHeight - 12, {
+                        width: colWidth - 8,
+                        align: 'center',
+                    });
                 } else {
                     const errorText = result?.error ? 'Erro' : '---';
-                    doc.font('Helvetica').fillColor('#9CA3AF').text(errorText, x, currentY + 4, {
+                    doc.font('Helvetica').fontSize(8).fillColor('#9CA3AF').text(errorText, x, currentY + 18, {
                         width: colWidth,
                         align: 'center',
                     });
                 }
             });
 
-            doc.moveDown(item.description ? 1.6 : 1.1);
+            doc.y = currentY + rowHeight;
             doc.fillColor('#E5E7EB').moveTo(startX, doc.y).lineTo(doc.page.width - 30, doc.y).stroke();
             doc.fillColor('black').moveDown(0.3);
         });
@@ -327,7 +415,7 @@ function renderPDFSections(res: Response, sections: QuotePdfSection[], filenameP
     doc.end();
 }
 
-function renderPDF(res: Response, items: QuoteItem[], suppliers: string[], matrix: QuoteMatrix, filenamePrefix: string) {
+function renderPDF(res: Response, items: QuoteItem[], suppliers: string[], matrix: QuoteMatrix, selectedOffers: SelectedOffersMatrix, filenamePrefix: string) {
     renderPDFSections(
         res,
         [
@@ -336,15 +424,17 @@ function renderPDF(res: Response, items: QuoteItem[], suppliers: string[], matri
                 items,
                 suppliers,
                 matrix,
+                selectedOffers,
             },
         ],
         filenamePrefix
     );
 }
 
-async function renderExcel(res: Response, items: QuoteItem[], suppliers: string[], matrix: QuoteMatrix, filenamePrefix: string) {
+async function renderExcel(res: Response, items: QuoteItem[], suppliers: string[], matrix: QuoteMatrix, selectedOffers: SelectedOffersMatrix, filenamePrefix: string) {
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Confronto');
+    const worksheet = workbook.addWorksheet('Resumo');
+    const detailWorksheet = workbook.addWorksheet('Ofertas Selecionadas');
 
     worksheet.columns = [
         { header: 'CODIGO', key: 'query', width: 24 },
@@ -354,8 +444,8 @@ async function renderExcel(res: Response, items: QuoteItem[], suppliers: string[
 
     items.forEach((item) => {
         const rowPrices = suppliers.map((supplier: string) => {
-            const result = matrix[item.query]?.find((entry: any) => entry.provider === supplier);
-            return result && !result.error ? parseFloat(result.price) : Infinity;
+            const result = selectedOffers[item.query]?.[supplier];
+            return result && !result.error ? Number.parseFloat(String(result.price)) : Infinity;
         });
         const minPrice = Math.min(...rowPrices);
 
@@ -365,8 +455,8 @@ async function renderExcel(res: Response, items: QuoteItem[], suppliers: string[
         };
 
         suppliers.forEach((supplier: string) => {
-            const result = matrix[item.query]?.find((entry: any) => entry.provider === supplier);
-            rowData[supplier] = result && !result.error ? parseFloat(result.price) : '---';
+            const result = selectedOffers[item.query]?.[supplier];
+            rowData[supplier] = result && !result.error ? Number.parseFloat(String(result.price)) : '---';
         });
 
         const excelRow = worksheet.addRow(rowData);
@@ -379,6 +469,47 @@ async function renderExcel(res: Response, items: QuoteItem[], suppliers: string[
                 };
                 excelRow.getCell(index + 3).font = { bold: true, color: { argb: 'FF065F46' } };
             }
+        });
+    });
+
+    detailWorksheet.columns = [
+        { header: 'CODIGO PESQUISADO', key: 'query', width: 20 },
+        { header: 'DESCRICAO DA EQUIPE', key: 'description', width: 28 },
+        { header: 'FORNECEDOR', key: 'provider', width: 24 },
+        { header: 'TIPO', key: 'matchType', width: 18 },
+        { header: 'PECA SELECIONADA', key: 'product', width: 40 },
+        { header: 'CODIGO DO FORNECEDOR', key: 'code', width: 20 },
+        { header: 'FABRICANTE', key: 'brand', width: 22 },
+        { header: 'APLICACAO / OBS', key: 'application', width: 38 },
+        { header: 'ESTOQUE', key: 'stock', width: 18 },
+        { header: 'PRECO', key: 'price', width: 14 },
+    ];
+
+    items.forEach((item) => {
+        suppliers.forEach((supplier) => {
+            const result = selectedOffers[item.query]?.[supplier];
+            if (!result || result.error) return;
+
+            const normalizedQuery = String(item.query || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const normalizedCode = String(result.code || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const matchType = normalizedCode
+                ? normalizedCode === normalizedQuery
+                    ? 'Código exato'
+                    : 'Similar real'
+                : 'Código não informado';
+
+            detailWorksheet.addRow({
+                query: item.query,
+                description: item.description || '',
+                provider: supplier,
+                matchType,
+                product: result.product || '',
+                code: result.code || '',
+                brand: result.brand || '',
+                application: result.application || '',
+                stock: result.stockText || result.stock || '',
+                price: Number.parseFloat(String(result.price)),
+            });
         });
     });
 
@@ -457,10 +588,11 @@ async function runQuoteJob(job: QuoteJob, socketId?: string) {
         const suppliers = extractSuppliersFromMatrix(matrix);
 
         const payload: StoredQuotePayload = {
-            version: 1,
+            version: 2,
             items: job.items,
             suppliers,
             matrix,
+            selectedOffers: buildSelectedOffersMatrix(matrix, suppliers, job.items.map((item) => item.query)),
         };
 
         const savedQuote = await prisma.quote.create({
@@ -585,8 +717,8 @@ export const deleteQuoteHistory = async (req: Request, res: Response) => {
 
 export const exportPDF = async (req: Request, res: Response) => {
     try {
-        const { items, suppliers, matrix } = normalizeExportData(req.body);
-        renderPDF(res, items, suppliers, matrix, 'orcamento');
+        const { items, suppliers, matrix, selectedOffers } = normalizeExportData(req.body);
+        renderPDF(res, items, suppliers, matrix, selectedOffers, 'orcamento');
     } catch (err) {
         console.error('Export PDF Error:', err);
         res.status(500).json({ message: 'Erro ao gerar PDF da matriz' });
@@ -595,8 +727,8 @@ export const exportPDF = async (req: Request, res: Response) => {
 
 export const exportExcel = async (req: Request, res: Response) => {
     try {
-        const { items, suppliers, matrix } = normalizeExportData(req.body);
-        await renderExcel(res, items, suppliers, matrix, 'orcamento');
+        const { items, suppliers, matrix, selectedOffers } = normalizeExportData(req.body);
+        await renderExcel(res, items, suppliers, matrix, selectedOffers, 'orcamento');
     } catch (err) {
         console.error('Export Excel Error:', err);
         res.status(500).json({ message: 'Erro ao gerar Excel da matriz' });
@@ -614,7 +746,14 @@ export const exportSavedQuotePDF = async (req: Request, res: Response) => {
         }
 
         const parsed = parseStoredQuote(quote);
-        renderPDF(res, parsed.items, parsed.suppliers, parsed.matrix, `orcamento-${quote.id}`);
+        renderPDF(
+            res,
+            parsed.items,
+            parsed.suppliers,
+            parsed.matrix,
+            parsed.selectedOffers || buildSelectedOffersMatrix(parsed.matrix, parsed.suppliers, parsed.items.map((item) => item.query)),
+            `orcamento-${quote.id}`
+        );
     } catch (err) {
         console.error('Export Saved PDF Error:', err);
         res.status(500).json({ message: 'Erro ao gerar PDF da cotacao salva' });
@@ -652,6 +791,9 @@ export const exportMultipleSavedQuotesPDF = async (req: Request, res: Response) 
                 items: parsed.items,
                 suppliers: parsed.suppliers,
                 matrix: parsed.matrix,
+                selectedOffers:
+                    parsed.selectedOffers ||
+                    buildSelectedOffersMatrix(parsed.matrix, parsed.suppliers, parsed.items.map((item) => item.query)),
             };
         });
 
@@ -673,7 +815,14 @@ export const exportSavedQuoteExcel = async (req: Request, res: Response) => {
         }
 
         const parsed = parseStoredQuote(quote);
-        await renderExcel(res, parsed.items, parsed.suppliers, parsed.matrix, `orcamento-${quote.id}`);
+        await renderExcel(
+            res,
+            parsed.items,
+            parsed.suppliers,
+            parsed.matrix,
+            parsed.selectedOffers || buildSelectedOffersMatrix(parsed.matrix, parsed.suppliers, parsed.items.map((item) => item.query)),
+            `orcamento-${quote.id}`
+        );
     } catch (err) {
         console.error('Export Saved Excel Error:', err);
         res.status(500).json({ message: 'Erro ao gerar Excel da cotacao salva' });

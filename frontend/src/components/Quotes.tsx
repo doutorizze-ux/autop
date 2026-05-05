@@ -57,15 +57,6 @@ type QuoteSearchResponse = {
     error?: string;
 };
 
-type VariantOption = {
-    key: string;
-    product: string;
-    application: string;
-    count: number;
-    code: string;
-    brand: string;
-};
-
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const activeQuoteJobStorageKey = 'active_quote_job_id';
 
@@ -119,38 +110,40 @@ const getMatchType = (result: QuoteResult, normalizedQueryCode: string, hasExact
     return 'similar' as const;
 };
 
-const buildVariantOptionsFromResults = (results: QuoteResult[], fallbackQuery: string): VariantOption[] => {
-    const groups = new Map<string, VariantOption>();
+const buildResultIdentity = (result: QuoteResult) =>
+    [
+        normalizeCodeValue(result.provider),
+        normalizeVariantKey(result.variantKey || `${result.product || ''} ${result.application || ''}`),
+        normalizeCodeValue(result.brand),
+        normalizeCodeValue(result.code),
+        parsePriceValue(result.price),
+    ].join('::');
 
-    results.forEach((result) => {
-        if (result.error) return;
-        const key = normalizeVariantKey(result.variantKey || `${result.product || ''} ${result.application || ''}`);
-        if (!key) return;
+const sortSupplierResults = (results: QuoteResult[], query: string) => {
+    const normalizedQueryCode = normalizeCodeValue(query);
+    const hasExactMatch = results.some((entry) => normalizeCodeValue(entry.code) === normalizedQueryCode);
 
-        const existing = groups.get(key);
-        if (existing) {
-            existing.count += 1;
-            return;
+    return [...results].sort((a, b) => {
+        if (a.error && !b.error) return 1;
+        if (!a.error && b.error) return -1;
+
+        const matchRank = { exact: 0, similar: 1, 'missing-code': 2 } as const;
+        const aMatch = getMatchType(a, normalizedQueryCode, hasExactMatch);
+        const bMatch = getMatchType(b, normalizedQueryCode, hasExactMatch);
+        if (matchRank[aMatch] !== matchRank[bMatch]) {
+            return matchRank[aMatch] - matchRank[bMatch];
         }
 
-        groups.set(key, {
-            key,
-            product: String(result.product || fallbackQuery),
-            application: String(result.application || ''),
-            count: 1,
-            code: String(result.code || ''),
-            brand: String(result.brand || ''),
-        });
-    });
+        const priceA = parsePriceValue(a.price);
+        const priceB = parsePriceValue(b.price);
+        if (priceA !== priceB) {
+            return priceA - priceB;
+        }
 
-    return Array.from(groups.values()).sort((a, b) => {
-        const productCompare = a.product.localeCompare(b.product, 'pt-BR');
-        if (productCompare !== 0) return productCompare;
+        const brandCompare = String(a.brand || '').localeCompare(String(b.brand || ''), 'pt-BR');
+        if (brandCompare !== 0) return brandCompare;
 
-        const codeCompare = a.code.localeCompare(b.code, 'pt-BR');
-        if (codeCompare !== 0) return codeCompare;
-
-        return a.application.localeCompare(b.application, 'pt-BR');
+        return String(a.code || '').localeCompare(String(b.code || ''), 'pt-BR');
     });
 };
 
@@ -182,7 +175,7 @@ export const Quotes = () => {
     const [activeJobId, setActiveJobId] = useState(() => localStorage.getItem(activeQuoteJobStorageKey) || '');
     const [quoteJobStatus, setQuoteJobStatus] = useState('');
     const [quoteJobError, setQuoteJobError] = useState('');
-    const [selectedVariantByQuery, setSelectedVariantByQuery] = useState<Record<string, string>>({});
+    const [selectedOfferByQuerySupplier, setSelectedOfferByQuerySupplier] = useState<Record<string, string>>({});
     const [activeResultView, setActiveResultView] = useState<'summary' | string>('summary');
 
     const scrollToResults = () => {
@@ -225,6 +218,7 @@ export const Quotes = () => {
         );
         setQuoteMatrix(data.matrix || {});
         setSuppliers(data.suppliers || []);
+        setSelectedOfferByQuerySupplier({});
 
         if (data.jobId) {
             setActiveJobId(data.jobId);
@@ -408,6 +402,7 @@ export const Quotes = () => {
                 })),
                 suppliers,
                 matrix: quoteMatrix,
+                selectedOffers: selectedOffersByQuerySupplier,
             }, {
                 responseType: 'blob',
             });
@@ -435,6 +430,7 @@ export const Quotes = () => {
             );
             setQuoteMatrix(response.data.matrix || {});
             setSuppliers(response.data.suppliers || []);
+            setSelectedOfferByQuerySupplier({});
             setCurrentQuoteId(response.data.quoteId || quoteId);
             setCurrentCreatedAt(response.data.createdAt);
             setIsSearching(false);
@@ -512,63 +508,45 @@ export const Quotes = () => {
 
     const hasResults = partList.length > 0 && suppliers.length > 0;
 
-    const variantOptionsByQuery = useMemo(() => {
-        const entries: Record<string, VariantOption[]> = {};
-
-        partList.forEach((item) => {
-            const source = quoteMatrix[item.query] || [];
-            entries[item.query] = buildVariantOptionsFromResults(source, item.query).sort((a, b) => {
-                const codeA = a.code.toLowerCase();
-                const codeB = b.code.toLowerCase();
-                const query = item.query.toLowerCase();
-
-                const aStarts = codeA === query ? -1 : 0;
-                const bStarts = codeB === query ? -1 : 0;
-                if (aStarts !== bStarts) return aStarts - bStarts;
-
-                const productCompare = a.product.localeCompare(b.product, 'pt-BR');
-                if (productCompare !== 0) return productCompare;
-
-                return a.application.localeCompare(b.application, 'pt-BR');
-            });
-        });
-
-        return entries;
-    }, [partList, quoteMatrix]);
-
-    useEffect(() => {
-        setSelectedVariantByQuery((current) => {
-            const next = { ...current };
-            let changed = false;
-
-            partList.forEach((item) => {
-                const variants = variantOptionsByQuery[item.query] || [];
-                if (variants.length <= 1) {
-                    if (next[item.query]) {
-                        delete next[item.query];
-                        changed = true;
-                    }
-                    return;
-                }
-
-                const currentValue = next[item.query];
-                const stillExists = variants.some((variant) => variant.key === currentValue);
-                if (!stillExists) {
-                    next[item.query] = variants[0].key;
-                    changed = true;
-                }
-            });
-
-            return changed ? next : current;
-        });
-    }, [partList, variantOptionsByQuery]);
-
     useEffect(() => {
         if (activeResultView === 'summary') return;
         if (!suppliers.includes(activeResultView)) {
             setActiveResultView('summary');
         }
     }, [activeResultView, suppliers]);
+
+    const selectedOffersByQuerySupplier = useMemo(() => {
+        const selections: Record<string, Record<string, QuoteResult | null>> = {};
+
+        partList.forEach((item) => {
+            const sourceResults = quoteMatrix[item.query] || [];
+            const providerNames = Array.from(new Set([...suppliers, ...sourceResults.map((entry) => entry.provider).filter(Boolean)]));
+            const querySelections: Record<string, QuoteResult | null> = {};
+
+            providerNames.forEach((provider) => {
+                const providerResults = sortSupplierResults(
+                    sourceResults.filter((entry) => entry.provider === provider && !entry.error),
+                    item.query
+                );
+
+                if (providerResults.length === 0) {
+                    querySelections[provider] = null;
+                    return;
+                }
+
+                const selectionKey = `${item.query}::${provider}`;
+                const selectedIdentity = selectedOfferByQuerySupplier[selectionKey];
+                const selectedResult =
+                    providerResults.find((entry) => buildResultIdentity(entry) === selectedIdentity) || providerResults[0];
+
+                querySelections[provider] = selectedResult;
+            });
+
+            selections[item.query] = querySelections;
+        });
+
+        return selections;
+    }, [partList, quoteMatrix, selectedOfferByQuerySupplier, suppliers]);
 
     return (
         <div className="quotes-container">
@@ -719,60 +697,52 @@ export const Quotes = () => {
                         </div>
 
                         {partList.map((item) => {
-                            const selectedVariantKey = selectedVariantByQuery[item.query];
                             const rawResults = quoteMatrix[item.query] || [];
                             const normalizedQueryCode = normalizeCodeValue(item.query);
-                            const viewSourceResults =
+                            const viewProviders =
                                 activeResultView === 'summary'
-                                    ? rawResults
-                                    : rawResults.filter((entry) => entry.provider === activeResultView);
-                            const visibleVariants =
-                                activeResultView === 'summary'
-                                    ? variantOptionsByQuery[item.query] || []
-                                    : buildVariantOptionsFromResults(viewSourceResults, item.query);
-                            const resolvedVariantKey =
-                                visibleVariants.some((variant) => variant.key === selectedVariantKey)
-                                    ? selectedVariantKey
-                                    : visibleVariants[0]?.key || '';
-                            const filteredViewResults = viewSourceResults.filter((entry) => {
-                                if (!resolvedVariantKey) return true;
-                                return normalizeVariantKey(entry.variantKey || `${entry.product || ''} ${entry.application || ''}`) === resolvedVariantKey;
-                            });
-                            const hasExactMatch = filteredViewResults.some((entry) => normalizeCodeValue(entry.code) === normalizedQueryCode);
+                                    ? suppliers
+                                    : suppliers.includes(activeResultView)
+                                        ? [activeResultView]
+                                        : [];
+                            const providerCards = viewProviders
+                                .map((provider) => {
+                                    const providerResults = sortSupplierResults(
+                                        rawResults.filter((entry) => entry.provider === provider && !entry.error),
+                                        item.query
+                                    );
+                                    const selectionKey = `${item.query}::${provider}`;
+                                    const selectedIdentity = selectedOfferByQuerySupplier[selectionKey];
+                                    const selectedResult =
+                                        providerResults.find((entry) => buildResultIdentity(entry) === selectedIdentity) ||
+                                        providerResults[0] ||
+                                        null;
+                                    const hasExactMatch = providerResults.some(
+                                        (entry) => normalizeCodeValue(entry.code) === normalizedQueryCode
+                                    );
+
+                                    return {
+                                        provider,
+                                        providerResults,
+                                        selectedResult,
+                                        hasExactMatch,
+                                    };
+                                })
+                                .filter((card) => activeResultView === 'summary' ? !!card.selectedResult : true);
+
+                            const visibleSelectedResults = providerCards
+                                .map((card) => card.selectedResult)
+                                .filter((entry): entry is QuoteResult => !!entry);
+                            const hasExactMatch = visibleSelectedResults.some(
+                                (entry) => normalizeCodeValue(entry.code) === normalizedQueryCode
+                            );
                             const bestResult =
-                                [...filteredViewResults]
-                                    .filter((entry) => !entry.error && entry.price !== undefined && entry.price !== null && entry.price !== '')
-                                    .sort((a, b) => {
-                                        const aExact = normalizeCodeValue(a.code) === normalizedQueryCode;
-                                        const bExact = normalizeCodeValue(b.code) === normalizedQueryCode;
-                                        if (aExact !== bExact) return aExact ? -1 : 1;
-                                        return parsePriceValue(a.price) - parsePriceValue(b.price);
-                                    })[0] || null;
-                            const sortedSelectedSupplierResults = [...filteredViewResults].sort((a, b) => {
-                                if (a.error && !b.error) return 1;
-                                if (!a.error && b.error) return -1;
-
-                                const matchRank = { exact: 0, similar: 1, 'missing-code': 2 } as const;
-                                const aMatch = getMatchType(a, normalizedQueryCode, hasExactMatch);
-                                const bMatch = getMatchType(b, normalizedQueryCode, hasExactMatch);
-                                if (matchRank[aMatch] !== matchRank[bMatch]) {
-                                    return matchRank[aMatch] - matchRank[bMatch];
-                                }
-
-                                const priceA = parsePriceValue(a.price);
-                                const priceB = parsePriceValue(b.price);
-                                if (priceA !== priceB) {
-                                    return priceA - priceB;
-                                }
-
-                                const providerCompare = String(a.provider).localeCompare(String(b.provider), 'pt-BR');
-                                if (providerCompare !== 0) return providerCompare;
-
-                                const brandCompare = String(a.brand || '').localeCompare(String(b.brand || ''), 'pt-BR');
-                                if (brandCompare !== 0) return brandCompare;
-
-                                return String(a.code || '').localeCompare(String(b.code || ''), 'pt-BR');
-                            });
+                                [...visibleSelectedResults].sort((a, b) => {
+                                    const aExact = normalizeCodeValue(a.code) === normalizedQueryCode;
+                                    const bExact = normalizeCodeValue(b.code) === normalizedQueryCode;
+                                    if (aExact !== bExact) return aExact ? -1 : 1;
+                                    return parsePriceValue(a.price) - parsePriceValue(b.price);
+                                })[0] || null;
 
                             return (
                                 <div key={item.query} className="quote-item-card">
@@ -792,63 +762,33 @@ export const Quotes = () => {
                                             : 'Código exato não apareceu. Abaixo estão os similares reais retornados pelos fornecedores.'}
                                     </div>
 
-                                    {visibleVariants.length > 1 && (
-                                        <div className="variant-selector">
-                                            <label>
-                                                {activeResultView === 'summary'
-                                                    ? `${visibleVariants.length} peças encontradas no código. Escolha a correta:`
-                                                    : `${visibleVariants.length} peças/similares neste fornecedor. Escolha a que a loja quer:`}
-                                            </label>
-                                            <div className="variant-options-list">
-                                                {visibleVariants.map((variant) => {
-                                                    const isSelected = (resolvedVariantKey || visibleVariants[0]?.key || '') === variant.key;
-                                                    return (
-                                                        <button
-                                                            key={variant.key}
-                                                            type="button"
-                                                            className={`variant-option-card ${isSelected ? 'selected' : ''}`}
-                                                            onClick={() =>
-                                                                setSelectedVariantByQuery((current) => ({
-                                                                    ...current,
-                                                                    [item.query]: variant.key,
-                                                                }))
-                                                            }
-                                                        >
-                                                            <div className="variant-option-label">
-                                                                Peça / Aplicação
-                                                            </div>
-                                                            <div className="variant-option-title">
-                                                                {variant.product}
-                                                            </div>
-                                                            <div className="variant-option-meta">
-                                                                {variant.code ? `Código: ${variant.code}` : 'Código não informado'}
-                                                                {variant.brand ? ` | Fabricante: ${variant.brand}` : ''}
-                                                            </div>
-                                                            {variant.application && (
-                                                                <div className="variant-option-meta">
-                                                                    Obs técnica: {variant.application}
-                                                                </div>
-                                                            )}
-                                                            <div className="variant-option-meta">
-                                                                {variant.count} oferta(s) encontrada(s)
-                                                            </div>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    )}
-
                                     <div className="supplier-results-grid compact-results-grid">
-                                        {sortedSelectedSupplierResults.length > 0 ? (
-                                            sortedSelectedSupplierResults.map((supplierResult, index) => {
+                                        {providerCards.length > 0 ? (
+                                            providerCards.map((card) => {
+                                                const supplierResult = card.selectedResult;
+                                                if (!supplierResult) {
+                                                    return (
+                                                        <div
+                                                            key={`${item.query}-${card.provider}-empty`}
+                                                            className="supplier-view-card compact-supplier-card empty-supplier-card"
+                                                        >
+                                                            <div className="supplier-view-header compact-supplier-header">
+                                                                <strong>{card.provider}</strong>
+                                                            </div>
+                                                            <div className="supplier-view-error">
+                                                                Este fornecedor não retornou oferta real para esta peça.
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+
                                                 const isBestOffer =
                                                     !!bestResult &&
-                                                    !supplierResult.error &&
                                                     supplierResult.provider === bestResult.provider &&
                                                     supplierResult.price === bestResult.price &&
-                                                    supplierResult.code === bestResult.code;
-                                                const matchType = getMatchType(supplierResult, normalizedQueryCode, hasExactMatch);
+                                                    supplierResult.code === bestResult.code &&
+                                                    supplierResult.product === bestResult.product;
+                                                const matchType = getMatchType(supplierResult, normalizedQueryCode, card.hasExactMatch);
                                                 const matchLabel =
                                                     matchType === 'exact'
                                                         ? 'Código exato'
@@ -858,12 +798,12 @@ export const Quotes = () => {
 
                                                 return (
                                                     <div
-                                                        key={`${item.query}-${activeResultView}-${supplierResult.provider}-${supplierResult.code || index}`}
+                                                        key={`${item.query}-${card.provider}`}
                                                         className={`supplier-view-card compact-supplier-card ${isBestOffer ? 'best-supplier-card' : ''}`}
                                                     >
                                                         <div className="supplier-view-header compact-supplier-header">
-                                                            <strong>{activeResultView === 'summary' ? supplierResult.provider : activeResultView}</strong>
-                                                            {supplierResult.error ? null : <span>R$ {supplierResult.price}</span>}
+                                                            <strong>{card.provider}</strong>
+                                                            <span>R$ {supplierResult.price}</span>
                                                         </div>
 
                                                         <div className="supplier-card-tags">
@@ -879,48 +819,74 @@ export const Quotes = () => {
                                                             )}
                                                         </div>
 
-                                                        {supplierResult.error ? (
-                                                            <div className="supplier-view-error">{supplierResult.error}</div>
-                                                        ) : (
-                                                            <div className="supplier-result-card">
-                                                                <div className="supplier-result-label">Peça / Aplicação</div>
-                                                                <div className="supplier-result-title">
-                                                                    {supplierResult.product || 'Peça sem descrição clara'}
-                                                                </div>
-                                                                <div className="supplier-result-meta">
-                                                                    {supplierResult.code ? `Código: ${supplierResult.code}` : 'Código não informado pelo fornecedor'}
-                                                                </div>
-                                                                {supplierResult.brand && (
-                                                                    <div className="supplier-result-meta">
-                                                                        Fabricante: {supplierResult.brand}
-                                                                    </div>
-                                                                )}
-                                                                {supplierResult.application && (
-                                                                    <div className="supplier-result-meta">
-                                                                        Obs técnica: {supplierResult.application}
-                                                                    </div>
-                                                                )}
-                                                                {supplierResult.stock !== undefined && (
-                                                                    <div className="supplier-result-meta">
-                                                                        Estoque: {supplierResult.stockText || supplierResult.stock}
-                                                                    </div>
-                                                                )}
-                                                                <div className="price-tag">
-                                                                    <span>R$ {supplierResult.price}</span>
-                                                                    {supplierResult.link && (
-                                                                        <a
-                                                                            href={supplierResult.link}
-                                                                            target="_blank"
-                                                                            rel="noreferrer"
-                                                                            title="Ver produto no site"
-                                                                            className="visit-link"
-                                                                        >
-                                                                            🔗
-                                                                        </a>
-                                                                    )}
-                                                                </div>
+                                                        {card.providerResults.length > 1 && (
+                                                            <div className="supplier-offer-selector">
+                                                                <label>Oferta selecionada neste fornecedor</label>
+                                                                <select
+                                                                    value={buildResultIdentity(supplierResult)}
+                                                                    onChange={(event) =>
+                                                                        setSelectedOfferByQuerySupplier((current) => ({
+                                                                            ...current,
+                                                                            [`${item.query}::${card.provider}`]: event.target.value,
+                                                                        }))
+                                                                    }
+                                                                >
+                                                                    {card.providerResults.map((option) => {
+                                                                        const optionMatch = getMatchType(option, normalizedQueryCode, card.hasExactMatch);
+                                                                        const optionLabel =
+                                                                            optionMatch === 'exact'
+                                                                                ? 'Código exato'
+                                                                                : optionMatch === 'similar'
+                                                                                    ? 'Similar real'
+                                                                                    : 'Código não informado';
+                                                                        return (
+                                                                            <option key={buildResultIdentity(option)} value={buildResultIdentity(option)}>
+                                                                                {`R$ ${option.price} • ${option.code || 's/código'} • ${option.brand || 's/fabricante'} • ${optionLabel}`}
+                                                                            </option>
+                                                                        );
+                                                                    })}
+                                                                </select>
                                                             </div>
                                                         )}
+
+                                                        <div className="supplier-result-card">
+                                                            <div className="supplier-result-label">Peça / Aplicação</div>
+                                                            <div className="supplier-result-title">
+                                                                {supplierResult.product || 'Peça sem descrição clara'}
+                                                            </div>
+                                                            <div className="supplier-result-meta">
+                                                                {supplierResult.code ? `Código: ${supplierResult.code}` : 'Código não informado pelo fornecedor'}
+                                                            </div>
+                                                            {supplierResult.brand && (
+                                                                <div className="supplier-result-meta">
+                                                                    Fabricante: {supplierResult.brand}
+                                                                </div>
+                                                            )}
+                                                            {supplierResult.application && (
+                                                                <div className="supplier-result-meta">
+                                                                    Obs técnica: {supplierResult.application}
+                                                                </div>
+                                                            )}
+                                                            {supplierResult.stock !== undefined && (
+                                                                <div className="supplier-result-meta">
+                                                                    Estoque: {supplierResult.stockText || supplierResult.stock}
+                                                                </div>
+                                                            )}
+                                                            <div className="price-tag">
+                                                                <span>R$ {supplierResult.price}</span>
+                                                                {supplierResult.link && (
+                                                                    <a
+                                                                        href={supplierResult.link}
+                                                                        target="_blank"
+                                                                        rel="noreferrer"
+                                                                        title="Ver produto no site"
+                                                                        className="visit-link"
+                                                                    >
+                                                                        🔗
+                                                                    </a>
+                                                                )}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 );
                                             })
@@ -1298,10 +1264,37 @@ export const Quotes = () => {
                     background: linear-gradient(180deg, rgba(16, 185, 129, 0.04), var(--panel-bg));
                 }
                 .compact-supplier-card {
-                    min-height: 220px;
+                    min-height: 250px;
                     display: flex;
                     flex-direction: column;
                     justify-content: space-between;
+                }
+                .supplier-offer-selector {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.35rem;
+                    margin-bottom: 0.7rem;
+                }
+                .supplier-offer-selector label {
+                    color: var(--text-muted);
+                    font-size: 0.74rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 0.04em;
+                }
+                .supplier-offer-selector select {
+                    width: 100%;
+                    border: 1px solid var(--border-color);
+                    background: var(--bg-color);
+                    color: var(--text-main);
+                    border-radius: 8px;
+                    padding: 0.6rem 0.75rem;
+                    font-size: 0.82rem;
+                }
+                .supplier-offer-selector select:focus {
+                    outline: none;
+                    border-color: var(--primary-color);
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
                 }
                 .supplier-view-header {
                     display: flex;
