@@ -108,6 +108,7 @@ export const Quotes = () => {
     const [quoteJobStatus, setQuoteJobStatus] = useState('');
     const [quoteJobError, setQuoteJobError] = useState('');
     const [selectedVariantByQuery, setSelectedVariantByQuery] = useState<Record<string, string>>({});
+    const [activeResultView, setActiveResultView] = useState<'summary' | string>('summary');
 
     const loadHistory = async () => {
         setIsHistoryLoading(true);
@@ -532,6 +533,13 @@ export const Quotes = () => {
         return map;
     }, [partList, filteredResultsByQuery]);
 
+    useEffect(() => {
+        if (activeResultView === 'summary') return;
+        if (!suppliers.includes(activeResultView)) {
+            setActiveResultView('summary');
+        }
+    }, [activeResultView, suppliers]);
+
     return (
         <div className="quotes-container">
             <div className="quotes-header">
@@ -660,24 +668,34 @@ export const Quotes = () => {
                     </div>
 
                     <div className="results-list">
+                        <div className="results-tabs">
+                            <button
+                                type="button"
+                                className={`results-tab ${activeResultView === 'summary' ? 'active' : ''}`}
+                                onClick={() => setActiveResultView('summary')}
+                            >
+                                Menor valor
+                            </button>
+                            {suppliers.map((supplier) => (
+                                <button
+                                    key={supplier}
+                                    type="button"
+                                    className={`results-tab ${activeResultView === supplier ? 'active' : ''}`}
+                                    onClick={() => setActiveResultView(supplier)}
+                                >
+                                    {supplier}
+                                </button>
+                            ))}
+                        </div>
+
                         {partList.map((item) => {
                             const selectedVariantKey = selectedVariantByQuery[item.query];
                             const variants = variantOptionsByQuery[item.query] || [];
                             const currentResults = filteredResultsByQuery[item.query] || [];
                             const bestResult = bestResultByQuery.get(item.query);
-                            const sortedSupplierResults = [...currentResults].sort((a, b) => {
-                                if (a.error && !b.error) return 1;
-                                if (!a.error && b.error) return -1;
-                                if (a.error && b.error) return String(a.provider).localeCompare(String(b.provider), 'pt-BR');
-
-                                const priceA = parseFloat(String(a.price).replace(',', '.'));
-                                const priceB = parseFloat(String(b.price).replace(',', '.'));
-                                if (!Number.isNaN(priceA) && !Number.isNaN(priceB) && priceA !== priceB) {
-                                    return priceA - priceB;
-                                }
-
-                                return String(a.provider).localeCompare(String(b.provider), 'pt-BR');
-                            });
+                            const selectedSupplierResults = activeResultView === 'summary'
+                                ? (bestResult ? [bestResult] : [])
+                                : currentResults.filter((entry) => entry.provider === activeResultView);
 
                             return (
                                 <div key={item.query} className="quote-item-card">
@@ -736,8 +754,8 @@ export const Quotes = () => {
                                     )}
 
                                     <div className="supplier-results-grid">
-                                        {sortedSupplierResults.length > 0 ? (
-                                            sortedSupplierResults.map((supplierResult, index) => {
+                                        {selectedSupplierResults.length > 0 ? (
+                                            selectedSupplierResults.map((supplierResult, index) => {
                                                 const isBestOffer =
                                                     !!bestResult &&
                                                     !supplierResult.error &&
@@ -751,7 +769,7 @@ export const Quotes = () => {
                                                         className={`supplier-view-card ${isBestOffer ? 'best-supplier-card' : ''}`}
                                                     >
                                                         <div className="supplier-view-header">
-                                                            <strong>{supplierResult.provider}</strong>
+                                                            <strong>{activeResultView === 'summary' ? supplierResult.provider : activeResultView}</strong>
                                                             {supplierResult.error ? null : <span>R$ {supplierResult.price}</span>}
                                                         </div>
 
@@ -816,7 +834,9 @@ export const Quotes = () => {
                                             })
                                         ) : (
                                             <span className="not-found">
-                                                Nenhuma oferta válida encontrada para a peça selecionada.
+                                                {activeResultView === 'summary'
+                                                    ? 'Nenhuma oferta válida encontrada para a peça selecionada.'
+                                                    : 'Este fornecedor não retornou resultado para a peça selecionada.'}
                                             </span>
                                         )}
                                     </div>
@@ -1096,6 +1116,26 @@ export const Quotes = () => {
                     flex-direction: column;
                     gap: 1rem;
                     padding: 1.25rem 1.5rem 1.5rem;
+                }
+                .results-tabs {
+                    display: flex;
+                    gap: 0.75rem;
+                    flex-wrap: wrap;
+                }
+                .results-tab {
+                    border: 1px solid var(--border-color);
+                    background: var(--bg-color);
+                    color: var(--text-main);
+                    border-radius: 999px;
+                    padding: 0.6rem 1rem;
+                    font-weight: 700;
+                    cursor: pointer;
+                    transition: all 0.18s ease;
+                }
+                .results-tab.active {
+                    background: var(--primary-color);
+                    color: white;
+                    border-color: var(--primary-color);
                 }
                 .quote-item-card {
                     border: 1px solid var(--border-color);
@@ -1407,6 +1447,7 @@ export const Quotes = () => {
                     .add-part-form { grid-template-columns: 1fr; }
                     .add-btn { width: 100%; justify-content: center; }
                     .results-list { padding: 1rem; }
+                    .results-tabs { width: 100%; }
                     .quote-item-header,
                     .supplier-view-header {
                         flex-direction: column;
