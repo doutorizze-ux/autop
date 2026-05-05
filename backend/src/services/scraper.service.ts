@@ -6,19 +6,51 @@ const prisma = new PrismaClient();
 const enginePath = path.resolve(__dirname, '../../../scraping/engine.js');
 const { scrapeProduct } = require(enginePath);
 
+function normalizeSupplierResults(data: any, supplier: any, productName: string) {
+    if (!Array.isArray(data) || data.length === 0) {
+        return [];
+    }
+
+    const bestByProvider = new Map<string, any>();
+
+    for (const item of data) {
+        const provider = String(item?.provider || supplier.name || '').trim() || supplier.name;
+        const numericPrice = Number(item?.price) || 0;
+        if (!numericPrice) continue;
+
+        const normalizedItem = {
+            provider,
+            product: item?.product || productName,
+            price: item.price,
+            available: item?.available ?? true,
+            link: item?.link || supplier.url,
+            stock: Number.parseInt(String(item?.stock ?? 0), 10) || 0,
+            code: item?.code ? String(item.code) : '',
+            brand: item?.brand ? String(item.brand) : '',
+            application: item?.application ? String(item.application) : '',
+        };
+
+        const existing = bestByProvider.get(provider);
+        if (!existing || numericPrice < Number(existing.price || 0)) {
+            bestByProvider.set(provider, normalizedItem);
+        }
+    }
+
+    return Array.from(bestByProvider.values());
+}
+
 export async function runSupplierSearch(supplier: any, productName: string) {
     try {
         const data = await scrapeProduct(supplier, productName);
 
         if (Array.isArray(data) && data.length > 0) {
-            const bestItem = data[0];
-            return {
-                provider: bestItem.provider || supplier.name,
-                product: bestItem.product || productName,
-                price: bestItem.price,
-                available: true,
-                link: bestItem.link || supplier.url,
-            };
+            const normalizedItems = normalizeSupplierResults(data, supplier, productName);
+            if (normalizedItems.length === 1) {
+                return normalizedItems[0];
+            }
+            if (normalizedItems.length > 1) {
+                return normalizedItems;
+            }
         }
 
         if (data && data.items && data.items.length > 0) {
@@ -29,6 +61,10 @@ export async function runSupplierSearch(supplier: any, productName: string) {
                 price: bestItem.price,
                 available: true,
                 link: bestItem.link || supplier.url,
+                stock: Number.parseInt(String(bestItem.stock ?? 0), 10) || 0,
+                code: bestItem.code ? String(bestItem.code) : '',
+                brand: bestItem.brand ? String(bestItem.brand) : '',
+                application: bestItem.application ? String(bestItem.application) : '',
             };
         }
 
@@ -106,7 +142,8 @@ export class ScraperService {
             throw new Error('Fornecedor não encontrado.');
         }
 
-        return runSupplierSearch(supplier, productName);
+        const result = await runSupplierSearch(supplier, productName);
+        return Array.isArray(result) ? result[0] || null : result;
     }
 
     static async searchMultipleProducts(
@@ -140,18 +177,22 @@ export class ScraperService {
                         };
                     }
                     const result = await runSupplierSearch(supplier, productName);
-                    const progressPayload = {
-                        supplier: supplier.name,
-                        productName,
-                        result
-                    };
-                    onProgress?.(progressPayload);
-                    if (socketId) {
-                        io.to(socketId).emit('quote_progress', progressPayload);
+                    const normalizedResults = Array.isArray(result) ? result : [result];
+
+                    for (const entry of normalizedResults) {
+                        const progressPayload = {
+                            supplier: entry.provider || supplier.name,
+                            productName,
+                            result: entry,
+                        };
+                        onProgress?.(progressPayload);
+                        if (socketId) {
+                            io.to(socketId).emit('quote_progress', progressPayload);
+                        }
                     }
-                    return result;
+                    return normalizedResults;
                 }));
-                productResults.push(...batchResults);
+                productResults.push(...batchResults.flat());
             }
 
             resultsByProduct[productName] = productResults;

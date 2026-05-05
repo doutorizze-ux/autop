@@ -26,6 +26,10 @@ type QuoteResult = {
     price?: string | number;
     link?: string;
     error?: string;
+    stock?: number;
+    code?: string;
+    brand?: string;
+    application?: string;
 };
 
 type QuoteMatrix = Record<string, QuoteResult[]>;
@@ -573,19 +577,36 @@ export const Quotes = () => {
                                                                     {result.error}
                                                                 </span>
                                                             ) : (
-                                                                <div className="price-tag">
-                                                                    <span>R$ {result.price}</span>
-                                                                    {result.link && (
-                                                                        <a
-                                                                            href={result.link}
-                                                                            target="_blank"
-                                                                            rel="noreferrer"
-                                                                            title="Ver produto no site"
-                                                                            className="visit-link"
-                                                                        >
-                                                                            🔗
-                                                                        </a>
+                                                                <div className="supplier-result-card">
+                                                                    {result.product && (
+                                                                        <div className="supplier-result-title">
+                                                                            {result.product}
+                                                                        </div>
                                                                     )}
+                                                                    {result.code && (
+                                                                        <div className="supplier-result-meta">
+                                                                            Codigo: {result.code}
+                                                                        </div>
+                                                                    )}
+                                                                    {result.stock !== undefined && (
+                                                                        <div className="supplier-result-meta">
+                                                                            Estoque: {result.stock}
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="price-tag">
+                                                                        <span>R$ {result.price}</span>
+                                                                        {result.link && (
+                                                                            <a
+                                                                                href={result.link}
+                                                                                target="_blank"
+                                                                                rel="noreferrer"
+                                                                                title="Ver produto no site"
+                                                                                className="visit-link"
+                                                                            >
+                                                                                🔗
+                                                                            </a>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             )
                                                         ) : (
@@ -959,6 +980,18 @@ export const Quotes = () => {
                     font-weight: bold;
                 }
                 .price-tag { display: flex; align-items: center; gap: 0.8rem; color: var(--text-main); }
+                .supplier-result-card { display: flex; flex-direction: column; gap: 0.35rem; }
+                .supplier-result-title {
+                    color: var(--text-main);
+                    font-size: 0.92rem;
+                    font-weight: 600;
+                    line-height: 1.35;
+                }
+                .supplier-result-meta {
+                    color: var(--text-muted);
+                    font-size: 0.82rem;
+                    line-height: 1.35;
+                }
                 .visit-link { text-decoration: none; font-size: 1.1rem; }
                 .error-text { color: #ef4444; font-size: 0.85rem; line-height: 1.5; }
                 .not-found { color: var(--text-muted); }

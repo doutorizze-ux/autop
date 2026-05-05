@@ -31,6 +31,8 @@ interface SupplierTestResult {
   product: string;
   price: string | number;
   available: boolean;
+  stock?: number;
+  code?: string;
   link?: string;
   error?: string;
   debug?: {

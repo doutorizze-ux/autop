@@ -452,7 +452,7 @@ async function performSearch(page, supplier, query, strategy = {}) {
 
 function buildBrowserPayload(items, supplier) {
     return items.map((item) => ({
-        provider: supplier.name,
+        provider: safeString(item.provider || supplier.name),
         product: safeString(item.nome || item.name || item.product),
         price: parsePrice(item.preco || item.price),
         available: true,
@@ -665,9 +665,21 @@ async function createContext(browser, supplier) {
         contextOptions.storageState = sessionStatePath;
     }
 
-    const context = profilePath
-        ? await chromium.launchPersistentContext(profilePath, contextOptions)
-        : await browser.newContext(contextOptions);
+    let context;
+    if (profilePath) {
+        try {
+            context = await chromium.launchPersistentContext(profilePath, {
+                ...contextOptions,
+                channel: 'chrome',
+                ignoreDefaultArgs: ['--enable-automation'],
+            });
+        } catch (error) {
+            console.error(`[DEBUG] Chrome real indisponivel para ${supplier.name}, usando Chromium: ${error.message}`);
+            context = await chromium.launchPersistentContext(profilePath, contextOptions);
+        }
+    } else {
+        context = await browser.newContext(contextOptions);
+    }
     await context.addInitScript(() => {
         Object.defineProperty(navigator, 'webdriver', {
             get: () => undefined,
@@ -695,7 +707,7 @@ async function createContext(browser, supplier) {
     });
     await context.route('**/*', (route) => {
         const resourceType = route.request().resourceType();
-        if (['image', 'media', 'font'].includes(resourceType)) {
+        if (['media'].includes(resourceType)) {
             return route.abort();
         }
 
@@ -736,21 +748,34 @@ let globalBrowserPromise = null;
 function getBrowser() {
     if (!globalBrowserPromise) {
         console.error("[Playwright] Inicializando Browser Global pela primeira vez...");
-        globalBrowserPromise = chromium.launch({
-            headless: process.env.HEADLESS !== 'false',
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-accelerated-2d-canvas',
-                '--disable-gpu',
-                '--disable-blink-features=AutomationControlled',
-                '--disable-features=IsolateOrigins,site-per-process',
-                '--no-first-run',
-                '--no-zygote',
-                '--window-size=1920,1080',
-            ],
-        });
+        globalBrowserPromise = (async () => {
+            const launchOptions = {
+                headless: process.env.HEADLESS !== 'false',
+                ignoreDefaultArgs: ['--enable-automation'],
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--disable-gpu',
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-features=IsolateOrigins,site-per-process',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--window-size=1920,1080',
+                ],
+            };
+
+            try {
+                return await chromium.launch({
+                    ...launchOptions,
+                    channel: 'chrome',
+                });
+            } catch (error) {
+                console.error(`[Playwright] Chrome real indisponivel, usando Chromium: ${error.message}`);
+                return chromium.launch(launchOptions);
+            }
+        })();
     }
     return globalBrowserPromise;
 }
@@ -892,7 +917,7 @@ async function scrapeProduct(supplier, productName) {
 
             let items = [];
             if (strategy.extractItems) {
-                items = await strategy.extractItems({ page, supplier });
+                items = await strategy.extractItems({ page, supplier, query, dismissTransientUi });
             }
 
             if (
