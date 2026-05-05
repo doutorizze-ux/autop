@@ -108,7 +108,6 @@ export const Quotes = () => {
     const [quoteJobStatus, setQuoteJobStatus] = useState('');
     const [quoteJobError, setQuoteJobError] = useState('');
     const [selectedVariantByQuery, setSelectedVariantByQuery] = useState<Record<string, string>>({});
-    const [activeResultView, setActiveResultView] = useState<'summary' | string>('summary');
 
     const loadHistory = async () => {
         setIsHistoryLoading(true);
@@ -533,12 +532,6 @@ export const Quotes = () => {
         return map;
     }, [partList, filteredResultsByQuery]);
 
-    useEffect(() => {
-        if (activeResultView === 'summary') return;
-        if (!suppliers.includes(activeResultView)) {
-            setActiveResultView('summary');
-        }
-    }, [activeResultView, suppliers]);
     return (
         <div className="quotes-container">
             <div className="quotes-header">
@@ -666,35 +659,25 @@ export const Quotes = () => {
                         </div>
                     </div>
 
-                    <div className="results-tabs">
-                        <button
-                            type="button"
-                            className={`results-tab ${activeResultView === 'summary' ? 'active' : ''}`}
-                            onClick={() => setActiveResultView('summary')}
-                        >
-                            Menor valor
-                        </button>
-                        {suppliers.map((supplier) => (
-                            <button
-                                key={supplier}
-                                type="button"
-                                className={`results-tab ${activeResultView === supplier ? 'active' : ''}`}
-                                onClick={() => setActiveResultView(supplier)}
-                            >
-                                {supplier}
-                            </button>
-                        ))}
-                    </div>
-
                     <div className="results-list">
                         {partList.map((item) => {
                             const selectedVariantKey = selectedVariantByQuery[item.query];
                             const variants = variantOptionsByQuery[item.query] || [];
                             const currentResults = filteredResultsByQuery[item.query] || [];
                             const bestResult = bestResultByQuery.get(item.query);
-                            const supplierResult = activeResultView === 'summary'
-                                ? bestResult
-                                : currentResults.find((entry) => entry.provider === activeResultView) || null;
+                            const sortedSupplierResults = [...currentResults].sort((a, b) => {
+                                if (a.error && !b.error) return 1;
+                                if (!a.error && b.error) return -1;
+                                if (a.error && b.error) return String(a.provider).localeCompare(String(b.provider), 'pt-BR');
+
+                                const priceA = parseFloat(String(a.price).replace(',', '.'));
+                                const priceB = parseFloat(String(b.price).replace(',', '.'));
+                                if (!Number.isNaN(priceA) && !Number.isNaN(priceB) && priceA !== priceB) {
+                                    return priceA - priceB;
+                                }
+
+                                return String(a.provider).localeCompare(String(b.provider), 'pt-BR');
+                            });
 
                             return (
                                 <div key={item.query} className="quote-item-card">
@@ -752,68 +735,88 @@ export const Quotes = () => {
                                         </div>
                                     )}
 
-                                    <div className="supplier-view-card">
-                                        <div className="supplier-view-header">
-                                            <strong>{activeResultView === 'summary' ? (supplierResult?.provider || 'Menor valor') : activeResultView}</strong>
-                                            {supplierResult && !supplierResult.error && <span>R$ {supplierResult.price}</span>}
-                                        </div>
+                                    <div className="supplier-results-grid">
+                                        {sortedSupplierResults.length > 0 ? (
+                                            sortedSupplierResults.map((supplierResult, index) => {
+                                                const isBestOffer =
+                                                    !!bestResult &&
+                                                    !supplierResult.error &&
+                                                    supplierResult.provider === bestResult.provider &&
+                                                    supplierResult.price === bestResult.price &&
+                                                    supplierResult.code === bestResult.code;
 
-                                        {supplierResult ? (
-                                            supplierResult.error ? (
-                                                <div className="supplier-view-error">{supplierResult.error}</div>
-                                            ) : (
-                                                <div className="supplier-result-card">
-                                                    {supplierResult.product && (
-                                                        <>
-                                                            <div className="supplier-result-label">
-                                                                Veículo / Aplicação
+                                                return (
+                                                    <div
+                                                        key={`${item.query}-${supplierResult.provider}-${supplierResult.code || index}`}
+                                                        className={`supplier-view-card ${isBestOffer ? 'best-supplier-card' : ''}`}
+                                                    >
+                                                        <div className="supplier-view-header">
+                                                            <strong>{supplierResult.provider}</strong>
+                                                            {supplierResult.error ? null : <span>R$ {supplierResult.price}</span>}
+                                                        </div>
+
+                                                        {isBestOffer && (
+                                                            <div className="supplier-card-badge">
+                                                                Menor valor
                                                             </div>
-                                                            <div className="supplier-result-title">
-                                                                {supplierResult.product}
+                                                        )}
+
+                                                        {supplierResult.error ? (
+                                                            <div className="supplier-view-error">{supplierResult.error}</div>
+                                                        ) : (
+                                                            <div className="supplier-result-card">
+                                                                {supplierResult.product && (
+                                                                    <>
+                                                                        <div className="supplier-result-label">
+                                                                            Veículo / Aplicação
+                                                                        </div>
+                                                                        <div className="supplier-result-title">
+                                                                            {supplierResult.product}
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                                {supplierResult.code && (
+                                                                    <div className="supplier-result-meta">
+                                                                        Código: {supplierResult.code}
+                                                                    </div>
+                                                                )}
+                                                                {supplierResult.brand && (
+                                                                    <div className="supplier-result-meta">
+                                                                        Fabricante: {supplierResult.brand}
+                                                                    </div>
+                                                                )}
+                                                                {supplierResult.application && (
+                                                                    <div className="supplier-result-meta">
+                                                                        Obs técnica: {supplierResult.application}
+                                                                    </div>
+                                                                )}
+                                                                {supplierResult.stock !== undefined && (
+                                                                    <div className="supplier-result-meta">
+                                                                        Estoque: {supplierResult.stockText || supplierResult.stock}
+                                                                    </div>
+                                                                )}
+                                                                <div className="price-tag">
+                                                                    <span>R$ {supplierResult.price}</span>
+                                                                    {supplierResult.link && (
+                                                                        <a
+                                                                            href={supplierResult.link}
+                                                                            target="_blank"
+                                                                            rel="noreferrer"
+                                                                            title="Ver produto no site"
+                                                                            className="visit-link"
+                                                                        >
+                                                                            🔗
+                                                                        </a>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                        </>
-                                                    )}
-                                                    {supplierResult.code && (
-                                                        <div className="supplier-result-meta">
-                                                            Código: {supplierResult.code}
-                                                        </div>
-                                                    )}
-                                                    {supplierResult.brand && (
-                                                        <div className="supplier-result-meta">
-                                                            Fabricante: {supplierResult.brand}
-                                                        </div>
-                                                    )}
-                                                    {supplierResult.application && (
-                                                        <div className="supplier-result-meta">
-                                                            Obs técnica: {supplierResult.application}
-                                                        </div>
-                                                    )}
-                                                    {supplierResult.stock !== undefined && (
-                                                        <div className="supplier-result-meta">
-                                                            Estoque: {supplierResult.stockText || supplierResult.stock}
-                                                        </div>
-                                                    )}
-                                                    <div className="price-tag">
-                                                        <span>R$ {supplierResult.price}</span>
-                                                        {supplierResult.link && (
-                                                            <a
-                                                                href={supplierResult.link}
-                                                                target="_blank"
-                                                                rel="noreferrer"
-                                                                title="Ver produto no site"
-                                                                className="visit-link"
-                                                            >
-                                                                🔗
-                                                            </a>
                                                         )}
                                                     </div>
-                                                </div>
-                                            )
+                                                );
+                                            })
                                         ) : (
                                             <span className="not-found">
-                                                {activeResultView === 'summary'
-                                                    ? 'Nenhuma oferta válida encontrada para a peça selecionada.'
-                                                    : 'Este fornecedor não retornou essa peça selecionada.'}
+                                                Nenhuma oferta válida encontrada para a peça selecionada.
                                             </span>
                                         )}
                                     </div>
@@ -1088,28 +1091,6 @@ export const Quotes = () => {
                     color: var(--text-muted);
                     font-size: 0.9rem;
                 }
-                .results-tabs {
-                    display: flex;
-                    gap: 0.75rem;
-                    flex-wrap: wrap;
-                    padding: 1rem 1.5rem 0;
-                    background: var(--panel-bg);
-                }
-                .results-tab {
-                    border: 1px solid var(--border-color);
-                    background: var(--bg-color);
-                    color: var(--text-main);
-                    border-radius: 999px;
-                    padding: 0.6rem 1rem;
-                    font-weight: 700;
-                    cursor: pointer;
-                    transition: all 0.18s ease;
-                }
-                .results-tab.active {
-                    background: var(--primary-color);
-                    color: white;
-                    border-color: var(--primary-color);
-                }
                 .results-list {
                     display: flex;
                     flex-direction: column;
@@ -1147,6 +1128,16 @@ export const Quotes = () => {
                     background: var(--panel-bg);
                     padding: 1rem;
                 }
+                .supplier-results-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                    gap: 0.9rem;
+                }
+                .best-supplier-card {
+                    border-color: rgba(16, 185, 129, 0.34);
+                    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.14);
+                    background: linear-gradient(180deg, rgba(16, 185, 129, 0.04), var(--panel-bg));
+                }
                 .supplier-view-header {
                     display: flex;
                     justify-content: space-between;
@@ -1158,6 +1149,21 @@ export const Quotes = () => {
                 }
                 .supplier-view-header strong {
                     font-size: 0.95rem;
+                }
+                .supplier-card-badge {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.35rem;
+                    margin-bottom: 0.7rem;
+                    background: rgba(16, 185, 129, 0.12);
+                    color: #047857;
+                    border: 1px solid rgba(16, 185, 129, 0.16);
+                    border-radius: 999px;
+                    padding: 0.35rem 0.7rem;
+                    font-size: 0.76rem;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    letter-spacing: 0.04em;
                 }
                 .supplier-view-error {
                     color: #dc2626;
@@ -1401,7 +1407,6 @@ export const Quotes = () => {
                     .add-part-form { grid-template-columns: 1fr; }
                     .add-btn { width: 100%; justify-content: center; }
                     .results-list { padding: 1rem; }
-                    .results-tabs { padding: 1rem 1rem 0; }
                     .quote-item-header,
                     .supplier-view-header {
                         flex-direction: column;
