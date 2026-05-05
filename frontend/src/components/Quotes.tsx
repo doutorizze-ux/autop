@@ -185,6 +185,15 @@ export const Quotes = () => {
     const [selectedVariantByQuery, setSelectedVariantByQuery] = useState<Record<string, string>>({});
     const [activeResultView, setActiveResultView] = useState<'summary' | string>('summary');
 
+    const scrollToResults = () => {
+        window.setTimeout(() => {
+            document.getElementById('quote-results-panel')?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+            });
+        }, 80);
+    };
+
     const loadHistory = async () => {
         setIsHistoryLoading(true);
         setHistoryError('');
@@ -236,6 +245,7 @@ export const Quotes = () => {
             setCurrentCreatedAt(data.completedAt || data.createdAt);
             setActiveHistoryId(data.quoteId || '');
             await loadHistory();
+            scrollToResults();
         }
     };
 
@@ -430,6 +440,7 @@ export const Quotes = () => {
             setIsSearching(false);
             setActiveJobId('');
             localStorage.removeItem(activeQuoteJobStorageKey);
+            scrollToResults();
         } catch (error) {
             console.error('Open Saved Quote Error:', error);
             alert('Não foi possível abrir essa cotação salva.');
@@ -701,7 +712,7 @@ export const Quotes = () => {
             </div>
 
             {hasResults && (
-                <div className="results-panel">
+                <div className="results-panel" id="quote-results-panel">
                     <div className="results-header">
                         <div>
                             <h3>Resultados por Fornecedor</h3>
@@ -1363,11 +1374,11 @@ export const Quotes = () => {
                 .quote-item-card {
                     border: 1px solid var(--border-color);
                     border-radius: 12px;
-                    padding: 1rem;
+                    padding: 0.8rem;
                     background: var(--bg-color);
                     display: flex;
                     flex-direction: column;
-                    gap: 0.9rem;
+                    gap: 0.65rem;
                 }
                 .quote-item-header {
                     display: flex;
@@ -1398,22 +1409,22 @@ export const Quotes = () => {
                 }
                 .supplier-results-grid {
                     display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-                    gap: 0.9rem;
+                    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+                    gap: 0.6rem;
                 }
                 .supplier-group-list {
                     display: flex;
                     flex-direction: column;
-                    gap: 1rem;
+                    gap: 0.75rem;
                 }
                 .supplier-group-panel {
                     border: 1px solid var(--border-color);
                     border-radius: 10px;
                     background: var(--panel-bg);
-                    padding: 1rem;
+                    padding: 0.75rem;
                     display: flex;
                     flex-direction: column;
-                    gap: 0.9rem;
+                    gap: 0.65rem;
                 }
                 .supplier-group-header {
                     display: flex;
@@ -1431,11 +1442,11 @@ export const Quotes = () => {
                     align-items: center;
                     gap: 0.75rem;
                     flex-wrap: wrap;
-                    margin-bottom: 0.75rem;
+                    margin-bottom: 0.45rem;
                     color: var(--text-main);
                 }
                 .supplier-view-header strong {
-                    font-size: 0.95rem;
+                    font-size: 0.88rem;
                 }
                 .supplier-card-badge {
                     display: inline-flex;
@@ -1553,7 +1564,7 @@ export const Quotes = () => {
                     display: flex;
                     flex-direction: column;
                     gap: 0.45rem;
-                    max-height: 260px;
+                    max-height: 170px;
                     overflow-y: auto;
                     padding-right: 0.2rem;
                 }
@@ -1563,8 +1574,8 @@ export const Quotes = () => {
                     border: 1px solid var(--border-color);
                     background: var(--panel-bg);
                     color: var(--text-main);
-                    padding: 0.6rem 0.75rem;
-                    font-size: 0.84rem;
+                    padding: 0.5rem 0.65rem;
+                    font-size: 0.8rem;
                     text-align: left;
                     cursor: pointer;
                     transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
@@ -1609,13 +1620,13 @@ export const Quotes = () => {
                 }
                 .supplier-result-title {
                     color: var(--text-main);
-                    font-size: 0.92rem;
+                    font-size: 0.86rem;
                     font-weight: 600;
                     line-height: 1.35;
                 }
                 .supplier-result-meta {
                     color: var(--text-muted);
-                    font-size: 0.82rem;
+                    font-size: 0.78rem;
                     line-height: 1.35;
                 }
                 .visit-link { text-decoration: none; font-size: 1.1rem; }
@@ -1630,16 +1641,16 @@ export const Quotes = () => {
                 .history-list {
                     display: flex;
                     flex-direction: column;
-                    gap: 1rem;
-                    padding: 1.5rem;
+                    gap: 0.75rem;
+                    padding: 1rem;
                 }
                 .history-card {
                     border: 1px solid var(--border-color);
                     border-radius: 12px;
-                    padding: 1rem;
+                    padding: 0.8rem 1rem;
                     display: grid;
                     grid-template-columns: auto minmax(0, 1fr) auto;
-                    gap: 1rem;
+                    gap: 0.8rem;
                     align-items: center;
                     background: var(--bg-color);
                 }
