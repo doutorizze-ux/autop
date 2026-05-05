@@ -1,6 +1,7 @@
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { io } from '../index';
+import { LocalAgentService } from './local-agent.service';
 
 const prisma = new PrismaClient();
 const enginePath = path.resolve(__dirname, '../../../scraping/engine.js');
@@ -132,6 +133,19 @@ export async function runSupplierSearch(supplier: any, productName: string) {
     }
 }
 
+async function executeSupplierSearch(supplier: any, productName: string) {
+    const useLocalAgent = process.env.LOCAL_AGENT_MODE !== 'disabled' && LocalAgentService.hasActiveAgents();
+    if (useLocalAgent) {
+        try {
+            return await LocalAgentService.dispatchSearchTask(supplier, productName);
+        } catch (error) {
+            console.error(`[Local Agent] Falha para ${supplier.name}, usando fallback no servidor: ${error instanceof Error ? error.message : error}`);
+        }
+    }
+
+    return runSupplierSearch(supplier, productName);
+}
+
 export class ScraperService {
     static async searchSupplierProduct(supplierId: string, productName: string) {
         const supplier = await prisma.supplier.findUnique({
@@ -142,7 +156,7 @@ export class ScraperService {
             throw new Error('Fornecedor não encontrado.');
         }
 
-        const result = await runSupplierSearch(supplier, productName);
+        const result = await executeSupplierSearch(supplier, productName);
         return Array.isArray(result) ? result[0] || null : result;
     }
 
@@ -176,7 +190,7 @@ export class ScraperService {
                             debug: null,
                         };
                     }
-                    const result = await runSupplierSearch(supplier, productName);
+                    const result = await executeSupplierSearch(supplier, productName);
                     const normalizedResults = Array.isArray(result) ? result : [result];
 
                     for (const entry of normalizedResults) {
