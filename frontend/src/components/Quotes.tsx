@@ -426,11 +426,11 @@ export const Quotes = () => {
     const hasResults = partList.length > 0 && suppliers.length > 0;
 
     const variantOptionsByQuery = useMemo(() => {
-        const entries: Record<string, Array<{ key: string; product: string; application: string; count: number }>> = {};
+        const entries: Record<string, Array<{ key: string; product: string; application: string; count: number; code: string; brand: string }>> = {};
 
         partList.forEach((item) => {
             const source = quoteMatrix[item.query] || [];
-            const groups = new Map<string, { key: string; product: string; application: string; count: number }>();
+            const groups = new Map<string, { key: string; product: string; application: string; count: number; code: string; brand: string }>();
 
             source.forEach((result) => {
                 if (result.error) return;
@@ -448,10 +448,25 @@ export const Quotes = () => {
                     product: String(result.product || item.query),
                     application: String(result.application || ''),
                     count: 1,
+                    code: String(result.code || ''),
+                    brand: String(result.brand || ''),
                 });
             });
 
-            entries[item.query] = Array.from(groups.values());
+            entries[item.query] = Array.from(groups.values()).sort((a, b) => {
+                const codeA = a.code.toLowerCase();
+                const codeB = b.code.toLowerCase();
+                const query = item.query.toLowerCase();
+
+                const aStarts = codeA === query ? -1 : 0;
+                const bStarts = codeB === query ? -1 : 0;
+                if (aStarts !== bStarts) return aStarts - bStarts;
+
+                const productCompare = a.product.localeCompare(b.product, 'pt-BR');
+                if (productCompare !== 0) return productCompare;
+
+                return a.application.localeCompare(b.application, 'pt-BR');
+            });
         });
 
         return entries;
@@ -653,24 +668,41 @@ export const Quotes = () => {
                                                 {item.description && <div className="part-cell-description">{item.description}</div>}
                                                 {variants.length > 1 && (
                                                     <div className="variant-selector">
-                                                        <label>Peças encontradas:</label>
-                                                        <select
-                                                            value={selectedVariantKey || variants[0]?.key || ''}
-                                                            onChange={(event) =>
-                                                                setSelectedVariantByQuery((current) => ({
-                                                                    ...current,
-                                                                    [item.query]: event.target.value,
-                                                                }))
-                                                            }
-                                                        >
-                                                            {variants.map((variant) => (
-                                                                <option key={variant.key} value={variant.key}>
-                                                                    {variant.product}
-                                                                    {variant.application ? ` | ${variant.application}` : ''}
-                                                                    {variant.count > 1 ? ` | ${variant.count} oferta(s)` : ''}
-                                                                </option>
-                                                            ))}
-                                                        </select>
+                                                        <label>{variants.length} peças encontradas no código. Escolha a correta:</label>
+                                                        <div className="variant-options-list">
+                                                            {variants.map((variant) => {
+                                                                const isSelected = (selectedVariantKey || variants[0]?.key || '') === variant.key;
+                                                                return (
+                                                                    <button
+                                                                        key={variant.key}
+                                                                        type="button"
+                                                                        className={`variant-option-card ${isSelected ? 'selected' : ''}`}
+                                                                        onClick={() =>
+                                                                            setSelectedVariantByQuery((current) => ({
+                                                                                ...current,
+                                                                                [item.query]: variant.key,
+                                                                            }))
+                                                                        }
+                                                                    >
+                                                                        <div className="variant-option-title">
+                                                                            {variant.product}
+                                                                        </div>
+                                                                        <div className="variant-option-meta">
+                                                                            {variant.code ? `Código: ${variant.code}` : 'Código não informado'}
+                                                                            {variant.brand ? ` | Fabricante: ${variant.brand}` : ''}
+                                                                        </div>
+                                                                        {variant.application && (
+                                                                            <div className="variant-option-meta">
+                                                                                Aplicação: {variant.application}
+                                                                            </div>
+                                                                        )}
+                                                                        <div className="variant-option-meta">
+                                                                            {variant.count} oferta(s) encontrada(s)
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
                                                     </div>
                                                 )}
                                             </td>
@@ -1104,7 +1136,7 @@ export const Quotes = () => {
                     margin-top: 0.8rem;
                     display: flex;
                     flex-direction: column;
-                    gap: 0.35rem;
+                    gap: 0.5rem;
                 }
                 .variant-selector label {
                     color: var(--text-muted);
@@ -1113,7 +1145,15 @@ export const Quotes = () => {
                     text-transform: uppercase;
                     letter-spacing: 0.04em;
                 }
-                .variant-selector select {
+                .variant-options-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.45rem;
+                    max-height: 260px;
+                    overflow-y: auto;
+                    padding-right: 0.2rem;
+                }
+                .variant-option-card {
                     width: 100%;
                     border-radius: 8px;
                     border: 1px solid var(--border-color);
@@ -1121,6 +1161,30 @@ export const Quotes = () => {
                     color: var(--text-main);
                     padding: 0.6rem 0.75rem;
                     font-size: 0.84rem;
+                    text-align: left;
+                    cursor: pointer;
+                    transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
+                }
+                .variant-option-card:hover {
+                    border-color: var(--primary-color);
+                    background: rgba(37, 99, 235, 0.04);
+                }
+                .variant-option-card.selected {
+                    border-color: var(--primary-color);
+                    background: rgba(37, 99, 235, 0.08);
+                    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.12);
+                }
+                .variant-option-title {
+                    font-size: 0.86rem;
+                    font-weight: 700;
+                    color: var(--text-main);
+                    line-height: 1.35;
+                    margin-bottom: 0.25rem;
+                }
+                .variant-option-meta {
+                    font-size: 0.78rem;
+                    color: var(--text-muted);
+                    line-height: 1.35;
                 }
                 .best-price {
                     background: rgba(16, 185, 129, 0.05);
