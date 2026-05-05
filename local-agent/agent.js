@@ -142,10 +142,12 @@ async function getOrCreateAssistSession(supplier) {
         locale: 'pt-BR',
         timezoneId: 'America/Sao_Paulo',
         ignoreHTTPSErrors: true,
-        ignoreDefaultArgs: ['--enable-automation'],
+        ignoreDefaultArgs: ['--enable-automation', '--no-sandbox'],
         args: [
-            '--disable-dev-shm-usage',
             '--window-size=1280,900',
+            '--start-maximized',
+            '--disable-blink-features=AutomationControlled',
+            '--disable-features=IsolateOrigins,site-per-process',
         ],
     };
 
