@@ -54,6 +54,23 @@ type QuoteJob = {
 
 const quoteJobs = new Map<string, QuoteJob>();
 
+function buildResultIdentity(result: any) {
+    const normalize = (value: unknown) =>
+        String(value || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim();
+
+    return [
+        normalize(result?.provider),
+        normalize(result?.variantKey || `${result?.product || ''} ${result?.application || ''}`),
+        normalize(result?.brand),
+        normalize(result?.code),
+    ].join('::');
+}
+
 function serializeQuoteJob(job: QuoteJob) {
     return {
         jobId: job.id,
@@ -413,7 +430,8 @@ async function runQuoteJob(job: QuoteJob, socketId?: string) {
                     job.matrix[productName] = [];
                 }
 
-                const existingIndex = job.matrix[productName].findIndex((entry: any) => entry.provider === supplier);
+                const identity = buildResultIdentity(result);
+                const existingIndex = job.matrix[productName].findIndex((entry: any) => buildResultIdentity(entry) === identity);
                 if (existingIndex >= 0) {
                     job.matrix[productName][existingIndex] = result;
                 } else {

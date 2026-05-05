@@ -32,6 +32,19 @@ function getSessionStatePath(supplier) {
     return path.join(sessionsDir, `${fileName || 'supplier'}.json`);
 }
 
+function buildVariantKey(product, application) {
+    const normalize = (value) => safeString(value)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+
+    const normalizedProduct = normalize(product);
+    const normalizedApplication = normalize(application);
+    return [normalizedProduct, normalizedApplication].filter(Boolean).join(' | ');
+}
+
 function getSupplierSlug(supplier) {
     return safeString(supplier.name)
         .toLowerCase()
@@ -461,6 +474,8 @@ function buildBrowserPayload(items, supplier) {
         brand: safeString(item.marca || item.brand),
         application: safeString(item.aplicacao || item.application),
         stock: parseInt(item.estoque || item.stock || 0, 10) || 0,
+        stockText: safeString(item.estoqueTexto || item.stockText),
+        variantKey: buildVariantKey(item.nome || item.name || item.product, item.aplicacao || item.application),
     })).filter((item) => item.price > 0);
 }
 

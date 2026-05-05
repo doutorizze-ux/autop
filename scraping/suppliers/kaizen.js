@@ -37,6 +37,55 @@ module.exports = {
     itemContainerSelector: ['[class*="product"]', '[class*="Product"]', '.card', '.product-block', '.item'],
     productNameSelector: ['h2', 'h3', '.nome', '.descricao', '[class*="name"]', '[class*="Name"]', '[class*="description"]', '[class*="Description"]'],
     priceSelector: ['.preco', '.valor', '[class*="preco"]', '[class*="valor"]', '[class*="price"]', '[class*="Price"]'],
+    extractItems: async ({ page, supplier }) => {
+        const products = await page.evaluate((supplierName) => {
+            const safeText = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+            const toAbsoluteUrl = (href) => {
+                if (!href) return '';
+                try {
+                    return new URL(href, window.location.origin).toString();
+                } catch {
+                    return href;
+                }
+            };
+
+            const cards = Array.from(document.querySelectorAll('div[class*="_products_"]'));
+            const items = [];
+
+            for (const card of cards) {
+                const productName = safeText(card.querySelector('h1')?.textContent);
+                const application = safeText(card.querySelector('p strong')?.parentElement?.textContent)
+                    .replace(/^Obs:\s*/i, '');
+
+                const rows = Array.from(card.querySelectorAll('tbody tr[class*="_origLine_"]'));
+                for (const row of rows) {
+                    const brand = safeText(row.querySelector('p[class*="_marca_"]')?.textContent);
+                    const code = safeText(row.querySelector('td:nth-child(2) a span')?.textContent);
+                    const priceText = safeText(row.querySelector('span#price, span[class*="_similar_"]')?.textContent);
+                    const stockText = safeText(row.querySelector('p[class*="_stockRange_"]')?.textContent);
+                    const link = toAbsoluteUrl(row.querySelector('td:nth-child(2) a')?.getAttribute('href'));
+
+                    if (!productName || !priceText) continue;
+
+                    items.push({
+                        provider: supplierName,
+                        nome: productName,
+                        preco: priceText,
+                        codigo: code,
+                        marca: brand,
+                        aplicacao: application,
+                        estoque: (stockText.match(/\d+/) || ['0'])[0],
+                        estoqueTexto: stockText,
+                        link,
+                    });
+                }
+            }
+
+            return items;
+        }, supplier.name);
+
+        return products;
+    },
 
     performSearch: async ({ page, query, fillVisibleLocator, dismissTransientUi }) => {
         await dismissTransientUi();

@@ -27,9 +27,11 @@ type QuoteResult = {
     link?: string;
     error?: string;
     stock?: number;
+    stockText?: string;
     code?: string;
     brand?: string;
     application?: string;
+    variantKey?: string;
 };
 
 type QuoteMatrix = Record<string, QuoteResult[]>;
@@ -69,6 +71,14 @@ const formatDateTime = (value?: string) => {
     return new Date(value).toLocaleString('pt-BR');
 };
 
+const normalizeVariantKey = (value?: string) =>
+    String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+
 const downloadBlob = (blob: BlobPart, filename: string) => {
     const url = window.URL.createObjectURL(new Blob([blob]));
     const link = document.createElement('a');
@@ -97,6 +107,7 @@ export const Quotes = () => {
     const [activeJobId, setActiveJobId] = useState(() => localStorage.getItem(activeQuoteJobStorageKey) || '');
     const [quoteJobStatus, setQuoteJobStatus] = useState('');
     const [quoteJobError, setQuoteJobError] = useState('');
+    const [selectedVariantByQuery, setSelectedVariantByQuery] = useState<Record<string, string>>({});
 
     const loadHistory = async () => {
         setIsHistoryLoading(true);
@@ -183,7 +194,21 @@ export const Quotes = () => {
                 if (!next[data.productName]) {
                     next[data.productName] = [];
                 }
-                const exists = next[data.productName].findIndex(r => r.provider === data.supplier);
+                const identity = [
+                    data.supplier,
+                    normalizeVariantKey(data.result?.variantKey || `${data.result?.product || ''} ${data.result?.application || ''}`),
+                    normalizeVariantKey(data.result?.brand),
+                    normalizeVariantKey(data.result?.code),
+                ].join('::');
+                const exists = next[data.productName].findIndex((r) => {
+                    const currentIdentity = [
+                        r.provider,
+                        normalizeVariantKey(r.variantKey || `${r.product || ''} ${r.application || ''}`),
+                        normalizeVariantKey(r.brand),
+                        normalizeVariantKey(r.code),
+                    ].join('::');
+                    return currentIdentity === identity;
+                });
                 if (exists !== -1) {
                     next[data.productName][exists] = data.result;
                 } else {
@@ -400,11 +425,75 @@ export const Quotes = () => {
 
     const hasResults = partList.length > 0 && suppliers.length > 0;
 
+    const variantOptionsByQuery = useMemo(() => {
+        const entries: Record<string, Array<{ key: string; product: string; application: string; count: number }>> = {};
+
+        partList.forEach((item) => {
+            const source = quoteMatrix[item.query] || [];
+            const groups = new Map<string, { key: string; product: string; application: string; count: number }>();
+
+            source.forEach((result) => {
+                if (result.error) return;
+                const key = normalizeVariantKey(result.variantKey || `${result.product || ''} ${result.application || ''}`);
+                if (!key) return;
+
+                const existing = groups.get(key);
+                if (existing) {
+                    existing.count += 1;
+                    return;
+                }
+
+                groups.set(key, {
+                    key,
+                    product: String(result.product || item.query),
+                    application: String(result.application || ''),
+                    count: 1,
+                });
+            });
+
+            entries[item.query] = Array.from(groups.values());
+        });
+
+        return entries;
+    }, [partList, quoteMatrix]);
+
+    useEffect(() => {
+        setSelectedVariantByQuery((current) => {
+            const next = { ...current };
+            let changed = false;
+
+            partList.forEach((item) => {
+                const variants = variantOptionsByQuery[item.query] || [];
+                if (variants.length <= 1) {
+                    if (next[item.query]) {
+                        delete next[item.query];
+                        changed = true;
+                    }
+                    return;
+                }
+
+                const currentValue = next[item.query];
+                const stillExists = variants.some((variant) => variant.key === currentValue);
+                if (!stillExists) {
+                    next[item.query] = variants[0].key;
+                    changed = true;
+                }
+            });
+
+            return changed ? next : current;
+        });
+    }, [partList, variantOptionsByQuery]);
+
     const bestPriceByQuery = useMemo(() => {
         const resultMap = new Map<string, number>();
 
         partList.forEach((item) => {
             const values = (quoteMatrix[item.query] || [])
+                .filter((entry) => {
+                    const selectedKey = selectedVariantByQuery[item.query];
+                    if (!selectedKey) return true;
+                    return normalizeVariantKey(entry.variantKey || `${entry.product || ''} ${entry.application || ''}`) === selectedKey;
+                })
                 .filter((entry) => !entry.error && entry.price !== undefined && entry.price !== null && entry.price !== '')
                 .map((entry) => parseFloat(String(entry.price).replace(',', '.')))
                 .filter((value) => !Number.isNaN(value));
@@ -413,7 +502,7 @@ export const Quotes = () => {
         });
 
         return resultMap;
-    }, [partList, quoteMatrix]);
+    }, [partList, quoteMatrix, selectedVariantByQuery]);
     return (
         <div className="quotes-container">
             <div className="quotes-header">
@@ -554,16 +643,44 @@ export const Quotes = () => {
                             <tbody>
                                 {partList.map((item) => {
                                     const minPrice = bestPriceByQuery.get(item.query) ?? Infinity;
+                                    const selectedVariantKey = selectedVariantByQuery[item.query];
+                                    const variants = variantOptionsByQuery[item.query] || [];
 
                                     return (
                                         <tr key={item.query}>
                                             <td className="part-name-cell">
                                                 <div className="part-cell-main">{item.query}</div>
                                                 {item.description && <div className="part-cell-description">{item.description}</div>}
+                                                {variants.length > 1 && (
+                                                    <div className="variant-selector">
+                                                        <label>Peças encontradas:</label>
+                                                        <select
+                                                            value={selectedVariantKey || variants[0]?.key || ''}
+                                                            onChange={(event) =>
+                                                                setSelectedVariantByQuery((current) => ({
+                                                                    ...current,
+                                                                    [item.query]: event.target.value,
+                                                                }))
+                                                            }
+                                                        >
+                                                            {variants.map((variant) => (
+                                                                <option key={variant.key} value={variant.key}>
+                                                                    {variant.product}
+                                                                    {variant.application ? ` | ${variant.application}` : ''}
+                                                                    {variant.count > 1 ? ` | ${variant.count} oferta(s)` : ''}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                )}
                                             </td>
 
                                             {suppliers.map((supplier) => {
-                                                const result = quoteMatrix[item.query]?.find((entry) => entry.provider === supplier);
+                                                const result = quoteMatrix[item.query]?.find((entry) => {
+                                                    if (entry.provider !== supplier) return false;
+                                                    if (!selectedVariantKey) return true;
+                                                    return normalizeVariantKey(entry.variantKey || `${entry.product || ''} ${entry.application || ''}`) === selectedVariantKey;
+                                                });
                                                 const parsedPrice = result && !result.error && result.price !== undefined
                                                     ? parseFloat(String(result.price).replace(',', '.'))
                                                     : Infinity;
@@ -588,9 +705,19 @@ export const Quotes = () => {
                                                                             Codigo: {result.code}
                                                                         </div>
                                                                     )}
+                                                                    {result.brand && (
+                                                                        <div className="supplier-result-meta">
+                                                                            Fabricante: {result.brand}
+                                                                        </div>
+                                                                    )}
+                                                                    {result.application && (
+                                                                        <div className="supplier-result-meta">
+                                                                            Aplicacao: {result.application}
+                                                                        </div>
+                                                                    )}
                                                                     {result.stock !== undefined && (
                                                                         <div className="supplier-result-meta">
-                                                                            Estoque: {result.stock}
+                                                                            Estoque: {result.stockText || result.stock}
                                                                         </div>
                                                                     )}
                                                                     <div className="price-tag">
@@ -972,6 +1099,28 @@ export const Quotes = () => {
                     color: var(--text-muted);
                     font-size: 0.85rem;
                     line-height: 1.4;
+                }
+                .variant-selector {
+                    margin-top: 0.8rem;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.35rem;
+                }
+                .variant-selector label {
+                    color: var(--text-muted);
+                    font-size: 0.78rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 0.04em;
+                }
+                .variant-selector select {
+                    width: 100%;
+                    border-radius: 8px;
+                    border: 1px solid var(--border-color);
+                    background: var(--panel-bg);
+                    color: var(--text-main);
+                    padding: 0.6rem 0.75rem;
+                    font-size: 0.84rem;
                 }
                 .best-price {
                     background: rgba(16, 185, 129, 0.05);

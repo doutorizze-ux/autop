@@ -7,12 +7,29 @@ const prisma = new PrismaClient();
 const enginePath = path.resolve(__dirname, '../../../scraping/engine.js');
 const { scrapeProduct } = require(enginePath);
 
+function normalizeVariantKey(value: string) {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+}
+
+function buildResultIdentity(item: any) {
+    const provider = String(item?.provider || '').trim();
+    const variantKey = normalizeVariantKey(item?.variantKey || `${item?.product || ''} ${item?.application || ''}`);
+    const brand = normalizeVariantKey(item?.brand || '');
+    const code = normalizeVariantKey(item?.code || '');
+    return [provider, variantKey, brand, code].join('::');
+}
+
 function normalizeSupplierResults(data: any, supplier: any, productName: string) {
     if (!Array.isArray(data) || data.length === 0) {
         return [];
     }
 
-    const bestByProvider = new Map<string, any>();
+    const bestByIdentity = new Map<string, any>();
 
     for (const item of data) {
         const provider = String(item?.provider || supplier.name || '').trim() || supplier.name;
@@ -26,18 +43,29 @@ function normalizeSupplierResults(data: any, supplier: any, productName: string)
             available: item?.available ?? true,
             link: item?.link || supplier.url,
             stock: Number.parseInt(String(item?.stock ?? 0), 10) || 0,
+            stockText: item?.stockText ? String(item.stockText) : '',
             code: item?.code ? String(item.code) : '',
             brand: item?.brand ? String(item.brand) : '',
             application: item?.application ? String(item.application) : '',
+            variantKey: String(item?.variantKey || `${item?.product || productName}|${item?.application || ''}`),
         };
 
-        const existing = bestByProvider.get(provider);
+        const identity = buildResultIdentity(normalizedItem);
+        const existing = bestByIdentity.get(identity);
         if (!existing || numericPrice < Number(existing.price || 0)) {
-            bestByProvider.set(provider, normalizedItem);
+            bestByIdentity.set(identity, normalizedItem);
         }
     }
 
-    return Array.from(bestByProvider.values());
+    return Array.from(bestByIdentity.values()).sort((a, b) => {
+        const productCompare = String(a.product || '').localeCompare(String(b.product || ''), 'pt-BR');
+        if (productCompare !== 0) return productCompare;
+
+        const applicationCompare = String(a.application || '').localeCompare(String(b.application || ''), 'pt-BR');
+        if (applicationCompare !== 0) return applicationCompare;
+
+        return Number(a.price || 0) - Number(b.price || 0);
+    });
 }
 
 export async function runSupplierSearch(supplier: any, productName: string) {
@@ -63,9 +91,11 @@ export async function runSupplierSearch(supplier: any, productName: string) {
                 available: true,
                 link: bestItem.link || supplier.url,
                 stock: Number.parseInt(String(bestItem.stock ?? 0), 10) || 0,
+                stockText: bestItem.stockText ? String(bestItem.stockText) : '',
                 code: bestItem.code ? String(bestItem.code) : '',
                 brand: bestItem.brand ? String(bestItem.brand) : '',
                 application: bestItem.application ? String(bestItem.application) : '',
+                variantKey: String(bestItem.variantKey || `${bestItem.product || bestItem.name || productName}|${bestItem.application || ''}`),
             };
         }
 
