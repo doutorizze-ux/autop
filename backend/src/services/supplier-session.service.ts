@@ -1,6 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 import { PrismaClient } from '@prisma/client';
+import { LocalAgentService } from './local-agent.service';
 
 const prisma = new PrismaClient();
 const { chromium } = require(path.resolve(__dirname, '../../../scraping/node_modules/playwright'));
@@ -45,11 +46,24 @@ async function closeExisting(supplierId: string) {
     }
 }
 
+async function getSupplierOrFail(supplierId: string) {
+    const supplier = await prisma.supplier.findUnique({ where: { id: supplierId } });
+    if (!supplier) {
+        throw new Error('Fornecedor nao encontrado.');
+    }
+    return supplier;
+}
+
+function shouldUseLocalAgent() {
+    return process.env.LOCAL_AGENT_MODE !== 'disabled' && LocalAgentService.hasActiveAgents();
+}
+
 export class SupplierSessionService {
     static async start(supplierId: string) {
-        const supplier = await prisma.supplier.findUnique({ where: { id: supplierId } });
-        if (!supplier) {
-            throw new Error('Fornecedor não encontrado.');
+        const supplier = await getSupplierOrFail(supplierId);
+
+        if (shouldUseLocalAgent()) {
+            return LocalAgentService.dispatchSessionTask(supplier, 'start') as Promise<any>;
         }
 
         await closeExisting(supplierId);
@@ -100,9 +114,14 @@ export class SupplierSessionService {
     }
 
     static async snapshot(supplierId: string) {
+        if (shouldUseLocalAgent()) {
+            const supplier = await getSupplierOrFail(supplierId);
+            return LocalAgentService.dispatchSessionTask(supplier, 'snapshot') as Promise<any>;
+        }
+
         const session = sessions.get(supplierId);
         if (!session) {
-            throw new Error('Sessão assistida não iniciada.');
+            throw new Error('Sessao assistida nao iniciada.');
         }
 
         const image = await session.page.screenshot({ type: 'jpeg', quality: 75, fullPage: false });
@@ -114,9 +133,14 @@ export class SupplierSessionService {
     }
 
     static async click(supplierId: string, x: number, y: number) {
+        if (shouldUseLocalAgent()) {
+            const supplier = await getSupplierOrFail(supplierId);
+            return LocalAgentService.dispatchSessionTask(supplier, 'click', { x, y }) as Promise<any>;
+        }
+
         const session = sessions.get(supplierId);
         if (!session) {
-            throw new Error('Sessão assistida não iniciada.');
+            throw new Error('Sessao assistida nao iniciada.');
         }
 
         await session.page.mouse.click(x, y);
@@ -125,9 +149,14 @@ export class SupplierSessionService {
     }
 
     static async type(supplierId: string, text: string) {
+        if (shouldUseLocalAgent()) {
+            const supplier = await getSupplierOrFail(supplierId);
+            return LocalAgentService.dispatchSessionTask(supplier, 'type', { text }) as Promise<any>;
+        }
+
         const session = sessions.get(supplierId);
         if (!session) {
-            throw new Error('Sessão assistida não iniciada.');
+            throw new Error('Sessao assistida nao iniciada.');
         }
 
         await session.page.keyboard.type(text, { delay: 25 });
@@ -136,9 +165,14 @@ export class SupplierSessionService {
     }
 
     static async press(supplierId: string, key: string) {
+        if (shouldUseLocalAgent()) {
+            const supplier = await getSupplierOrFail(supplierId);
+            return LocalAgentService.dispatchSessionTask(supplier, 'press', { key }) as Promise<any>;
+        }
+
         const session = sessions.get(supplierId);
         if (!session) {
-            throw new Error('Sessão assistida não iniciada.');
+            throw new Error('Sessao assistida nao iniciada.');
         }
 
         await session.page.keyboard.press(key);
@@ -147,10 +181,28 @@ export class SupplierSessionService {
     }
 
     static async save(supplierId: string) {
-        const supplier = await prisma.supplier.findUnique({ where: { id: supplierId } });
+        const supplier = await getSupplierOrFail(supplierId);
+
+        if (shouldUseLocalAgent()) {
+            const result = await LocalAgentService.dispatchSessionTask(supplier, 'save') as any;
+            await (prisma.supplier as any).update({
+                where: { id: supplierId },
+                data: {
+                    sessionData: result?.storageState ? JSON.stringify(result.storageState) : supplier.sessionData,
+                },
+            });
+
+            return {
+                saved: true,
+                profilePath: result?.profilePath || null,
+                url: result?.url || supplier.loginUrl || supplier.url,
+                mode: 'local-agent',
+            };
+        }
+
         const session = sessions.get(supplierId);
-        if (!supplier || !session) {
-            throw new Error('Sessão assistida não iniciada.');
+        if (!session) {
+            throw new Error('Sessao assistida nao iniciada.');
         }
 
         const storageState = await session.context.storageState();
@@ -169,6 +221,11 @@ export class SupplierSessionService {
     }
 
     static async stop(supplierId: string) {
+        if (shouldUseLocalAgent()) {
+            const supplier = await getSupplierOrFail(supplierId);
+            return LocalAgentService.dispatchSessionTask(supplier, 'stop') as Promise<any>;
+        }
+
         await closeExisting(supplierId);
         return { stopped: true };
     }

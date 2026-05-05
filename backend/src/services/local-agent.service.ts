@@ -1,9 +1,23 @@
 import { randomUUID } from 'crypto';
 
-type AgentTask = {
-    id: string;
+type SearchTaskPayload = {
+    kind: 'search';
     supplier: any;
     productName: string;
+};
+
+type SessionTaskPayload = {
+    kind: 'supplier-session';
+    supplier: any;
+    action: 'start' | 'snapshot' | 'click' | 'type' | 'press' | 'save' | 'stop';
+    payload?: Record<string, any>;
+};
+
+type AgentTaskPayload = SearchTaskPayload | SessionTaskPayload;
+
+type AgentTask = {
+    id: string;
+    payload: AgentTaskPayload;
     createdAt: number;
     claimedBy?: string;
     claimedAt?: number;
@@ -24,6 +38,7 @@ const connectedAgents = new Map<string, ConnectedAgent>();
 const pendingTasks = new Map<string, AgentTask>();
 const agentTimeoutMs = 45_000;
 const taskTimeoutMs = 180_000;
+const sessionTaskTimeoutMs = 120_000;
 
 function cleanupAgents() {
     const now = Date.now();
@@ -73,20 +88,22 @@ export class LocalAgentService {
         return Array.from(connectedAgents.values()).sort((a, b) => b.lastSeenAt - a.lastSeenAt);
     }
 
-    static dispatchSearchTask(supplier: any, productName: string) {
+    static dispatchTask(payload: AgentTaskPayload, timeoutMs = taskTimeoutMs) {
         const taskId = randomUUID();
 
         return new Promise((resolve, reject) => {
             const timer = setTimeout(() => {
                 const existing = pendingTasks.get(taskId);
                 if (!existing) return;
-                cleanupClaimedTask(existing, `Agente local nao respondeu para ${supplier.name}.`);
-            }, taskTimeoutMs);
+                const taskLabel = existing.payload.kind === 'search'
+                    ? `${existing.payload.supplier.name}`
+                    : `${existing.payload.supplier.name} (${existing.payload.action})`;
+                cleanupClaimedTask(existing, `Agente local nao respondeu para ${taskLabel}.`);
+            }, timeoutMs);
 
             pendingTasks.set(taskId, {
                 id: taskId,
-                supplier,
-                productName,
+                payload,
                 createdAt: Date.now(),
                 status: 'pending',
                 resolve,
@@ -94,6 +111,30 @@ export class LocalAgentService {
                 timer,
             });
         });
+    }
+
+    static dispatchSearchTask(supplier: any, productName: string) {
+        return this.dispatchTask({
+            kind: 'search',
+            supplier,
+            productName,
+        });
+    }
+
+    static dispatchSessionTask(
+        supplier: any,
+        action: SessionTaskPayload['action'],
+        payload?: Record<string, any>,
+    ) {
+        return this.dispatchTask(
+            {
+                kind: 'supplier-session',
+                supplier,
+                action,
+                payload,
+            },
+            sessionTaskTimeoutMs,
+        );
     }
 
     static nextTask(agentId: string, name = 'Agente Local', version = '1.0.0') {
@@ -113,8 +154,7 @@ export class LocalAgentService {
 
         return {
             id: task.id,
-            supplier: task.supplier,
-            productName: task.productName,
+            ...task.payload,
         };
     }
 
