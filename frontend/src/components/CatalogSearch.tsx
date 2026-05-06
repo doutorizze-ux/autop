@@ -40,7 +40,7 @@ export const CatalogSearch = ({ onUseCode }: CatalogSearchProps) => {
       setSearched(true);
     } catch (error) {
       console.error('Catalog Search Error:', error);
-      alert('Não foi possível consultar o catálogo agora.');
+      alert('Nao foi possivel consultar o catalogo agora.');
     } finally {
       setIsLoading(false);
     }
@@ -50,9 +50,10 @@ export const CatalogSearch = ({ onUseCode }: CatalogSearchProps) => {
     <div className="catalog-search-page">
       <div className="catalog-hero">
         <div>
-          <h2>Buscar Código por Descrição</h2>
+          <h2>Buscar Codigo por Descricao</h2>
           <p>
-            Procure por descrição, veículo, motor, combustível ou ano e encontre os códigos do catálogo para mandar direto para a cotação.
+            Procure por descricao, veiculo, motor, combustivel ou ano e encontre os codigos do
+            catalogo para mandar direto para a cotacao.
           </p>
         </div>
       </div>
@@ -70,25 +71,25 @@ export const CatalogSearch = ({ onUseCode }: CatalogSearchProps) => {
             />
           </div>
           <button type="submit" className="catalog-search-button" disabled={isLoading}>
-            {isLoading ? 'Buscando...' : 'Buscar no catálogo'}
+            {isLoading ? 'Buscando...' : 'Buscar no catalogo'}
           </button>
         </form>
 
         <div className="catalog-search-hint">
-          Dica: combine peça + veículo + ano. Exemplo: <strong>sensor nível fiesta 2010</strong>
+          Dica: combine peca + veiculo + ano. Exemplo: <strong>sensor nivel fiesta 2010</strong>
         </div>
       </div>
 
       <div className="catalog-results-panel">
         <div className="catalog-results-header">
-          <h3>Resultados do catálogo</h3>
-          {searched && <span>{results.length} código(s) encontrado(s)</span>}
+          <h3>Resultados do catalogo</h3>
+          {searched && <span>{results.length} codigo(s) encontrado(s)</span>}
         </div>
 
         {!searched ? (
-          <div className="catalog-empty-state">Digite uma descrição para localizar os códigos do catálogo.</div>
+          <div className="catalog-empty-state">Digite uma descricao para localizar os codigos do catalogo.</div>
         ) : results.length === 0 ? (
-          <div className="catalog-empty-state">Nenhum código encontrado com essa busca.</div>
+          <div className="catalog-empty-state">Nenhum codigo encontrado com essa busca.</div>
         ) : (
           <div className="catalog-results-grid">
             {results.map((item) => (
@@ -96,7 +97,9 @@ export const CatalogSearch = ({ onUseCode }: CatalogSearchProps) => {
                 <div className="catalog-result-top">
                   <div>
                     <div className="catalog-result-code">{item.code}</div>
-                    <div className="catalog-result-description">{item.description || 'Descrição não informada'}</div>
+                    <div className="catalog-result-description">
+                      {item.description || 'Descricao nao informada'}
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -108,19 +111,19 @@ export const CatalogSearch = ({ onUseCode }: CatalogSearchProps) => {
                       })
                     }
                   >
-                    <Plus size={15} /> Usar código
+                    <Plus size={15} /> Usar codigo
                   </button>
                 </div>
 
                 <div className="catalog-meta-grid">
                   <div><strong>Categoria:</strong> {item.category || '---'}</div>
-                  <div><strong>Família:</strong> {item.family || '---'}</div>
+                  <div><strong>Familia:</strong> {item.family || '---'}</div>
                   <div><strong>Marca:</strong> {item.brand || '---'}</div>
                 </div>
 
                 {item.applications.length > 0 && (
                   <div className="catalog-applications">
-                    <strong>Aplicações encontradas</strong>
+                    <strong>Aplicacoes encontradas</strong>
                     <ul>
                       {item.applications.slice(0, 5).map((application, index) => (
                         <li key={`${item.code}-${index}`}>{application}</li>

@@ -30,11 +30,11 @@ const quotePrefillStorageKey = 'quote_prefill_item';
 const navItems = [
   { id: 'clientes', label: 'Clientes', icon: Users, caption: 'CRM e funil' },
   { id: 'atendimento', label: 'WhatsApp', icon: MessageSquare, caption: 'Conversas em tempo real' },
-  { id: 'cotacoes', label: 'Orçamento Geral', icon: Search, caption: 'Códigos e confrontos' },
-  { id: 'roadmap', label: 'Versão e Roadmap', icon: Rocket, caption: 'Evolução do produto' },
-  { id: 'fornecedores', label: 'Fornecedores', icon: Briefcase, caption: 'Integrações e logins', adminOnly: true },
-  { id: 'config', label: 'Configurações', icon: Settings, caption: 'Preferências do sistema' },
-  { id: 'catalogo', label: 'Buscar CÃ³digo', icon: FileSearch, caption: 'CatÃ¡logo por descriÃ§Ã£o' },
+  { id: 'cotacoes', label: 'Orcamento Geral', icon: Search, caption: 'Codigos e confrontos' },
+  { id: 'roadmap', label: 'Versao e Roadmap', icon: Rocket, caption: 'Evolucao do produto' },
+  { id: 'fornecedores', label: 'Fornecedores', icon: Briefcase, caption: 'Integracoes e logins', adminOnly: true },
+  { id: 'config', label: 'Configuracoes', icon: Settings, caption: 'Preferencias do sistema' },
+  { id: 'catalogo', label: 'Buscar Codigo', icon: FileSearch, caption: 'Catalogo por descricao' },
 ];
 
 export const Dashboard = () => {
@@ -147,16 +147,16 @@ export const Dashboard = () => {
                 <img src={themeLogo} alt="Logo" className="logo-image" />
               ) : (
                 <div className="brand-fallback">
-                  <span className="brand-kicker">Autopeças</span>
+                  <span className="brand-kicker">Autopecas</span>
                   <h2>AutoCRM</h2>
                 </div>
               )}
             </div>
             <div className="sidebar-summary">
               <span className="sidebar-chip">
-                <Sparkles size={14} /> Operação ativa
+                <Sparkles size={14} /> Operacao ativa
               </span>
-              <p>Fluxo centralizado de atendimento, cotações e fornecedores.</p>
+              <p>Fluxo centralizado de atendimento, cotacoes e fornecedores.</p>
             </div>
           </div>
 
@@ -196,7 +196,7 @@ export const Dashboard = () => {
 
           <div className="user-profile">
             <div className="user-badge">
-              <span className="user-badge-label">Sessão atual</span>
+              <span className="user-badge-label">Sessao atual</span>
               <span className="user-badge-name">{user?.name} ({user?.role})</span>
             </div>
             <button className="logout-btn" onClick={logout} title="Sair">
@@ -219,7 +219,7 @@ export const Dashboard = () => {
             <div className="dashboard-section">
               <div className="section-heading">
                 <h2 className="page-title">Atendimento WhatsApp</h2>
-                <p>Converse, troque de cliente no celular com mais facilidade e mantenha o time rápido no balcão.</p>
+                <p>Converse, troque de cliente no celular com mais facilidade e mantenha o time rapido no balcao.</p>
               </div>
               {wsStatus === 'connected' ? <ChatArea /> : <WhatsAppConnect />}
             </div>
@@ -244,7 +244,7 @@ export const Dashboard = () => {
             <div className="modal-content auth-card" style={{ maxWidth: '420px', width: '100%' }}>
               <h2 style={{ marginBottom: '0.75rem' }}>Acesso protegido</h2>
               <p style={{ color: 'var(--text-muted)', marginBottom: '1.25rem', lineHeight: 1.6 }}>
-                Digite a senha para abrir a área de fornecedores.
+                Digite a senha para abrir a area de fornecedores.
               </p>
 
               <form onSubmit={handleUnlockSuppliers}>
