@@ -36,6 +36,17 @@ type QuoteResult = {
 
 type QuoteMatrix = Record<string, QuoteResult[]>;
 
+type VariantGroup = {
+    key: string;
+    title: string;
+    application?: string;
+    code?: string;
+    brands: string[];
+    offersCount: number;
+    bestPrice: number;
+    exactMatch: boolean;
+};
+
 type QuoteHistoryEntry = {
     id: string;
     createdAt: string;
@@ -119,6 +130,22 @@ const buildResultIdentity = (result: QuoteResult) =>
         parsePriceValue(result.price),
     ].join('::');
 
+const buildVariantGroupKey = (result: QuoteResult) =>
+    normalizeVariantKey(
+        result.variantKey ||
+        `${result.product || ''} ${result.application || ''} ${result.code || ''}`
+    );
+
+const buildVariantGroupLabel = (group: VariantGroup) => {
+    const parts = [
+        group.exactMatch ? 'Código exato' : 'Similar',
+        group.code || 's/código',
+        group.title || 'Peça sem descrição',
+        `${group.offersCount} oferta(s)`,
+    ];
+    return parts.join(' • ');
+};
+
 const sortSupplierResults = (results: QuoteResult[], query: string) => {
     const normalizedQueryCode = normalizeCodeValue(query);
     const hasExactMatch = results.some((entry) => normalizeCodeValue(entry.code) === normalizedQueryCode);
@@ -176,6 +203,7 @@ export const Quotes = () => {
     const [quoteJobStatus, setQuoteJobStatus] = useState('');
     const [quoteJobError, setQuoteJobError] = useState('');
     const [selectedOfferByQuerySupplier, setSelectedOfferByQuerySupplier] = useState<Record<string, string>>({});
+    const [selectedVariantByQuery, setSelectedVariantByQuery] = useState<Record<string, string>>({});
     const [activeResultView, setActiveResultView] = useState<'summary' | string>('summary');
 
     const scrollToResults = () => {
@@ -219,6 +247,7 @@ export const Quotes = () => {
         setQuoteMatrix(data.matrix || {});
         setSuppliers(data.suppliers || []);
         setSelectedOfferByQuerySupplier({});
+        setSelectedVariantByQuery({});
 
         if (data.jobId) {
             setActiveJobId(data.jobId);
@@ -431,6 +460,7 @@ export const Quotes = () => {
             setQuoteMatrix(response.data.matrix || {});
             setSuppliers(response.data.suppliers || []);
             setSelectedOfferByQuerySupplier({});
+            setSelectedVariantByQuery({});
             setCurrentQuoteId(response.data.quoteId || quoteId);
             setCurrentCreatedAt(response.data.createdAt);
             setIsSearching(false);
@@ -515,6 +545,72 @@ export const Quotes = () => {
         }
     }, [activeResultView, suppliers]);
 
+    const variantGroupsByQuery = useMemo(() => {
+        const groupsByQuery: Record<string, VariantGroup[]> = {};
+
+        partList.forEach((item) => {
+            const sourceResults = (quoteMatrix[item.query] || []).filter((entry) => !entry.error);
+            const groupMap = new Map<string, VariantGroup>();
+
+            sourceResults.forEach((entry) => {
+                const key = buildVariantGroupKey(entry);
+                if (!key) return;
+
+                const existing = groupMap.get(key);
+                const entryPrice = parsePriceValue(entry.price);
+                const entryCode = normalizeCodeValue(entry.code);
+                const normalizedQueryCode = normalizeCodeValue(item.query);
+
+                if (!existing) {
+                    groupMap.set(key, {
+                        key,
+                        title: String(entry.product || 'Peça sem descrição'),
+                        application: entry.application ? String(entry.application) : '',
+                        code: entry.code ? String(entry.code) : '',
+                        brands: entry.brand ? [String(entry.brand)] : [],
+                        offersCount: 1,
+                        bestPrice: entryPrice,
+                        exactMatch: !!entryCode && entryCode === normalizedQueryCode,
+                    });
+                    return;
+                }
+
+                existing.offersCount += 1;
+                existing.bestPrice = Math.min(existing.bestPrice, entryPrice);
+                if (!existing.code && entry.code) existing.code = String(entry.code);
+                if (!existing.application && entry.application) existing.application = String(entry.application);
+                if (!existing.title && entry.product) existing.title = String(entry.product);
+                if (entry.brand && !existing.brands.includes(String(entry.brand))) {
+                    existing.brands.push(String(entry.brand));
+                }
+                if (!!entryCode && entryCode === normalizedQueryCode) {
+                    existing.exactMatch = true;
+                }
+            });
+
+            groupsByQuery[item.query] = Array.from(groupMap.values()).sort((a, b) => {
+                if (a.exactMatch !== b.exactMatch) return a.exactMatch ? -1 : 1;
+                if (a.bestPrice !== b.bestPrice) return a.bestPrice - b.bestPrice;
+                return a.title.localeCompare(b.title, 'pt-BR');
+            });
+        });
+
+        return groupsByQuery;
+    }, [partList, quoteMatrix]);
+
+    const resolvedVariantSelectionByQuery = useMemo(() => {
+        const resolved: Record<string, string> = {};
+
+        partList.forEach((item) => {
+            const variants = variantGroupsByQuery[item.query] || [];
+            const preferred = selectedVariantByQuery[item.query];
+            const exists = variants.some((group) => group.key === preferred);
+            resolved[item.query] = exists ? preferred : variants[0]?.key || '';
+        });
+
+        return resolved;
+    }, [partList, selectedVariantByQuery, variantGroupsByQuery]);
+
     const selectedOffersByQuerySupplier = useMemo(() => {
         const selections: Record<string, Record<string, QuoteResult | null>> = {};
 
@@ -522,10 +618,16 @@ export const Quotes = () => {
             const sourceResults = quoteMatrix[item.query] || [];
             const providerNames = Array.from(new Set([...suppliers, ...sourceResults.map((entry) => entry.provider).filter(Boolean)]));
             const querySelections: Record<string, QuoteResult | null> = {};
+            const selectedVariantKey = resolvedVariantSelectionByQuery[item.query];
 
             providerNames.forEach((provider) => {
                 const providerResults = sortSupplierResults(
-                    sourceResults.filter((entry) => entry.provider === provider && !entry.error),
+                    sourceResults.filter(
+                        (entry) =>
+                            entry.provider === provider &&
+                            !entry.error &&
+                            (!selectedVariantKey || buildVariantGroupKey(entry) === selectedVariantKey)
+                    ),
                     item.query
                 );
 
@@ -546,7 +648,7 @@ export const Quotes = () => {
         });
 
         return selections;
-    }, [partList, quoteMatrix, selectedOfferByQuerySupplier, suppliers]);
+    }, [partList, quoteMatrix, resolvedVariantSelectionByQuery, selectedOfferByQuerySupplier, suppliers]);
 
     return (
         <div className="quotes-container">
@@ -699,6 +801,9 @@ export const Quotes = () => {
                         {partList.map((item) => {
                             const rawResults = quoteMatrix[item.query] || [];
                             const normalizedQueryCode = normalizeCodeValue(item.query);
+                            const variantGroups = variantGroupsByQuery[item.query] || [];
+                            const selectedVariantKey = resolvedVariantSelectionByQuery[item.query];
+                            const selectedVariant = variantGroups.find((group) => group.key === selectedVariantKey) || null;
                             const viewProviders =
                                 activeResultView === 'summary'
                                     ? suppliers
@@ -762,6 +867,39 @@ export const Quotes = () => {
                                             : 'Código exato não apareceu. Abaixo estão os similares reais retornados pelos fornecedores.'}
                                     </div>
 
+                                    {variantGroups.length > 1 && (
+                                        <div className="query-variant-selector">
+                                            <label htmlFor={`variant-${item.query}`}>Peça escolhida para comparar neste código</label>
+                                            <select
+                                                id={`variant-${item.query}`}
+                                                value={selectedVariantKey}
+                                                onChange={(event) =>
+                                                    setSelectedVariantByQuery((current) => ({
+                                                        ...current,
+                                                        [item.query]: event.target.value,
+                                                    }))
+                                                }
+                                            >
+                                                {variantGroups.map((group) => (
+                                                    <option key={group.key} value={group.key}>
+                                                        {buildVariantGroupLabel(group)}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            {selectedVariant && (
+                                                <div className="query-variant-summary">
+                                                    <strong>{selectedVariant.title}</strong>
+                                                    {selectedVariant.application && <span>{selectedVariant.application}</span>}
+                                                    <small>
+                                                        {selectedVariant.brands.length > 0
+                                                            ? `Fabricantes: ${selectedVariant.brands.join(', ')}`
+                                                            : 'Fabricante não informado'}
+                                                    </small>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
                                     <div className="supplier-results-grid compact-results-grid">
                                         {providerCards.length > 0 ? (
                                             providerCards.map((card) => {
@@ -776,7 +914,7 @@ export const Quotes = () => {
                                                                 <strong>{card.provider}</strong>
                                                             </div>
                                                             <div className="supplier-view-error">
-                                                                Este fornecedor não retornou oferta real para esta peça.
+                                                                Este fornecedor não retornou oferta real para a peça escolhida.
                                                             </div>
                                                         </div>
                                                     );
@@ -801,9 +939,9 @@ export const Quotes = () => {
                                                         key={`${item.query}-${card.provider}`}
                                                         className={`supplier-view-card compact-supplier-card ${isBestOffer ? 'best-supplier-card' : ''}`}
                                                     >
-                                                        <div className="supplier-view-header compact-supplier-header">
+                                                        <div className="supplier-card-topline">
                                                             <strong>{card.provider}</strong>
-                                                            <span>R$ {supplierResult.price}</span>
+                                                            <span className="supplier-card-price">R$ {supplierResult.price}</span>
                                                         </div>
 
                                                         <div className="supplier-card-tags">
@@ -821,7 +959,7 @@ export const Quotes = () => {
 
                                                         {card.providerResults.length > 1 && (
                                                             <div className="supplier-offer-selector">
-                                                                <label>Oferta selecionada neste fornecedor</label>
+                                                                <label>Escolha fabricante / similar neste fornecedor</label>
                                                                 <select
                                                                     value={buildResultIdentity(supplierResult)}
                                                                     onChange={(event) =>
@@ -841,7 +979,7 @@ export const Quotes = () => {
                                                                                     : 'Código não informado';
                                                                         return (
                                                                             <option key={buildResultIdentity(option)} value={buildResultIdentity(option)}>
-                                                                                {`R$ ${option.price} • ${option.code || 's/código'} • ${option.brand || 's/fabricante'} • ${optionLabel}`}
+                                                                                {`${option.brand || 'Sem fabricante'} • ${option.code || 's/código'} • R$ ${option.price} • ${optionLabel}`}
                                                                             </option>
                                                                         );
                                                                     })}
@@ -849,32 +987,32 @@ export const Quotes = () => {
                                                             </div>
                                                         )}
 
-                                                        <div className="supplier-result-card">
+                                                        <div className="supplier-result-card compact-result-body">
                                                             <div className="supplier-result-label">Peça / Aplicação</div>
                                                             <div className="supplier-result-title">
                                                                 {supplierResult.product || 'Peça sem descrição clara'}
                                                             </div>
-                                                            <div className="supplier-result-meta">
-                                                                {supplierResult.code ? `Código: ${supplierResult.code}` : 'Código não informado pelo fornecedor'}
+                                                            <div className="supplier-meta-grid">
+                                                                <div className="supplier-result-meta">
+                                                                    <strong>Fabricante:</strong> {supplierResult.brand || 'Não informado'}
+                                                                </div>
+                                                                <div className="supplier-result-meta">
+                                                                    <strong>Código:</strong> {supplierResult.code || 'Não informado'}
+                                                                </div>
+                                                                <div className="supplier-result-meta">
+                                                                    <strong>Estoque:</strong> {supplierResult.stockText || supplierResult.stock || 0}
+                                                                </div>
+                                                                <div className="supplier-result-meta">
+                                                                    <strong>Tipo:</strong> {matchLabel}
+                                                                </div>
                                                             </div>
-                                                            {supplierResult.brand && (
-                                                                <div className="supplier-result-meta">
-                                                                    Fabricante: {supplierResult.brand}
-                                                                </div>
-                                                            )}
                                                             {supplierResult.application && (
-                                                                <div className="supplier-result-meta">
-                                                                    Obs técnica: {supplierResult.application}
+                                                                <div className="supplier-result-meta supplier-application">
+                                                                    <strong>Obs técnica:</strong> {supplierResult.application}
                                                                 </div>
                                                             )}
-                                                            {supplierResult.stock !== undefined && (
-                                                                <div className="supplier-result-meta">
-                                                                    Estoque: {supplierResult.stockText || supplierResult.stock}
-                                                                </div>
-                                                            )}
-                                                            <div className="price-tag">
-                                                                <span>R$ {supplierResult.price}</span>
-                                                                {supplierResult.link && (
+                                                            {supplierResult.link && (
+                                                                <div className="supplier-card-link-row">
                                                                     <a
                                                                         href={supplierResult.link}
                                                                         target="_blank"
@@ -882,10 +1020,10 @@ export const Quotes = () => {
                                                                         title="Ver produto no site"
                                                                         className="visit-link"
                                                                     >
-                                                                        🔗
+                                                                        Abrir no fornecedor
                                                                     </a>
-                                                                )}
-                                                            </div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 );
@@ -1216,6 +1354,43 @@ export const Quotes = () => {
                     font-size: 0.85rem;
                     line-height: 1.4;
                 }
+                .query-variant-selector {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.45rem;
+                    padding: 0.8rem;
+                    border: 1px solid var(--border-color);
+                    border-radius: 10px;
+                    background: var(--panel-bg);
+                }
+                .query-variant-selector label {
+                    color: var(--text-muted);
+                    font-size: 0.76rem;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    letter-spacing: 0.04em;
+                }
+                .query-variant-selector select {
+                    width: 100%;
+                    border: 1px solid var(--border-color);
+                    background: var(--bg-color);
+                    color: var(--text-main);
+                    border-radius: 8px;
+                    padding: 0.65rem 0.75rem;
+                    font-size: 0.84rem;
+                }
+                .query-variant-summary {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.2rem;
+                    font-size: 0.82rem;
+                    color: var(--text-muted);
+                    line-height: 1.35;
+                }
+                .query-variant-summary strong {
+                    color: var(--text-main);
+                    font-size: 0.9rem;
+                }
                 .best-offer-badge {
                     background: rgba(16, 185, 129, 0.12);
                     color: #047857;
@@ -1233,8 +1408,8 @@ export const Quotes = () => {
                 }
                 .supplier-results-grid {
                     display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-                    gap: 0.6rem;
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                    gap: 0.8rem;
                 }
                 .compact-results-grid {
                     align-items: stretch;
@@ -1264,16 +1439,31 @@ export const Quotes = () => {
                     background: linear-gradient(180deg, rgba(16, 185, 129, 0.04), var(--panel-bg));
                 }
                 .compact-supplier-card {
-                    min-height: 250px;
+                    min-height: 0;
                     display: flex;
                     flex-direction: column;
+                    gap: 0.7rem;
+                }
+                .supplier-card-topline {
+                    display: flex;
+                    align-items: center;
                     justify-content: space-between;
+                    gap: 0.8rem;
+                }
+                .supplier-card-topline strong {
+                    color: var(--text-main);
+                    font-size: 0.92rem;
+                }
+                .supplier-card-price {
+                    color: var(--primary-color);
+                    font-size: 1rem;
+                    font-weight: 800;
+                    white-space: nowrap;
                 }
                 .supplier-offer-selector {
                     display: flex;
                     flex-direction: column;
                     gap: 0.35rem;
-                    margin-bottom: 0.7rem;
                 }
                 .supplier-offer-selector label {
                     color: var(--text-muted);
@@ -1334,7 +1524,6 @@ export const Quotes = () => {
                 .supplier-card-match {
                     display: inline-flex;
                     align-items: center;
-                    margin-bottom: 0.7rem;
                     border-radius: 999px;
                     padding: 0.35rem 0.7rem;
                     font-size: 0.76rem;
@@ -1477,8 +1666,10 @@ export const Quotes = () => {
                     color: var(--text-muted);
                     line-height: 1.35;
                 }
-                .price-tag { display: flex; align-items: center; gap: 0.8rem; color: var(--text-main); }
                 .supplier-result-card { display: flex; flex-direction: column; gap: 0.35rem; }
+                .compact-result-body {
+                    padding-top: 0.1rem;
+                }
                 .supplier-result-label {
                     color: var(--text-muted);
                     font-size: 0.72rem;
@@ -1497,7 +1688,28 @@ export const Quotes = () => {
                     font-size: 0.78rem;
                     line-height: 1.35;
                 }
-                .visit-link { text-decoration: none; font-size: 1.1rem; }
+                .supplier-meta-grid {
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 0.45rem 0.8rem;
+                }
+                .supplier-result-meta strong {
+                    color: var(--text-main);
+                }
+                .supplier-application {
+                    margin-top: 0.15rem;
+                }
+                .supplier-card-link-row {
+                    display: flex;
+                    justify-content: flex-end;
+                    margin-top: 0.35rem;
+                }
+                .visit-link {
+                    text-decoration: none;
+                    font-size: 0.8rem;
+                    font-weight: 700;
+                    color: var(--primary-color);
+                }
                 .error-text { color: #ef4444; font-size: 0.85rem; line-height: 1.5; }
                 .not-found { color: var(--text-muted); }
                 .history-panel { overflow: hidden; }
@@ -1604,6 +1816,13 @@ export const Quotes = () => {
                     .supplier-view-header {
                         flex-direction: column;
                         align-items: flex-start;
+                    }
+                    .supplier-card-topline {
+                        flex-direction: column;
+                        align-items: flex-start;
+                    }
+                    .supplier-meta-grid {
+                        grid-template-columns: 1fr;
                     }
                     .history-header-actions,
                     .export-actions, .history-card-actions { width: 100%; }
