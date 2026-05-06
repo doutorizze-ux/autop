@@ -12,6 +12,7 @@ import quoteRoutes from './routes/quote.routes';
 import aiRoutes from './routes/ai.routes';
 import configRoutes from './routes/config.routes';
 import localAgentRoutes from './routes/local-agent.routes';
+import catalogRoutes from './routes/catalog.routes';
 
 
 dotenv.config();
@@ -44,6 +45,7 @@ app.use('/api/quotes', quoteRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/local-agent', localAgentRoutes);
+app.use('/api/catalog', catalogRoutes);
 
 
 server.listen(PORT, () => {

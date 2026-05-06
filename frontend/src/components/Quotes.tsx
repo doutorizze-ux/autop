@@ -70,6 +70,7 @@ type QuoteSearchResponse = {
 
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const activeQuoteJobStorageKey = 'active_quote_job_id';
+const quotePrefillStorageKey = 'quote_prefill_item';
 
 const buildItemLabel = (item: QuoteItemInput) => {
     const query = String(item.query || '').trim();
@@ -338,6 +339,42 @@ export const Quotes = () => {
         return () => {
             socket.off('quote_progress', handleProgress);
         };
+    }, []);
+
+    useEffect(() => {
+        const applyPrefill = () => {
+            const raw = localStorage.getItem(quotePrefillStorageKey);
+            if (!raw) return;
+
+            try {
+                const payload = JSON.parse(raw) as QuoteItemInput;
+                const query = String(payload.query || '').trim();
+                const description = String(payload.description || '').trim();
+
+                if (!query) return;
+
+                setPartList((current) => {
+                    const alreadyExists = current.some((item) => item.query.toLowerCase() === query.toLowerCase());
+                    if (alreadyExists) return current;
+
+                    return [
+                        ...current,
+                        {
+                            query,
+                            description: description || undefined,
+                        },
+                    ];
+                });
+            } catch (error) {
+                console.error('Quote Prefill Error:', error);
+            } finally {
+                localStorage.removeItem(quotePrefillStorageKey);
+            }
+        };
+
+        applyPrefill();
+        window.addEventListener('quote-prefill-ready', applyPrefill);
+        return () => window.removeEventListener('quote-prefill-ready', applyPrefill);
     }, []);
 
     const handleAddPart = (event?: React.FormEvent) => {

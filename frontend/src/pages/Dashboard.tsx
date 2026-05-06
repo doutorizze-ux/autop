@@ -8,6 +8,7 @@ import {
   Settings,
   LogOut,
   Search,
+  FileSearch,
   ChevronRight,
   Sparkles,
   Rocket,
@@ -19,10 +20,12 @@ import { Suppliers } from '../components/Suppliers';
 import { Settings as SettingsComponent } from '../components/Settings';
 import { Quotes } from '../components/Quotes';
 import { Roadmap } from '../components/Roadmap';
+import { CatalogSearch } from '../components/CatalogSearch';
 import { socket } from '../services/socket';
 
 const suppliersAccessPassword = '080782';
 const suppliersAccessStorageKey = 'suppliers_access_granted';
+const quotePrefillStorageKey = 'quote_prefill_item';
 
 const navItems = [
   { id: 'clientes', label: 'Clientes', icon: Users, caption: 'CRM e funil' },
@@ -31,6 +34,7 @@ const navItems = [
   { id: 'roadmap', label: 'Versão e Roadmap', icon: Rocket, caption: 'Evolução do produto' },
   { id: 'fornecedores', label: 'Fornecedores', icon: Briefcase, caption: 'Integrações e logins', adminOnly: true },
   { id: 'config', label: 'Configurações', icon: Settings, caption: 'Preferências do sistema' },
+  { id: 'catalogo', label: 'Buscar CÃ³digo', icon: FileSearch, caption: 'CatÃ¡logo por descriÃ§Ã£o' },
 ];
 
 export const Dashboard = () => {
@@ -223,6 +227,14 @@ export const Dashboard = () => {
 
           {activeTab === 'fornecedores' && <Suppliers />}
           {activeTab === 'cotacoes' && <Quotes />}
+          {activeTab === 'catalogo' && (
+            <CatalogSearch
+              onUseCode={(payload) => {
+                localStorage.setItem(quotePrefillStorageKey, JSON.stringify(payload));
+                setActiveTab('cotacoes');
+              }}
+            />
+          )}
           {activeTab === 'roadmap' && <Roadmap />}
           {activeTab === 'config' && <SettingsComponent />}
         </section>
