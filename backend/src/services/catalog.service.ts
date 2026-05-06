@@ -45,7 +45,17 @@ export class CatalogService {
     private static loadPayload() {
         if (this.payload) return this.payload;
 
-        const filePath = path.resolve(__dirname, '../../data/vdo-catalog.json');
+        const candidates = [
+            path.resolve(__dirname, '../../catalog/vdo-catalog.json'),
+            path.resolve(__dirname, '../../data/vdo-catalog.json'),
+        ];
+
+        const filePath = candidates.find((candidate) => fs.existsSync(candidate));
+
+        if (!filePath) {
+            throw new Error(`VDO catalog file not found. Checked: ${candidates.join(', ')}`);
+        }
+
         const raw = fs.readFileSync(filePath, 'utf8');
         this.payload = JSON.parse(raw) as CatalogPayload;
         return this.payload;
