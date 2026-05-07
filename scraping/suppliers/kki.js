@@ -4,12 +4,16 @@ module.exports = {
     authenticatedUrl: 'https://kki.autonorte.com.br/compras',
     loginSuccessSelector: [
         'button:has-text("Pesquisar")',
+        'input[placeholder*="referencia" i]',
+        'input[placeholder*="referência" i]',
         'input[placeholder*="descricao" i]',
         'input[placeholder*="aplicacao" i]',
         'input[placeholder*="referencia auxiliar" i]',
         'text=Comprar peças',
     ],
     searchSelector: [
+        'input[placeholder*="referencia" i]',
+        'input[placeholder*="referência" i]',
         'input[placeholder*="descricao" i]',
         'input[placeholder*="aplicacao" i]',
         'input[placeholder*="referencia auxiliar" i]',
@@ -29,20 +33,30 @@ module.exports = {
     performSearch: async ({ page, query, fillVisibleLocator, dismissTransientUi }) => {
         await dismissTransientUi();
 
-        const inputs = page.locator('input[type="text"]');
-        const visibleInputs = [];
-        const count = await inputs.count().catch(() => 0);
+        const selectors = [
+            'input[placeholder*="referencia" i]',
+            'input[placeholder*="referência" i]',
+            'input[placeholder*="codigo" i]',
+            'input[placeholder*="código" i]',
+            'form input[type="text"]',
+        ];
 
-        for (let index = 0; index < count; index += 1) {
-            const current = inputs.nth(index);
-            const isVisible = await current.isVisible().catch(() => false);
-            const isEnabled = await current.isEnabled().catch(() => true);
-            if (isVisible && isEnabled) {
-                visibleInputs.push(current);
+        let codeInput = null;
+        for (const selector of selectors) {
+            const locator = page.locator(selector);
+            const count = await locator.count().catch(() => 0);
+            for (let index = 0; index < count; index += 1) {
+                const current = locator.nth(index);
+                const isVisible = await current.isVisible().catch(() => false);
+                const isEnabled = await current.isEnabled().catch(() => true);
+                if (isVisible && isEnabled) {
+                    codeInput = current;
+                    break;
+                }
             }
+            if (codeInput) break;
         }
 
-        const codeInput = visibleInputs[1] || visibleInputs[0];
         if (!codeInput) {
             throw new Error('Campo de busca do KKI nao encontrado.');
         }
