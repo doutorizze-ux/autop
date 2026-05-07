@@ -26,18 +26,58 @@ module.exports = {
     priceSelector: ['button', 'span', 'div'],
     emptyResultSelector: ['text=Nenhum produto encontrado', 'text=0 resultado', 'text=0 resultados'],
     navigateToAuthenticatedAfterLogin: true,
+    performSearch: async ({ page, query, fillVisibleLocator, dismissTransientUi }) => {
+        await dismissTransientUi();
+
+        const inputs = page.locator('input[type="text"]');
+        const visibleInputs = [];
+        const count = await inputs.count().catch(() => 0);
+
+        for (let index = 0; index < count; index += 1) {
+            const current = inputs.nth(index);
+            const isVisible = await current.isVisible().catch(() => false);
+            const isEnabled = await current.isEnabled().catch(() => true);
+            if (isVisible && isEnabled) {
+                visibleInputs.push(current);
+            }
+        }
+
+        const codeInput = visibleInputs[1] || visibleInputs[0];
+        if (!codeInput) {
+            throw new Error('Campo de busca do KKI nao encontrado.');
+        }
+
+        await fillVisibleLocator(codeInput, query);
+
+        const searchButton = page.locator('button:has-text("Pesquisar"), button[type="submit"]').first();
+        if (await searchButton.isVisible().catch(() => false)) {
+            await searchButton.click({ force: true }).catch(() => {});
+        } else {
+            await codeInput.press('Enter').catch(() => {});
+        }
+
+        await page.waitForLoadState('domcontentloaded').catch(() => {});
+        await page.waitForTimeout(1200);
+        await page.waitForFunction(() => {
+            const body = String(document.body?.innerText || '');
+            return /Distribu[ií]do por/i.test(body) || /Nenhum produto encontrado/i.test(body);
+        }, { timeout: 12000 }).catch(() => {});
+        await page.waitForTimeout(1500);
+        await dismissTransientUi();
+    },
     extractItems: async ({ page, supplier }) => {
         return page.evaluate((supplierName) => {
             const clean = (value) => String(value || '').replace(/\s+/g, ' ').trim();
 
-            const candidateNodes = Array.from(document.querySelectorAll('div, article, li')).filter((node) => {
+            const candidateNodes = Array.from(document.querySelectorAll('div, article, li, section')).filter((node) => {
                 const text = clean(node.textContent || '');
                 if (!text) return false;
                 return /distribu[ií]do por/i.test(text) && /R\$\s*[0-9.,]+/.test(text);
             });
 
             const filteredNodes = candidateNodes.filter((node) => {
-                return !candidateNodes.some((other) => other !== node && node.contains(other));
+                const text = clean(node.textContent || '');
+                return text.length > 40 && text.length < 1200;
             });
 
             const parseCard = (node) => {
@@ -60,6 +100,11 @@ module.exports = {
                     if (normalized.includes('avise-me')) return false;
                     if (normalized.includes('ver carrinho')) return false;
                     if (normalized.includes('comprar peças')) return false;
+                    if (normalized.includes('lancamentos')) return false;
+                    if (normalized.includes('promocao')) return false;
+                    if (normalized.includes('placa do veiculo')) return false;
+                    if (normalized.includes('menor preco')) return false;
+                    if (normalized.includes('maior preco')) return false;
                     if (/^[A-Z0-9-]{2,}$/.test(line)) return false;
                     return line.length > 6;
                 }) || '';
@@ -71,6 +116,8 @@ module.exports = {
                     if (normalized.includes('em estoque')) return false;
                     if (normalized.includes('transporte')) return false;
                     if (normalized.includes('avise-me')) return false;
+                    if (normalized.includes('lancamentos')) return false;
+                    if (normalized.includes('promocao')) return false;
                     if (/^r\$\s*[0-9.,]+/i.test(line)) return false;
                     if (/^[A-Z0-9-]{2,}$/.test(line)) return false;
                     return line.length <= 30;
