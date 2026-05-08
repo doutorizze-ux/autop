@@ -4,11 +4,16 @@ module.exports = {
     userSelector: ['input[type="email"]', 'input[formcontrolname="email"]', 'input[name="login"]'],
     passSelector: ['input[type="password"]', 'input[formcontrolname="senha"]'],
     loginSuccessSelector: ['a[href*="logout"]', '.user-info', 'button.btn-buscar', 'input[formcontrolname="descricao"]'],
-    searchSelector: ['input[formcontrolname="descricao"]', 'input[role="search"]', 'input[placeholder*="codigo ou descricao" i]'],
-    searchButtonSelector: ['button.btn-buscar', 'button:has-text("Buscar")', '.btn-buscar'],
-    buildSearchUrl: (query) => `https://dpk.com.br/#/busca-produto?termo=${encodeURIComponent(query)}`,
+    searchSelector: [
+        'input[formcontrolname="descricao"]',
+        'input[role="search"]',
+        'input[placeholder*="código ou descrição" i]',
+        'input[placeholder*="codigo ou descricao" i]',
+    ],
+    searchButtonSelector: ['button.btn-buscar', '.btn-buscar'],
+    buildSearchUrl: (query) => `https://www.dpk.com.br/#/busca-produto?termo=${encodeURIComponent(query)}`,
     performSearch: async ({ page, query }) => {
-        const targetUrl = `https://dpk.com.br/#/busca-produto?termo=${encodeURIComponent(query)}`;
+        const targetUrl = `https://www.dpk.com.br/#/busca-produto?termo=${encodeURIComponent(query)}`;
         await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 60000 }).catch(() => {});
         await page.waitForTimeout(4000);
     },
@@ -27,30 +32,34 @@ module.exports = {
                 return '';
             };
 
-            const cards = Array.from(document.querySelectorAll('mat-card, .product-item, .card-produto, .grid-produto, tr.mat-row'));
+            const cards = Array.from(document.querySelectorAll('div.cardsAlinhamento > mat-card.produto-card, mat-card.produto-card'));
             const items = [];
 
             for (const card of cards) {
                 const text = normalize(card.textContent || '');
                 if (!text) continue;
 
+                const product = findText(card, ['h2.mat-h4', 'h2', '.mat-h4']);
                 const priceText =
-                    findText(card, ['.price', '.preco', '.valor', '[class*="price"]', '[class*="preco"]', '[class*="valor"]'])
+                    findText(card, ['span.cor-preco', 'div.preco span.cor-preco', '.preco .cor-preco'])
                     || ((text.match(/R\$\s*[0-9.,]+/) || [])[0] || '');
 
-                if (!priceText || /ver preco/i.test(priceText)) continue;
+                if (!product || !priceText) continue;
 
-                const product =
-                    findText(card, ['.product-name', '.product-title', '.descricao-produto', 'a[href*="#/produtos/"]', 'td.mat-column-descricao'])
-                    || normalize(text.split('R$')[0]);
+                const stockText = findText(card, ['div.estoque', '.estoque']);
+                const brandNode = Array.from(card.querySelectorAll('div.informacoes p strong, p strong, strong')).find((node) => {
+                    const parentText = normalize(node.parentElement?.textContent || '');
+                    return /fabricante/i.test(parentText);
+                });
+                const factoryCodeNode = Array.from(card.querySelectorAll('div.fab strong, div.informacoes strong, strong')).find((node) => {
+                    const parentText = normalize(node.parentElement?.textContent || '');
+                    return /c[oó]d\.\s*de\s*f[aá]brica/i.test(parentText);
+                });
+                const productCodeText = text.match(/C[oó]d\.\s*do\s*Produto:\s*([A-Z0-9./_-]+)/i);
 
-                const code =
-                    ((text.match(/C[oó]d(?:\.|igo)?\s*(?:de)?\s*F[aá]brica:\s*([A-Z0-9./_-]+)/i) || [])[1] || '')
-                    || ((text.match(/SKU:\s*([A-Z0-9./_-]+)/i) || [])[1] || '')
-                    || ((text.match(/C[oó]d(?:\.|igo)?\s*(?:do)?\s*Produto:\s*([A-Z0-9./_-]+)/i) || [])[1] || '');
-
-                const brand = ((text.match(/Fabricante:\s*([^\n]+)/i) || [])[1] || '').trim();
-                const stock = ((text.match(/(?:Estoque|Saldo|Dispon[ií]vel|Qtd)\s*:?\s*([0-9]+)/i) || [])[1] || '0').trim();
+                const brand = normalize(brandNode?.textContent || '') || ((text.match(/Fabricante:\s*([^\n]+)/i) || [])[1] || '').trim();
+                const code = normalize(factoryCodeNode?.textContent || '') || (productCodeText ? productCodeText[1] : '');
+                const stock = ((stockText.match(/([0-9]+)\s*un/i) || [])[1] || (text.match(/([0-9]+)\s*un\.?\s*no estoque/i) || [])[1] || '0').trim();
 
                 items.push({
                     nome: product,
@@ -65,10 +74,10 @@ module.exports = {
             return items;
         });
     },
-    itemContainerSelector: ['mat-card', '.product-item', '.card-produto', 'tr.mat-row', '.grid-produto', '.lista-produtos .item'],
-    productNameSelector: ['.product-name', '.product-title', '.descricao-produto', 'a[href*="#/produtos/"]', 'td.mat-column-descricao'],
-    priceSelector: ['.price', '.valor', '.preco', 'td.mat-column-preco'],
-    codeSelector: ['.codigo-produto', '.ref', '.sku'],
+    itemContainerSelector: ['div.cardsAlinhamento > mat-card.produto-card', 'mat-card.produto-card'],
+    productNameSelector: ['h2.mat-h4', 'h2', '.mat-h4'],
+    priceSelector: ['span.cor-preco', 'div.preco span.cor-preco', '.preco .cor-preco'],
+    codeSelector: ['div.fab strong', 'div.informacoes strong'],
     waitForResultsOnly: true,
     emptyResultSelector: ['text="Nao encontramos resultados"', '.sem-resultados', 'text="0 resultados"', 'text="Pesquisa por:"'],
     navigateToAuthenticatedAfterLogin: true,
