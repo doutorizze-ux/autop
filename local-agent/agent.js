@@ -11,8 +11,12 @@ const agentName = String(process.env.LOCAL_AGENT_NAME || `Agente ${os.hostname()
 const agentVersion = '1.1.0';
 const pollIntervalMs = Number.parseInt(process.env.LOCAL_AGENT_POLL_INTERVAL_MS || '3000', 10) || 3000;
 const headless = String(process.env.HEADLESS || 'false').trim() === 'true';
+let cachedDashboardToken = null;
 
 const sessionRoot = path.resolve(__dirname, 'browser-profiles');
+if (!process.env.SCRAPER_PROFILE_ROOT) {
+    process.env.SCRAPER_PROFILE_ROOT = sessionRoot;
+}
 const assistSessions = new Map();
 const knownBrowserExecutables = [
     process.env.LOCAL_AGENT_BROWSER_PATH,
@@ -58,7 +62,83 @@ function resolveBrowserExecutable() {
     return null;
 }
 
-async function postJson(url, body) {
+function copyDirectory(sourceDir, targetDir) {
+    ensureDirectory(targetDir);
+
+    for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
+        const sourcePath = path.join(sourceDir, entry.name);
+        const targetPath = path.join(targetDir, entry.name);
+
+        if (entry.isDirectory()) {
+            copyDirectory(sourcePath, targetPath);
+            continue;
+        }
+
+        fs.copyFileSync(sourcePath, targetPath);
+    }
+}
+
+async function readDashboardTokenFromChrome(forceRefresh = false) {
+    if (!forceRefresh && cachedDashboardToken) {
+        return cachedDashboardToken;
+    }
+
+    const chromeDefaultProfile = process.env.LOCALAPPDATA
+        ? path.join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'User Data', 'Default')
+        : '';
+
+    if (!chromeDefaultProfile || !fs.existsSync(chromeDefaultProfile)) {
+        return null;
+    }
+
+    const tempUserDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autopecas-agent-token-'));
+    const tempDefaultProfile = path.join(tempUserDataDir, 'Default');
+    ensureDirectory(tempDefaultProfile);
+
+    for (const folderName of ['Local Storage', 'Session Storage']) {
+        const sourceDir = path.join(chromeDefaultProfile, folderName);
+        if (fs.existsSync(sourceDir)) {
+            copyDirectory(sourceDir, path.join(tempDefaultProfile, folderName));
+        }
+    }
+
+    const browserOptions = {
+        headless: true,
+        viewport: { width: 1280, height: 900 },
+        ignoreHTTPSErrors: true,
+    };
+
+    let context;
+    try {
+        try {
+            context = await chromium.launchPersistentContext(tempUserDataDir, {
+                ...browserOptions,
+                channel: 'chrome',
+            });
+        } catch (_) {
+            context = await chromium.launchPersistentContext(tempUserDataDir, browserOptions);
+        }
+
+        const page = context.pages()[0] || await context.newPage();
+        await page.goto('https://centroautomotivo0058.store/dashboard', {
+            waitUntil: 'domcontentloaded',
+            timeout: 120000,
+        }).catch(() => {});
+        await page.waitForTimeout(1500);
+
+        const token = await page.evaluate(() => localStorage.getItem('token')).catch(() => null);
+        cachedDashboardToken = String(token || '').trim() || null;
+        return cachedDashboardToken;
+    } finally {
+        if (context) {
+            await context.close().catch(() => {});
+        }
+        fs.rmSync(tempUserDataDir, { recursive: true, force: true });
+    }
+}
+
+async function postJson(url, body, retry = true) {
+    const browserToken = await readDashboardTokenFromChrome();
     const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -67,9 +147,18 @@ async function postJson(url, body) {
             'x-local-agent-id': agentId,
             'x-local-agent-name': agentName,
             'x-local-agent-version': agentVersion,
+            ...(browserToken ? { Authorization: `Bearer ${browserToken}` } : {}),
         },
         body: JSON.stringify(body || {}),
     });
+
+    if (response.status === 401 && retry) {
+        const responseText = await response.text().catch(() => '');
+        if (responseText.toLowerCase().includes('token do agente local invalido')) {
+            await readDashboardTokenFromChrome(true).catch(() => null);
+            return postJson(url, body, false);
+        }
+    }
 
     const text = await response.text();
     const data = text ? JSON.parse(text) : {};

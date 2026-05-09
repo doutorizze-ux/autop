@@ -1,14 +1,41 @@
 import { Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import { LocalAgentService } from '../services/local-agent.service';
 
 function readAgentToken(req: Request) {
     return String(req.headers['x-local-agent-token'] || req.body?.token || '').trim();
 }
 
+function readBearerToken(req: Request) {
+    const authHeader = String(req.headers.authorization || '').trim();
+    if (!authHeader) return '';
+
+    const parts = authHeader.split(' ');
+    if (parts.length !== 2) return '';
+
+    const [scheme, token] = parts;
+    if (!/^Bearer$/i.test(scheme)) return '';
+    return String(token || '').trim();
+}
+
 function isAuthorized(req: Request) {
     const expected = String(process.env.LOCAL_AGENT_TOKEN || '').trim();
-    if (!expected) return false;
-    return readAgentToken(req) === expected;
+    const agentToken = readAgentToken(req);
+    if (expected && agentToken === expected) {
+        return true;
+    }
+
+    const bearerToken = readBearerToken(req);
+    if (!bearerToken) {
+        return false;
+    }
+
+    try {
+        jwt.verify(bearerToken, process.env.JWT_SECRET || 'secret');
+        return true;
+    } catch (_) {
+        return false;
+    }
 }
 
 function readAgentIdentity(req: Request) {

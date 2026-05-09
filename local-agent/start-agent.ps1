@@ -16,9 +16,11 @@ $env:LOCAL_AGENT_TOKEN = $Token
 $env:LOCAL_AGENT_ID = $AgentId
 $env:LOCAL_AGENT_NAME = $AgentName
 $env:HEADLESS = "false"
+$env:SCRAPER_PROFILE_ROOT = Join-Path $PSScriptRoot "browser-profiles"
 
 Write-Host "Iniciando agente local..." -ForegroundColor Cyan
 Write-Host "Backend: $BackendUrl"
 Write-Host "Agente: $AgentName ($AgentId)"
+Write-Host "Perfis: $env:SCRAPER_PROFILE_ROOT"
 
 node "$PSScriptRoot\agent.js"

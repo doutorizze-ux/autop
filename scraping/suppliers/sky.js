@@ -6,6 +6,7 @@ const SEARCH_SELECTORS = [
 ];
 
 const SEARCH_BUTTON_SELECTORS = [
+    '#btnBuscar',
     'button:has-text("Buscar")',
     'button[type="submit"]',
 ];
@@ -51,12 +52,56 @@ async function clickVisibleSearchButton(page) {
     return false;
 }
 
+function looksLikeCodeQuery(query) {
+    const normalized = String(query || '').trim();
+    if (!normalized) return false;
+    return /^[A-Za-z0-9./_-]{4,}$/.test(normalized) && /\d/.test(normalized);
+}
+
+async function pickSearchInput(page, query) {
+    const codeLike = looksLikeCodeQuery(query);
+    const selectors = codeLike
+        ? ['#inpCodigo', 'input[placeholder*="codigo da peca" i]', 'input[placeholder*="codigo" i]', '#inpPeca']
+        : ['#inpPeca', 'input[placeholder*="descricao da peca" i]', 'input[placeholder*="descricao da pe" i]', '#inpCodigo'];
+
+    for (const selector of selectors) {
+        const locator = page.locator(selector);
+        const count = await locator.count().catch(() => 0);
+        for (let index = 0; index < count; index += 1) {
+            const current = locator.nth(index);
+            const isVisible = await current.isVisible().catch(() => false);
+            const isEnabled = await current.isEnabled().catch(() => true);
+            if (isVisible && isEnabled) {
+                return current;
+            }
+        }
+    }
+
+    return findVisibleSearchInput(page);
+}
+
+async function waitForSearchRender(page) {
+    await page.waitForFunction(() => {
+        const bodyText = String(document.body?.innerText || '');
+        const hasCards = document.querySelectorAll('#tb_produto .bx_produto').length > 0;
+        const hasCounter = Boolean(document.querySelector('#tb_produto, .resultado_contador'));
+        const hasEmptyMessage = /nenhum|nao encontrado|não encontrado/i.test(bodyText);
+        const stillLoading = /carregando/i.test(bodyText);
+        return hasCards || hasCounter || hasEmptyMessage || !stillLoading;
+    }, null, { timeout: 12000 }).catch(() => {});
+
+    await page.waitForTimeout(1200);
+}
+
 async function runBranchSearch(page, query, dismissTransientUi) {
-    const input = await findVisibleSearchInput(page);
+    const input = await pickSearchInput(page, query);
     if (!input) {
         return false;
     }
 
+    await page.locator('#inpPeca').fill('').catch(() => {});
+    await page.locator('#inpCodigo').fill('').catch(() => {});
+    await page.locator('#inpCodigoBarras').fill('').catch(() => {});
     await input.click({ force: true }).catch(() => {});
     await input.fill('').catch(() => {});
     await input.fill(String(query || '')).catch(() => {});
@@ -68,7 +113,7 @@ async function runBranchSearch(page, query, dismissTransientUi) {
     }
 
     await page.waitForLoadState('domcontentloaded').catch(() => {});
-    await page.waitForTimeout(1500);
+    await waitForSearchRender(page);
     await dismissTransientUi();
     return true;
 }
@@ -123,6 +168,35 @@ async function getSelectedBranchLabel(selectLocator) {
 async function extractBranchResults(page, providerName) {
     return page.evaluate(({ providerName }) => {
         const clean = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+
+        const parseProductCards = () => {
+            const cards = Array.from(document.querySelectorAll('#tb_produto .bx_produto, .bx_produto'));
+            return cards.map((card) => {
+                const text = clean(card.textContent);
+                const price = clean(card.querySelector('.valor .preco_final')?.textContent || '');
+                if (!price) return null;
+
+                const fabCode = clean(card.querySelector('.codfab strong')?.textContent || '');
+                const nnCode = clean(card.querySelector('.codnn')?.textContent || '').replace(/^N\/N:\s*/i, '');
+                const auxCode = clean(card.querySelector('.codaux')?.textContent || '').replace(/^C[oó]d\.\s*Aux:\s*/i, '');
+                const stockText = clean(card.querySelector('.lkDisp')?.textContent || '');
+                const stock = ((stockText.match(/([0-9]+)/) || [])[1] || '0').trim();
+                const product = clean(card.querySelector('.nome')?.textContent || '');
+                const brand = clean(card.querySelector('.fornecedor')?.textContent || '');
+                const linkNode = card.querySelector('.lkAplicacao[href], .lkSimilar[href], a[href]');
+
+                return {
+                    provider: providerName,
+                    nome: product || text,
+                    preco: `R$ ${price}`,
+                    codigo: fabCode || nnCode || auxCode,
+                    marca: brand,
+                    estoque: stock,
+                    estoqueTexto: stockText,
+                    link: linkNode ? linkNode.href : '',
+                };
+            }).filter(Boolean);
+        };
 
         const parseTableRows = () => {
             const results = [];
@@ -203,6 +277,11 @@ async function extractBranchResults(page, providerName) {
                 };
             }).filter(Boolean);
         };
+
+        const cardResults = parseProductCards();
+        if (cardResults.length) {
+            return cardResults;
+        }
 
         const tableResults = parseTableRows();
         return tableResults.length ? tableResults : fallbackCards();

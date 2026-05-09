@@ -55,14 +55,20 @@ function getSupplierSlug(supplier) {
 }
 
 function getPersistentProfilePath(supplier) {
-    const profileRoot = process.env.SCRAPER_PROFILE_ROOT || path.join(__dirname, '../backend/data/browser-profiles');
-    const profilePath = path.join(profileRoot, getSupplierSlug(supplier));
+    const profileRoots = [
+        process.env.SCRAPER_PROFILE_ROOT,
+        path.join(__dirname, '../local-agent/browser-profiles'),
+        path.join(__dirname, '../backend/data/browser-profiles'),
+    ].filter(Boolean);
 
-    if (!fs.existsSync(profilePath)) {
-        return null;
+    for (const profileRoot of profileRoots) {
+        const profilePath = path.join(profileRoot, getSupplierSlug(supplier));
+        if (fs.existsSync(profilePath)) {
+            return profilePath;
+        }
     }
 
-    return profilePath;
+    return null;
 }
 
 function normalizeCookie(cookie) {
@@ -464,7 +470,7 @@ async function performSearch(page, supplier, query, strategy = {}) {
 }
 
 function buildBrowserPayload(items, supplier) {
-    return items.map((item) => ({
+    const mappedItems = items.map((item) => ({
         provider: safeString(item.provider || supplier.name),
         product: safeString(item.nome || item.name || item.product),
         price: parsePrice(item.preco || item.price),
@@ -477,6 +483,38 @@ function buildBrowserPayload(items, supplier) {
         stockText: safeString(item.estoqueTexto || item.stockText),
         variantKey: buildVariantKey(item.nome || item.name || item.product, item.aplicacao || item.application),
     })).filter((item) => item.price > 0);
+
+    const uniqueItems = [];
+    const seen = new Set();
+
+    for (const item of mappedItems) {
+        const dedupeKey = [
+            item.provider,
+            item.product,
+            item.code,
+            item.price,
+            item.stock,
+            item.link,
+        ].join('|');
+
+        if (seen.has(dedupeKey)) {
+            continue;
+        }
+
+        seen.add(dedupeKey);
+        uniqueItems.push(item);
+    }
+
+    return uniqueItems;
+}
+
+function hasVisibleItemsWithoutPrice(items) {
+    if (!Array.isArray(items) || !items.length) {
+        return false;
+    }
+
+    return items.some((item) => safeString(item?.nome || item?.name || item?.product))
+        && items.every((item) => parsePrice(item?.preco || item?.price) <= 0);
 }
 
 async function extractWithConfiguredSelectors(page, supplier, strategy = {}) {
@@ -643,10 +681,11 @@ async function resetForNextSearch(page, supplier) {
     await page.waitForTimeout(1500);
 }
 
-async function createContext(browser, supplier) {
+async function createContext(browser, supplier, strategy = {}) {
     const sessionStatePath = getSessionStatePath(supplier);
     const supplierSessionState = parseSupplierSessionData(supplier);
     const profilePath = getPersistentProfilePath(supplier);
+    const preferSessionDataOverProfile = Boolean(strategy.preferSessionDataOverProfile);
     const contextOptions = {
         viewport: { width: 1920, height: 1080 },
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -667,30 +706,37 @@ async function createContext(browser, supplier) {
         }
     };
 
-    if (profilePath) {
+    const selectedProfilePath = (profilePath && !preferSessionDataOverProfile) ? profilePath : null;
+    const selectedSessionState = supplierSessionState || null;
+    const fallbackProfilePath = (profilePath && preferSessionDataOverProfile && !selectedSessionState) ? profilePath : null;
+
+    if (selectedProfilePath) {
         console.error(`[DEBUG] Reutilizando perfil persistente para: ${supplier.name}`);
-    } else if (supplierSessionState) {
+    } else if (selectedSessionState) {
         console.error(`[DEBUG] Reutilizando sessionData para: ${supplier.name} (${supplierSessionState.cookieCount || 0} cookies)`);
         contextOptions.storageState = {
-            cookies: supplierSessionState.cookies || [],
-            origins: supplierSessionState.origins || [],
+            cookies: selectedSessionState.cookies || [],
+            origins: selectedSessionState.origins || [],
         };
+    } else if (fallbackProfilePath) {
+        console.error(`[DEBUG] Reutilizando perfil persistente para: ${supplier.name}`);
     } else if (fs.existsSync(sessionStatePath)) {
         console.error(`[DEBUG] Reutilizando sessao salva em arquivo para: ${supplier.name}`);
         contextOptions.storageState = sessionStatePath;
     }
 
     let context;
-    if (profilePath) {
+    const effectiveProfilePath = selectedProfilePath || fallbackProfilePath;
+    if (effectiveProfilePath) {
         try {
-            context = await chromium.launchPersistentContext(profilePath, {
+            context = await chromium.launchPersistentContext(effectiveProfilePath, {
                 ...contextOptions,
                 channel: 'chrome',
                 ignoreDefaultArgs: ['--enable-automation'],
             });
         } catch (error) {
             console.error(`[DEBUG] Chrome real indisponivel para ${supplier.name}, usando Chromium: ${error.message}`);
-            context = await chromium.launchPersistentContext(profilePath, contextOptions);
+            context = await chromium.launchPersistentContext(effectiveProfilePath, contextOptions);
         }
     } else {
         context = await browser.newContext(contextOptions);
@@ -731,7 +777,7 @@ async function createContext(browser, supplier) {
     return {
         context,
         sessionStatePath,
-        hasPreloadedSession: Boolean(profilePath || supplierSessionState || fs.existsSync(sessionStatePath)),
+        hasPreloadedSession: Boolean(effectiveProfilePath || selectedSessionState || fs.existsSync(sessionStatePath)),
     };
 }
 
@@ -797,15 +843,21 @@ function getBrowser() {
 
 async function scrapeProduct(supplier, productName) {
     const browser = await getBrowser();
+    const strategy = resolveStrategy(supplier);
 
-    const { context, hasPreloadedSession } = await createContext(browser, supplier);
+    const { context, hasPreloadedSession } = await createContext(browser, supplier, strategy);
     const page = await context.newPage();
     page.setDefaultTimeout(120000);
     page.setDefaultNavigationTimeout(120000);
 
     try {
         console.error(`[DEBUG] Iniciando scraping para: ${supplier.name}`);
-        const strategy = resolveStrategy(supplier.name);
+
+        if (typeof strategy.preparePage === 'function') {
+            await strategy.preparePage({ page, supplier, productName, context }).catch((error) => {
+                console.error(`[WARN] Falha ao preparar pagina para ${supplier.name}: ${error.message}`);
+            });
+        }
 
         const loginUrl = supplier.loginUrl || supplier.url;
         const initialUrl = hasPreloadedSession
@@ -947,6 +999,10 @@ async function scrapeProduct(supplier, productName) {
             }
 
             finalItems = buildBrowserPayload(items, supplier);
+
+            if (!finalItems.length && hasVisibleItemsWithoutPrice(items)) {
+                throw new Error('Produto localizado, mas o portal nao exibiu preco. Sessao/login pode estar invalido para este fornecedor.');
+            }
 
             if (finalItems.length > 0) {
                 break;
