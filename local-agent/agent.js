@@ -1,7 +1,11 @@
 const os = require('os');
 const fs = require('fs');
+const http = require('http');
+const net = require('net');
 const path = require('path');
+const { spawn } = require('child_process');
 const { scrapeProduct } = require(path.resolve(__dirname, '../scraping/engine.js'));
+const { resolveStrategy } = require(path.resolve(__dirname, '../scraping/suppliers'));
 const { chromium } = require(path.resolve(__dirname, '../scraping/node_modules/playwright'));
 
 const backendUrl = String(process.env.LOCAL_AGENT_BACKEND_URL || '').trim().replace(/\/+$/, '');
@@ -51,6 +55,12 @@ function supplierSlug(value) {
 
 function getSupplierProfilePath(supplierName) {
     return path.join(sessionRoot, supplierSlug(supplierName));
+}
+
+function getSystemChromeUserDataRoot() {
+    return process.env.LOCALAPPDATA
+        ? path.join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'User Data')
+        : null;
 }
 
 function resolveBrowserExecutable() {
@@ -209,9 +219,111 @@ async function failTask(taskId, error) {
 async function closeAssistSession(supplierId) {
     const existing = assistSessions.get(supplierId);
     if (existing) {
-        await existing.context.close().catch(() => {});
+        await existing.browser?.close?.().catch(() => {});
+        await existing.context?.close?.().catch(() => {});
+        if (existing.chromeProcess && !existing.chromeProcess.killed) {
+            try {
+                existing.chromeProcess.kill();
+            } catch (_) {}
+        }
         assistSessions.delete(supplierId);
     }
+}
+
+function httpGetJson(url) {
+    return new Promise((resolve, reject) => {
+        http.get(url, (response) => {
+            let body = '';
+            response.on('data', (chunk) => {
+                body += chunk;
+            });
+            response.on('end', () => {
+                try {
+                    resolve(JSON.parse(body));
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        }).on('error', reject);
+    });
+}
+
+function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function findFreePort() {
+    return new Promise((resolve, reject) => {
+        const server = net.createServer();
+        server.listen(0, '127.0.0.1', () => {
+            const address = server.address();
+            const port = address && typeof address === 'object' ? address.port : 0;
+            server.close(() => resolve(port));
+        });
+        server.on('error', reject);
+    });
+}
+
+async function waitForCdp(port, timeoutMs = 20000) {
+    const startedAt = Date.now();
+    while ((Date.now() - startedAt) < timeoutMs) {
+        try {
+            const version = await httpGetJson(`http://127.0.0.1:${port}/json/version`);
+            if (version?.webSocketDebuggerUrl) {
+                return version;
+            }
+        } catch (_) {}
+
+        await wait(300);
+    }
+
+    throw new Error(`Chrome nao abriu o DevTools na porta ${port}.`);
+}
+
+async function getAssistPage(session) {
+    const pages = session.context.pages();
+    if (pages.length) {
+        return pages[0];
+    }
+
+    return session.context.newPage();
+}
+
+async function launchHumanChromeAssist(profilePath, startUrl) {
+    const executablePath = resolveBrowserExecutable();
+    if (!executablePath) {
+        throw new Error('Chrome local nao encontrado para Login Assistido.');
+    }
+
+    const port = await findFreePort();
+    const args = [
+        `--remote-debugging-port=${port}`,
+        `--user-data-dir=${profilePath}`,
+        '--no-first-run',
+        '--new-window',
+        '--start-maximized',
+        '--disable-blink-features=AutomationControlled',
+        startUrl || 'about:blank',
+    ];
+
+    const chromeProcess = spawn(executablePath, args, {
+        detached: false,
+        stdio: 'ignore',
+        windowsHide: false,
+    });
+
+    const version = await waitForCdp(port);
+    const browser = await chromium.connectOverCDP(version.webSocketDebuggerUrl);
+    const context = browser.contexts()[0] || await browser.newContext();
+    const page = await getAssistPage({ context });
+
+    return {
+        browser,
+        context,
+        page,
+        chromeProcess,
+        port,
+    };
 }
 
 async function getOrCreateAssistSession(supplier) {
@@ -224,67 +336,44 @@ async function getOrCreateAssistSession(supplier) {
     const profilePath = getSupplierProfilePath(supplier.name);
     ensureDirectory(profilePath);
 
-    const browserOptions = {
-        headless,
-        viewport: { width: 1280, height: 900 },
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        locale: 'pt-BR',
-        timezoneId: 'America/Sao_Paulo',
-        ignoreHTTPSErrors: true,
-        ignoreDefaultArgs: ['--enable-automation', '--no-sandbox'],
-        args: [
-            '--window-size=1280,900',
-            '--start-maximized',
-            '--disable-blink-features=AutomationControlled',
-            '--disable-features=IsolateOrigins,site-per-process',
-        ],
+    const strategy = resolveStrategy(supplier);
+    const startUrl = String(
+        strategy.authenticatedUrl
+        || supplier.searchUrl
+        || supplier.loginUrl
+        || supplier.url
+        || 'about:blank'
+    ).trim();
+
+    console.log(`[Local Agent] Abrindo Chrome humano para Login Assistido: ${profilePath}`);
+    const launched = await launchHumanChromeAssist(profilePath, startUrl);
+    const session = {
+        supplierId: supplier.id,
+        context: launched.context,
+        browser: launched.browser,
+        chromeProcess: launched.chromeProcess,
+        page: launched.page,
+        profilePath,
+        port: launched.port,
     };
-
-    const executablePath = resolveBrowserExecutable();
-    let context;
-    try {
-        if (executablePath) {
-            console.log(`[Local Agent] Abrindo navegador local: ${executablePath}`);
-            context = await chromium.launchPersistentContext(profilePath, {
-                ...browserOptions,
-                executablePath,
-            });
-        } else {
-            context = await chromium.launchPersistentContext(profilePath, {
-                ...browserOptions,
-                channel: 'chrome',
-            });
-        }
-    } catch (error) {
-        console.error(`[Local Agent] Navegador local preferido indisponivel, usando Chromium: ${error instanceof Error ? error.message : error}`);
-        context = await chromium.launchPersistentContext(profilePath, browserOptions);
-    }
-
-    await context.addInitScript(() => {
-        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-        Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en-US', 'en'] });
-        Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
-        Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-        window.chrome = window.chrome || { runtime: {} };
-    });
-
-    const page = context.pages()[0] || await context.newPage();
-    const session = { supplierId: supplier.id, context, page, profilePath };
     assistSessions.set(supplier.id, session);
     return session;
 }
 
 async function buildSnapshot(session) {
-    const image = await session.page.screenshot({ type: 'jpeg', quality: 75, fullPage: false });
+    const page = await getAssistPage(session);
+    session.page = page;
+    const image = await page.screenshot({ type: 'jpeg', quality: 75, fullPage: false });
     return {
         image: `data:image/jpeg;base64,${image.toString('base64')}`,
-        url: session.page.url(),
-        title: await session.page.title().catch(() => ''),
+        url: page.url(),
+        title: await page.title().catch(() => ''),
     };
 }
 
 async function handleAssistTask(task) {
     const { supplier, action, payload } = task;
+    const strategy = resolveStrategy(supplier);
 
     if (action === 'stop') {
         await closeAssistSession(supplier.id);
@@ -292,10 +381,10 @@ async function handleAssistTask(task) {
     }
 
     const session = await getOrCreateAssistSession(supplier);
-    const page = session.page;
+    const page = await getAssistPage(session);
+    session.page = page;
 
     if (action === 'start') {
-        await page.goto(supplier.loginUrl || supplier.url, { waitUntil: 'domcontentloaded' }).catch(() => {});
         return buildSnapshot(session);
     }
 
@@ -322,7 +411,7 @@ async function handleAssistTask(task) {
     }
 
     if (action === 'save') {
-        const storageState = await session.context.storageState();
+        const storageState = await session.context.storageState().catch(() => ({ cookies: [], origins: [] }));
         return {
             saved: true,
             profilePath: session.profilePath,

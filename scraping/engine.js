@@ -71,6 +71,12 @@ function getPersistentProfilePath(supplier) {
     return null;
 }
 
+function getSystemChromeUserDataRoot() {
+    return process.env.LOCALAPPDATA
+        ? path.join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'User Data')
+        : null;
+}
+
 function normalizeCookie(cookie) {
     if (!cookie || !cookie.name || cookie.value === undefined) {
         return null;
@@ -146,8 +152,21 @@ async function waitForAnyVisible(page, selectors, timeout = 8000) {
 
     for (const selector of selectors) {
         try {
-            await page.locator(selector).first().waitFor({ state: 'visible', timeout });
-            return selector;
+            const locator = page.locator(selector);
+            const count = await locator.count().catch(() => 0);
+
+            for (let index = 0; index < count; index += 1) {
+                const current = locator.nth(index);
+                const isVisible = await current.isVisible({ timeout }).catch(() => false);
+                const isEnabled = await current.isEnabled().catch(() => true);
+
+                if (isVisible && isEnabled) {
+                    return { selector, locator: current, index };
+                }
+            }
+
+            await locator.first().waitFor({ state: 'visible', timeout });
+            return { selector, locator: locator.first(), index: 0 };
         } catch (error) {
             lastError = error;
         }
@@ -157,9 +176,9 @@ async function waitForAnyVisible(page, selectors, timeout = 8000) {
 }
 
 async function fillFirstVisible(page, selectors, value, options = {}) {
-    const selector = await waitForAnyVisible(page, selectors, options.timeout);
-    await page.locator(selector).first().fill(safeString(value), { force: true });
-    return selector;
+    const target = await waitForAnyVisible(page, selectors, options.timeout);
+    await target.locator.fill(safeString(value), { force: true });
+    return target.selector;
 }
 
 async function fillVisibleLocator(locator, value) {
@@ -266,9 +285,9 @@ function buildSearchQueries(productName) {
 }
 
 async function clickFirstVisible(page, selectors, options = {}) {
-    const selector = await waitForAnyVisible(page, selectors, options.timeout);
-    await page.locator(selector).first().click({ force: true });
-    return selector;
+    const target = await waitForAnyVisible(page, selectors, options.timeout);
+    await target.locator.click({ force: true });
+    return target.selector;
 }
 
 async function dismissTransientUi(page) {
@@ -450,8 +469,8 @@ async function performSearch(page, supplier, query, strategy = {}) {
         ]
     );
 
-    const selector = await waitForAnyVisible(page, searchSelectors, 15000);
-    const input = page.locator(selector).first();
+    const target = await waitForAnyVisible(page, searchSelectors, 15000);
+    const input = target.locator;
     await input.click({ force: true }).catch(() => {});
     await input.press('Control+A').catch(() => {});
     await input.fill('');
@@ -706,9 +725,12 @@ async function createContext(browser, supplier, strategy = {}) {
         }
     };
 
-    const selectedProfilePath = (profilePath && !preferSessionDataOverProfile) ? profilePath : null;
+    const systemChromeProfileRoot = strategy.useSystemChromeProfile ? getSystemChromeUserDataRoot() : null;
+    const selectedProfilePath = systemChromeProfileRoot
+        || (!preferSessionDataOverProfile && profilePath ? profilePath : null);
     const selectedSessionState = supplierSessionState || null;
-    const fallbackProfilePath = (profilePath && preferSessionDataOverProfile && !selectedSessionState) ? profilePath : null;
+    const fallbackProfilePath = systemChromeProfileRoot
+        || (preferSessionDataOverProfile && profilePath && !selectedSessionState ? profilePath : null);
 
     if (selectedProfilePath) {
         console.error(`[DEBUG] Reutilizando perfil persistente para: ${supplier.name}`);
@@ -733,10 +755,18 @@ async function createContext(browser, supplier, strategy = {}) {
                 ...contextOptions,
                 channel: 'chrome',
                 ignoreDefaultArgs: ['--enable-automation'],
+                args: systemChromeProfileRoot
+                    ? [...(contextOptions.args || []), '--profile-directory=Default']
+                    : contextOptions.args,
             });
         } catch (error) {
             console.error(`[DEBUG] Chrome real indisponivel para ${supplier.name}, usando Chromium: ${error.message}`);
-            context = await chromium.launchPersistentContext(effectiveProfilePath, contextOptions);
+            context = await chromium.launchPersistentContext(effectiveProfilePath, {
+                ...contextOptions,
+                args: systemChromeProfileRoot
+                    ? [...(contextOptions.args || []), '--profile-directory=Default']
+                    : contextOptions.args,
+            });
         }
     } else {
         context = await browser.newContext(contextOptions);
@@ -860,7 +890,7 @@ async function scrapeProduct(supplier, productName) {
         }
 
         const loginUrl = supplier.loginUrl || supplier.url;
-        const initialUrl = hasPreloadedSession
+        const initialUrl = (hasPreloadedSession || strategy.useAuthenticatedUrlOnPrepare)
             ? resolveAuthenticatedUrl(strategy, supplier, loginUrl)
             : loginUrl;
 

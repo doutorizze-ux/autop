@@ -16,6 +16,37 @@ function normalizeVariantKey(value: string) {
         .trim();
 }
 
+function normalizeCodeLike(value: string) {
+    return String(value || '')
+        .toUpperCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^A-Z0-9]+/g, '');
+}
+
+function getResultRelevance(item: any, productName: string) {
+    const rawQuery = String(productName || '').trim();
+    const queryText = normalizeVariantKey(productName);
+    const queryCode = normalizeCodeLike(productName);
+    const itemCode = normalizeCodeLike(item?.code || '');
+    const itemProduct = normalizeVariantKey(item?.product || '');
+
+    const looksLikeCode = /^[A-Za-z0-9./_-]{3,}$/.test(rawQuery) && !/\s/.test(rawQuery);
+
+    if (looksLikeCode) {
+        if (itemCode && itemCode === queryCode) return 0;
+        if (itemCode && itemCode.startsWith(queryCode)) return 1;
+        if (itemCode && itemCode.includes(queryCode)) return 2;
+        if (itemProduct && itemProduct.includes(queryText)) return 3;
+        return 4;
+    }
+
+    if (itemProduct && itemProduct === queryText) return 0;
+    if (itemProduct && itemProduct.includes(queryText)) return 1;
+    if (itemCode && itemCode.includes(queryCode) && queryCode) return 2;
+    return 3;
+}
+
 function buildResultIdentity(item: any) {
     const provider = String(item?.provider || '').trim();
     const variantKey = normalizeVariantKey(item?.variantKey || `${item?.product || ''} ${item?.application || ''}`);
@@ -58,6 +89,9 @@ function normalizeSupplierResults(data: any, supplier: any, productName: string)
     }
 
     return Array.from(bestByIdentity.values()).sort((a, b) => {
+        const relevanceCompare = getResultRelevance(a, productName) - getResultRelevance(b, productName);
+        if (relevanceCompare !== 0) return relevanceCompare;
+
         const productCompare = String(a.product || '').localeCompare(String(b.product || ''), 'pt-BR');
         if (productCompare !== 0) return productCompare;
 
@@ -176,6 +210,15 @@ async function executeSupplierSearch(supplier: any, productName: string) {
     return runSupplierSearch(supplier, productName);
 }
 
+function normalizeSearchResultPayload(result: any, supplier: any, productName: string) {
+    if (Array.isArray(result)) {
+        const normalizedItems = normalizeSupplierResults(result, supplier, productName);
+        return normalizedItems.length <= 1 ? (normalizedItems[0] || null) : normalizedItems;
+    }
+
+    return result;
+}
+
 export class ScraperService {
     static async searchSupplierProduct(supplierId: string, productName: string) {
         const supplier = await prisma.supplier.findUnique({
@@ -187,7 +230,8 @@ export class ScraperService {
         }
 
         const result = await executeSupplierSearch(supplier, productName);
-        return Array.isArray(result) ? result[0] || null : result;
+        const normalized = normalizeSearchResultPayload(result, supplier, productName);
+        return Array.isArray(normalized) ? normalized[0] || null : normalized;
     }
 
     static async searchMultipleProducts(
@@ -221,7 +265,8 @@ export class ScraperService {
                         };
                     }
                     const result = await executeSupplierSearch(supplier, productName);
-                    const normalizedResults = Array.isArray(result) ? result : [result];
+                    const normalizedPayload = normalizeSearchResultPayload(result, supplier, productName);
+                    const normalizedResults = Array.isArray(normalizedPayload) ? normalizedPayload : [normalizedPayload];
 
                     for (const entry of normalizedResults) {
                         const progressPayload = {

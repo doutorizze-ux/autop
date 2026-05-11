@@ -1,8 +1,20 @@
 module.exports = {
     key: 'rmp',
     matches: (supplierName) => supplierName.includes('real moto') || supplierName.includes('rmp'),
-    userSelector: ['input[name*="user" i]', 'input[name*="login" i]', 'input[type="email"]'],
-    passSelector: ['input[type="password"]'],
+    userSelector: [
+        'input[name="login[username]"]',
+        'input[placeholder*="e-mail" i]',
+        'input[placeholder*="telefone" i]',
+        'input[placeholder*="cnpj" i]',
+        'input[name*="user" i]',
+        'input[name*="login" i]',
+        'input[type="email"]',
+    ],
+    passSelector: [
+        'input[name="login[password]"]',
+        'input[placeholder*="senha" i]',
+        'input[type="password"]',
+    ],
     loginSuccessSelector: [
         '.header-search',
         '.welcome-msg',
