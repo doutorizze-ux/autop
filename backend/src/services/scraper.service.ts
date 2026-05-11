@@ -241,7 +241,7 @@ export class ScraperService {
         shouldCancel?: () => boolean
     ) {
         const suppliers = await prisma.supplier.findMany();
-        const concurrency = Math.max(1, Number.parseInt(process.env.SCRAPER_CONCURRENCY || '1', 10) || 1);
+        const concurrency = Math.max(1, Number.parseInt(process.env.SCRAPER_CONCURRENCY || '3', 10) || 3);
         const resultsByProduct: Record<string, any[]> = {};
 
         for (const productName of productNames) {

@@ -53,6 +53,7 @@ export const Suppliers = () => {
     const [assistSnapshot, setAssistSnapshot] = useState<{ image: string; url: string; title: string } | null>(null);
     const [assistText, setAssistText] = useState('');
     const [isAssistLoading, setIsAssistLoading] = useState(false);
+    const [assistAction, setAssistAction] = useState<'idle' | 'saving' | 'closing' | 'typing' | 'pressing'>('idle');
     const [formData, setFormData] = useState({
         name: '',
         url: '',
@@ -196,7 +197,8 @@ export const Suppliers = () => {
 
     const refreshAssistSession = async () => {
         if (!assistSupplier) return;
-        const response = await axios.get(`${apiBase}/api/suppliers/${assistSupplier.id}/session/snapshot`);
+        if (assistAction !== 'idle') return;
+        const response = await axios.get(`${apiBase}/api/suppliers/${assistSupplier.id}/session/snapshot`, { timeout: 15000 });
         setAssistSnapshot(response.data);
     };
 
@@ -213,31 +215,52 @@ export const Suppliers = () => {
 
     const typeAssistText = async () => {
         if (!assistSupplier || !assistText) return;
-        const response = await axios.post(`${apiBase}/api/suppliers/${assistSupplier.id}/session/type`, { text: assistText });
-        setAssistSnapshot(response.data);
-        setAssistText('');
+        try {
+            setAssistAction('typing');
+            const response = await axios.post(`${apiBase}/api/suppliers/${assistSupplier.id}/session/type`, { text: assistText }, { timeout: 20000 });
+            setAssistSnapshot(response.data);
+            setAssistText('');
+        } finally {
+            setAssistAction('idle');
+        }
     };
 
     const pressAssistKey = async (key: string) => {
         if (!assistSupplier) return;
-        const response = await axios.post(`${apiBase}/api/suppliers/${assistSupplier.id}/session/press`, { key });
-        setAssistSnapshot(response.data);
+        try {
+            setAssistAction('pressing');
+            const response = await axios.post(`${apiBase}/api/suppliers/${assistSupplier.id}/session/press`, { key }, { timeout: 20000 });
+            setAssistSnapshot(response.data);
+        } finally {
+            setAssistAction('idle');
+        }
     };
 
     const saveAssistSession = async () => {
         if (!assistSupplier) return;
-        await axios.post(`${apiBase}/api/suppliers/${assistSupplier.id}/session/save`);
-        await fetchSuppliers();
-        alert('Sessão salva. Agora teste a busca deste fornecedor.');
+        try {
+            setAssistAction('saving');
+            await axios.post(`${apiBase}/api/suppliers/${assistSupplier.id}/session/save`, {}, { timeout: 45000 });
+            await fetchSuppliers();
+            setAssistSupplier(null);
+            setAssistSnapshot(null);
+            setAssistText('');
+            alert('Sessão salva. Agora teste a busca deste fornecedor.');
+        } finally {
+            setAssistAction('idle');
+        }
     };
 
     const closeAssistSession = async () => {
-        if (assistSupplier) {
-            await axios.post(`${apiBase}/api/suppliers/${assistSupplier.id}/session/stop`).catch(() => {});
-        }
+        const currentSupplier = assistSupplier;
         setAssistSupplier(null);
         setAssistSnapshot(null);
         setAssistText('');
+        setAssistAction('closing');
+        if (currentSupplier) {
+            await axios.post(`${apiBase}/api/suppliers/${currentSupplier.id}/session/stop`, {}, { timeout: 15000 }).catch(() => {});
+        }
+        setAssistAction('idle');
     };
 
     return (
@@ -465,10 +488,10 @@ export const Suppliers = () => {
                                 placeholder="Texto para digitar no campo selecionado"
                                 style={{ flex: '1 1 300px' }}
                             />
-                            <button type="button" className="btn-secondary" onClick={typeAssistText} style={{ padding: '0.75rem 1rem' }}>Digitar</button>
-                            <button type="button" className="btn-secondary" onClick={() => pressAssistKey('Enter')} style={{ padding: '0.75rem 1rem' }}>Enter</button>
-                            <button type="button" className="btn-secondary" onClick={() => pressAssistKey('Tab')} style={{ padding: '0.75rem 1rem' }}>Tab</button>
-                            <button type="button" className="btn-secondary" onClick={refreshAssistSession} style={{ padding: '0.75rem 1rem' }}>Atualizar</button>
+                            <button type="button" className="btn-secondary" onClick={typeAssistText} disabled={assistAction !== 'idle'} style={{ padding: '0.75rem 1rem' }}>{assistAction === 'typing' ? 'Digitando...' : 'Digitar'}</button>
+                            <button type="button" className="btn-secondary" onClick={() => pressAssistKey('Enter')} disabled={assistAction !== 'idle'} style={{ padding: '0.75rem 1rem' }}>Enter</button>
+                            <button type="button" className="btn-secondary" onClick={() => pressAssistKey('Tab')} disabled={assistAction !== 'idle'} style={{ padding: '0.75rem 1rem' }}>Tab</button>
+                            <button type="button" className="btn-secondary" onClick={refreshAssistSession} disabled={assistAction !== 'idle'} style={{ padding: '0.75rem 1rem' }}>Atualizar</button>
                         </div>
 
                         <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden', background: '#111', minHeight: '320px' }}>
@@ -491,8 +514,8 @@ export const Suppliers = () => {
                         )}
 
                         <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                            <button type="button" className="btn-primary" onClick={saveAssistSession} style={{ flex: 2 }}>Salvar Sessão</button>
-                            <button type="button" className="btn-secondary" onClick={closeAssistSession} style={{ flex: 1, padding: '0.85rem', background: 'var(--bg-color)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '6px', cursor: 'pointer' }}>Fechar</button>
+                            <button type="button" className="btn-primary" onClick={saveAssistSession} disabled={assistAction !== 'idle'} style={{ flex: 2 }}>{assistAction === 'saving' ? 'Salvando...' : 'Salvar Sessão'}</button>
+                            <button type="button" className="btn-secondary" onClick={closeAssistSession} disabled={assistAction === 'saving'} style={{ flex: 1, padding: '0.85rem', background: 'var(--bg-color)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '6px', cursor: 'pointer' }}>{assistAction === 'closing' ? 'Fechando...' : 'Fechar'}</button>
                         </div>
                     </div>
                 </div>

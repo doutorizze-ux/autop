@@ -14,7 +14,8 @@ const agentId = String(process.env.LOCAL_AGENT_ID || `${os.hostname()}-agent`).t
 const agentName = String(process.env.LOCAL_AGENT_NAME || `Agente ${os.hostname()}`).trim();
 const agentVersion = '1.1.0';
 const pollIntervalMs = Number.parseInt(process.env.LOCAL_AGENT_POLL_INTERVAL_MS || '3000', 10) || 3000;
-const headless = String(process.env.HEADLESS || 'false').trim() === 'true';
+const headless = String(process.env.HEADLESS || 'true').trim() === 'true';
+const searchWorkerCount = Math.max(1, Number.parseInt(process.env.LOCAL_AGENT_SEARCH_WORKERS || '3', 10) || 3);
 let cachedDashboardToken = null;
 
 const sessionRoot = path.resolve(__dirname, 'browser-profiles');
@@ -187,12 +188,13 @@ async function heartbeat() {
     });
 }
 
-async function nextTask() {
+async function nextTask(preferredKind = 'any') {
     return postJson(`${backendUrl}/api/local-agent/tasks/next`, {
         token: agentToken,
         agentId,
         agentName,
         version: agentVersion,
+        preferredKind,
     });
 }
 
@@ -439,25 +441,51 @@ async function processTask(task) {
     console.log(`[Local Agent] Tarefa concluida: ${task.id}`);
 }
 
-async function mainLoop() {
-    console.log(`[Local Agent] Iniciado: ${agentName} (${agentId})`);
-    console.log(`[Local Agent] Backend: ${backendUrl}`);
+async function workerLoop(workerName, preferredKind) {
+    console.log(`[Local Agent] Worker ${workerName} pronto (${preferredKind})`);
 
     while (true) {
         try {
-            await heartbeat();
-            const payload = await nextTask();
+            const payload = await nextTask(preferredKind);
             if (payload?.task) {
                 await processTask(payload.task);
                 continue;
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            console.error(`[Local Agent] Erro no loop: ${message}`);
+            console.error(`[Local Agent] Erro no worker ${workerName}: ${message}`);
         }
 
-        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+        await wait(pollIntervalMs);
     }
+}
+
+async function heartbeatLoop() {
+    while (true) {
+        try {
+            await heartbeat();
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.error(`[Local Agent] Erro no heartbeat: ${message}`);
+        }
+
+        await wait(pollIntervalMs);
+    }
+}
+
+async function mainLoop() {
+    console.log(`[Local Agent] Iniciado: ${agentName} (${agentId})`);
+    console.log(`[Local Agent] Backend: ${backendUrl}`);
+    console.log(`[Local Agent] Headless busca: ${headless ? 'sim' : 'nao'}`);
+    console.log(`[Local Agent] Workers de busca: ${searchWorkerCount}`);
+
+    const loops = [
+        heartbeatLoop(),
+        workerLoop('session', 'supplier-session'),
+        ...Array.from({ length: searchWorkerCount }, (_, index) => workerLoop(`search-${index + 1}`, 'search')),
+    ];
+
+    await Promise.all(loops);
 }
 
 mainLoop().catch((error) => {

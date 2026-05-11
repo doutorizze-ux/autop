@@ -34,6 +34,8 @@ type ConnectedAgent = {
     lastSeenAt: number;
 };
 
+type TaskKindFilter = AgentTaskPayload['kind'] | 'any';
+
 const connectedAgents = new Map<string, ConnectedAgent>();
 const pendingTasks = new Map<string, AgentTask>();
 const agentTimeoutMs = 45_000;
@@ -137,12 +139,22 @@ export class LocalAgentService {
         );
     }
 
-    static nextTask(agentId: string, name = 'Agente Local', version = '1.0.0') {
+    static nextTask(agentId: string, name = 'Agente Local', version = '1.0.0', preferredKind: TaskKindFilter = 'any') {
         this.heartbeat(agentId, name, version);
 
-        const task = Array.from(pendingTasks.values())
+        const pending = Array.from(pendingTasks.values())
             .filter((entry) => entry.status === 'pending')
-            .sort((a, b) => a.createdAt - b.createdAt)[0];
+            .sort((a, b) => a.createdAt - b.createdAt);
+
+        const prioritizedKinds = preferredKind === 'any'
+            ? ['supplier-session', 'search']
+            : [preferredKind];
+
+        let task: AgentTask | null = null;
+        for (const kind of prioritizedKinds) {
+            task = pending.find((entry) => entry.payload.kind === kind) || null;
+            if (task) break;
+        }
 
         if (!task) {
             return null;

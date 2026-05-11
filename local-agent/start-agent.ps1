@@ -5,7 +5,7 @@ param(
     [string]$Token = "dummy",
     [string]$AgentId = "$env:COMPUTERNAME-agent",
     [string]$AgentName = "Agente Local $env:COMPUTERNAME",
-    [string]$Headless = "false"
+    [string]$Headless = "true"
 )
 
 $ErrorActionPreference = "Stop"

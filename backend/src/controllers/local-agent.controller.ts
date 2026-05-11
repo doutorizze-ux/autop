@@ -73,7 +73,12 @@ export const pullNextAgentTask = (req: Request, res: Response): void => {
         return;
     }
 
-    const task = LocalAgentService.nextTask(identity.id, identity.name, identity.version);
+    const preferredKindRaw = String(req.body?.preferredKind || req.query?.preferredKind || '').trim();
+    const preferredKind = preferredKindRaw === 'search' || preferredKindRaw === 'supplier-session'
+        ? preferredKindRaw
+        : 'any';
+
+    const task = LocalAgentService.nextTask(identity.id, identity.name, identity.version, preferredKind);
     res.json({ task });
 };
 
