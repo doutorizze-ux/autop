@@ -299,10 +299,6 @@ export const Quotes = () => {
 
     useEffect(() => {
         const handleProgress = (data: { supplier: string; productName: string; result: any }) => {
-            if (!data?.result) {
-                return;
-            }
-
             setQuoteMatrix((prev) => {
                 const next = { ...prev };
                 if (!next[data.productName]) {
@@ -656,7 +652,7 @@ export const Quotes = () => {
         const selections: Record<string, Record<string, QuoteResult | null>> = {};
 
         partList.forEach((item) => {
-            const sourceResults = (quoteMatrix[item.query] || []).filter((entry): entry is QuoteResult => !!entry);
+            const sourceResults = quoteMatrix[item.query] || [];
             const providerNames = Array.from(new Set([...suppliers, ...sourceResults.map((entry) => entry.provider).filter(Boolean)]));
             const querySelections: Record<string, QuoteResult | null> = {};
             const selectedVariantKey = resolvedVariantSelectionByQuery[item.query];
@@ -840,7 +836,7 @@ export const Quotes = () => {
                         </div>
 
                         {partList.map((item) => {
-                            const rawResults = (quoteMatrix[item.query] || []).filter((entry): entry is QuoteResult => !!entry);
+                            const rawResults = quoteMatrix[item.query] || [];
                             const normalizedQueryCode = normalizeCodeValue(item.query);
                             const variantGroups = variantGroupsByQuery[item.query] || [];
                             const selectedVariantKey = resolvedVariantSelectionByQuery[item.query];

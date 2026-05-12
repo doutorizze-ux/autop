@@ -310,12 +310,7 @@ export class ScraperService {
                     }
                     const result = await executeSupplierSearch(supplier, productName);
                     const normalizedPayload = normalizeSearchResultPayload(result, supplier, productName);
-                    const normalizedResults = (Array.isArray(normalizedPayload) ? normalizedPayload : [normalizedPayload])
-                        .filter((entry) => !!entry);
-
-                    if (normalizedResults.length === 0) {
-                        return [];
-                    }
+                    const normalizedResults = Array.isArray(normalizedPayload) ? normalizedPayload : [normalizedPayload];
 
                     for (const entry of normalizedResults) {
                         const progressPayload = {
