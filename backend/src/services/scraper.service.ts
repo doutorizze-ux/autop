@@ -6,7 +6,6 @@ import { LocalAgentService } from './local-agent.service';
 const prisma = new PrismaClient();
 const enginePath = path.resolve(__dirname, '../../../scraping/engine.js');
 const { scrapeProduct } = require(enginePath);
-const supplierSearchTimeoutMs = Math.max(10_000, Number.parseInt(process.env.SUPPLIER_SEARCH_TIMEOUT_MS || '45000', 10) || 45000);
 
 function normalizeVariantKey(value: string) {
     return String(value || '')
@@ -243,22 +242,6 @@ export async function runSupplierSearch(supplier: any, productName: string) {
 }
 
 async function executeSupplierSearch(supplier: any, productName: string) {
-    const timeoutMessage = `Tempo limite excedido ao consultar ${supplier.name}.`;
-    const timeoutPromise = new Promise((resolve) => {
-        setTimeout(() => {
-            resolve({
-                provider: supplier.name,
-                product: productName,
-                price: '---',
-                error: timeoutMessage,
-                link: supplier.url,
-                available: false,
-                debug: null,
-            });
-        }, supplierSearchTimeoutMs);
-    });
-
-    const runSearchPromise = (async () => {
     const useLocalAgent = process.env.LOCAL_AGENT_MODE !== 'disabled' && LocalAgentService.hasActiveAgents();
     if (useLocalAgent) {
         try {
@@ -269,9 +252,6 @@ async function executeSupplierSearch(supplier: any, productName: string) {
     }
 
     return runSupplierSearch(supplier, productName);
-    })();
-
-    return Promise.race([runSearchPromise, timeoutPromise]);
 }
 
 function normalizeSearchResultPayload(result: any, supplier: any, productName: string) {
