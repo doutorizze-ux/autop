@@ -24,53 +24,21 @@ function normalizeCodeLike(value: string) {
         .replace(/[^A-Z0-9]+/g, '');
 }
 
-function extractCodeTokens(value: string) {
-    return String(value || '')
-        .toUpperCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .match(/[A-Z0-9]+/g) || [];
-}
-
-function hasExactCodeToken(value: string, queryCode: string) {
-    if (!queryCode) return false;
-    return extractCodeTokens(value).some((token) => token === queryCode);
-}
-
-function hasSafeSimilarCodeToken(value: string, queryCode: string) {
-    if (!queryCode) return false;
-
-    return extractCodeTokens(value).some((token) => {
-        if (token === queryCode) return true;
-        if (!token.startsWith(queryCode)) return false;
-
-        const suffix = token.slice(queryCode.length);
-        if (!suffix) return true;
-
-        return /^[A-Z]+$/.test(suffix);
-    });
-}
-
 function getResultRelevance(item: any, productName: string) {
     const rawQuery = String(productName || '').trim();
     const queryText = normalizeVariantKey(productName);
     const queryCode = normalizeCodeLike(productName);
     const itemCode = normalizeCodeLike(item?.code || '');
     const itemProduct = normalizeVariantKey(item?.product || '');
-    const productHasExactToken = hasExactCodeToken(item?.product || '', queryCode);
-    const codeHasExactToken = hasExactCodeToken(item?.code || '', queryCode);
-    const productHasSafeSimilarToken = hasSafeSimilarCodeToken(item?.product || '', queryCode);
-    const codeHasSafeSimilarToken = hasSafeSimilarCodeToken(item?.code || '', queryCode);
 
     const looksLikeCode = /^[A-Za-z0-9./_-]{3,}$/.test(rawQuery) && !/\s/.test(rawQuery);
 
     if (looksLikeCode) {
         if (itemCode && itemCode === queryCode) return 0;
-        if (codeHasExactToken || productHasExactToken) return 1;
-        if (codeHasSafeSimilarToken) return 2;
-        if (productHasSafeSimilarToken) return 3;
-        if (itemProduct && itemProduct === queryText) return 4;
-        return 10;
+        if (itemCode && itemCode.startsWith(queryCode)) return 1;
+        if (itemCode && itemCode.includes(queryCode)) return 2;
+        if (itemProduct && itemProduct.includes(queryText)) return 3;
+        return 4;
     }
 
     if (itemProduct && itemProduct === queryText) return 0;
@@ -93,8 +61,6 @@ function normalizeSupplierResults(data: any, supplier: any, productName: string)
     }
 
     const bestByIdentity = new Map<string, any>();
-    const rawQuery = String(productName || '').trim();
-    const looksLikeCode = /^[A-Za-z0-9./_-]{3,}$/.test(rawQuery) && !/\s/.test(rawQuery);
 
     for (const item of data) {
         const provider = String(item?.provider || supplier.name || '').trim() || supplier.name;
@@ -122,17 +88,7 @@ function normalizeSupplierResults(data: any, supplier: any, productName: string)
         }
     }
 
-    let normalizedItems = Array.from(bestByIdentity.values());
-
-    if (looksLikeCode) {
-        normalizedItems = normalizedItems.filter((entry) => getResultRelevance(entry, productName) <= 4);
-        const bestRelevance = normalizedItems.reduce((best, entry) => Math.min(best, getResultRelevance(entry, productName)), Number.POSITIVE_INFINITY);
-        if (bestRelevance <= 3) {
-            normalizedItems = normalizedItems.filter((entry) => getResultRelevance(entry, productName) <= 3);
-        }
-    }
-
-    return normalizedItems.sort((a, b) => {
+    return Array.from(bestByIdentity.values()).sort((a, b) => {
         const relevanceCompare = getResultRelevance(a, productName) - getResultRelevance(b, productName);
         if (relevanceCompare !== 0) return relevanceCompare;
 
