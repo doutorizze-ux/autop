@@ -124,7 +124,7 @@ export class SupplierSessionService {
             throw new Error('Sessao assistida nao iniciada.');
         }
 
-        const image = await session.page.screenshot({ type: 'jpeg', quality: 75, fullPage: false });
+        const image = await session.page.screenshot({ type: 'jpeg', quality: 40, fullPage: false });
         return {
             image: `data:image/jpeg;base64,${image.toString('base64')}`,
             url: session.page.url(),

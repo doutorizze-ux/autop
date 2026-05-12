@@ -172,7 +172,15 @@ async function postJson(url, body, retry = true) {
     }
 
     const text = await response.text();
-    const data = text ? JSON.parse(text) : {};
+    let data = {};
+    if (text) {
+        try {
+            data = JSON.parse(text);
+        } catch (_) {
+            const compactText = String(text || '').replace(/\s+/g, ' ').trim();
+            throw new Error(`Resposta invalida do backend (${response.status}): ${compactText.slice(0, 180)}`);
+        }
+    }
     if (!response.ok) {
         throw new Error(data?.message || `Falha HTTP ${response.status}`);
     }
@@ -365,7 +373,7 @@ async function getOrCreateAssistSession(supplier) {
 async function buildSnapshot(session) {
     const page = await getAssistPage(session);
     session.page = page;
-    const image = await page.screenshot({ type: 'jpeg', quality: 75, fullPage: false });
+    const image = await page.screenshot({ type: 'jpeg', quality: 40, fullPage: false });
     return {
         image: `data:image/jpeg;base64,${image.toString('base64')}`,
         url: page.url(),
