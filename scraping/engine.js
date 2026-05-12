@@ -536,6 +536,25 @@ function hasVisibleItemsWithoutPrice(items) {
         && items.every((item) => parsePrice(item?.preco || item?.price) <= 0);
 }
 
+function hasUnavailableVisibleItems(items) {
+    if (!Array.isArray(items) || !items.length) {
+        return false;
+    }
+
+    return items.some((item) => {
+        const combinedText = safeString([
+            item?.estoqueTexto,
+            item?.stockText,
+            item?.disponibilidade,
+            item?.availability,
+            item?.nome,
+            item?.product,
+        ].join(' ')).toLowerCase();
+
+        return combinedText.includes('indispon');
+    });
+}
+
 async function extractWithConfiguredSelectors(page, supplier, strategy = {}) {
     const preferStrategySelectors = Boolean(strategy.preferStrategySelectors);
     const selectors = buildSelectorList(
@@ -1031,6 +1050,10 @@ async function scrapeProduct(supplier, productName) {
             finalItems = buildBrowserPayload(items, supplier);
 
             if (!finalItems.length && hasVisibleItemsWithoutPrice(items)) {
+                if (hasUnavailableVisibleItems(items)) {
+                    throw new Error('Produto localizado, mas esta indisponivel neste fornecedor.');
+                }
+
                 throw new Error('Produto localizado, mas o portal nao exibiu preco. Sessao/login pode estar invalido para este fornecedor.');
             }
 

@@ -1,12 +1,29 @@
 module.exports = {
     key: 'comdip',
-    matches: (supplierName) => supplierName.includes('comdip'),
+    matches: (supplierName) => String(supplierName || '').toLowerCase().includes('comdip'),
     authenticatedUrl: 'https://portalcomdip.com.br/comdip/compras',
     userSelector: ['input[name*="cnpj" i]', 'input[placeholder*="cnpj" i]', '#Cnpj', '#Login'],
     passSelector: ['input[id="pass"]', 'input[type="password"]'],
     submitSelector: ['button:has-text("Entrar")', 'button:has-text("Login")', 'button.btn-success'],
-    loginSuccessSelector: ['a:has-text("Meu histÃ³rico")', 'a:has-text("Minhas Listas")', 'text=OFICINA DO'],
-    searchSelector: ['input[type="search"]', 'input[placeholder*="nome" i]', 'input[placeholder*="marca" i]', '.search-input'],
+    loginSuccessSelector: [
+        'a:has-text("Meu histórico")',
+        'a:has-text("Meu historico")',
+        'a:has-text("Minhas Listas")',
+        'a:has-text("Sair")',
+        'button:has-text("MENU DEPARTAMENTOS")',
+        'text=/OFICINA DO/i',
+        'text=/MEU HISTORICO/i',
+        'text=/MINHAS LISTAS/i',
+        'text=/MENU DEPARTAMENTOS/i',
+    ],
+    searchSelector: [
+        'input[type="search"]',
+        'input[placeholder*="buscar" i]',
+        'input[placeholder*="nome" i]',
+        'input[placeholder*="marca" i]',
+        'input[value]',
+        '.search-input',
+    ],
     searchButtonSelector: ['button[type="submit"]', 'button .fa-search', '.fa-search', '.icon-search'],
     preferStrategySelectors: true,
     waitForResultsOnly: true,
@@ -14,7 +31,7 @@ module.exports = {
     itemContainerSelector: ['[class*="produto"]', '[class*="item"]', '[class*="card"]', 'article', 'li'],
     productNameSelector: ['h2', 'h3', 'h4', 'a', 'strong', 'span'],
     priceSelector: ['.price', '.valor', '[class*="price"]', '[class*="valor"]'],
-    buildSearchUrl: (query) => `https://portalcomdip.com.br/comdip/compras/pesquisa/termo-busca/${encodeURIComponent(String(query).toLowerCase())}/1`,
+    buildSearchUrl: (query) => `https://portalcomdip.com.br/comdip/compras/pesquisa/termo-busca/${encodeURIComponent(String(query || '').trim())}/1`,
     extractItems: async ({ page }) => {
         return page.evaluate(() => {
             const candidates = Array.from(document.querySelectorAll('[class*="produto"], [class*="item"], [class*="card"], article, li')).slice(0, 300);
@@ -25,7 +42,6 @@ module.exports = {
             for (const el of candidates) {
                 const text = normalize(el.textContent || '');
                 const priceMatch = text.match(/R\$\s?[0-9.,]+/);
-                if (!priceMatch) continue;
 
                 const rawNameCandidates = Array.from(el.querySelectorAll('h1, h2, h3, h4, h5, a, strong, span'))
                     .map((node) => normalize(node.textContent || ''))
@@ -37,15 +53,16 @@ module.exports = {
 
                 if (!nome) continue;
 
-                const key = `${nome}|${priceMatch[0]}`;
+                const key = `${nome}|${priceMatch ? priceMatch[0] : 'sem-preco'}`;
                 if (seen.has(key)) continue;
                 seen.add(key);
 
                 const linkNode = el.querySelector('a[href]');
                 items.push({
                     nome,
-                    preco: priceMatch[0],
+                    preco: priceMatch ? priceMatch[0] : '',
                     codigo: (text.match(/([A-Z0-9-]{4,})/) || [null, ''])[1],
+                    estoqueTexto: /indispon/i.test(text) ? 'Indisponível' : '',
                     link: linkNode ? linkNode.href : '',
                 });
             }
