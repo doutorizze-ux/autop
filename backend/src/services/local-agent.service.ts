@@ -84,7 +84,9 @@ function agentAcceptsSupplier(agent: ConnectedAgent, supplier: any) {
         supplier?.type,
     ].map(normalizeSupplierFilter).filter(Boolean);
 
-    return supplierKeys.some((key) => agent.supplierFilters.includes(key));
+    return supplierKeys.some((key) =>
+        agent.supplierFilters.some((filter) => key === filter || key.includes(filter) || filter.includes(key))
+    );
 }
 
 function agentAcceptsTask(agent: ConnectedAgent, task: AgentTask) {
@@ -93,7 +95,9 @@ function agentAcceptsTask(agent: ConnectedAgent, task: AgentTask) {
     }
 
     const taskSupplierFilters = getTaskSupplierFilters(task);
-    return taskSupplierFilters.some((key) => agent.supplierFilters.includes(key));
+    return taskSupplierFilters.some((key) =>
+        agent.supplierFilters.some((filter) => key === filter || key.includes(filter) || filter.includes(key))
+    );
 }
 
 function cleanupAgents() {
