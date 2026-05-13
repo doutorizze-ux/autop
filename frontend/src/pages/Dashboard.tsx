@@ -9,6 +9,7 @@ import {
   LogOut,
   Search,
   FileSearch,
+  History,
   ChevronRight,
   Sparkles,
   Rocket,
@@ -19,6 +20,7 @@ import { ChatArea } from '../components/ChatArea';
 import { Suppliers } from '../components/Suppliers';
 import { Settings as SettingsComponent } from '../components/Settings';
 import { Quotes } from '../components/Quotes';
+import { QuoteHistory } from '../components/QuoteHistory';
 import { Roadmap } from '../components/Roadmap';
 import { CatalogSearch } from '../components/CatalogSearch';
 import { API_URL } from '../services/api';
@@ -32,6 +34,7 @@ const navItems = [
   { id: 'clientes', label: 'Clientes', icon: Users, caption: 'CRM e funil' },
   { id: 'atendimento', label: 'WhatsApp', icon: MessageSquare, caption: 'Conversas em tempo real' },
   { id: 'cotacoes', label: 'Orcamento Geral', icon: Search, caption: 'Codigos e confrontos' },
+  { id: 'historico', label: 'Produtos Pesquisados', icon: History, caption: 'Historico de cotacoes' },
   { id: 'roadmap', label: 'Versao e Roadmap', icon: Rocket, caption: 'Evolucao do produto' },
   { id: 'fornecedores', label: 'Fornecedores', icon: Briefcase, caption: 'Integracoes e logins', adminOnly: true },
   { id: 'config', label: 'Configuracoes', icon: Settings, caption: 'Preferencias do sistema' },
@@ -49,6 +52,7 @@ export const Dashboard = () => {
   const [suppliersUnlocked, setSuppliersUnlocked] = useState(
     () => sessionStorage.getItem(suppliersAccessStorageKey) === 'true'
   );
+  const [quoteToOpen, setQuoteToOpen] = useState('');
 
   useEffect(() => {
     const applyTheme = (themeColor?: string, logo?: string) => {
@@ -227,7 +231,15 @@ export const Dashboard = () => {
           )}
 
           {activeTab === 'fornecedores' && <Suppliers />}
-          {activeTab === 'cotacoes' && <Quotes />}
+          {activeTab === 'cotacoes' && <Quotes openHistoryId={quoteToOpen} />}
+          {activeTab === 'historico' && (
+            <QuoteHistory
+              onOpenQuote={(quoteId) => {
+                setQuoteToOpen(quoteId);
+                setActiveTab('cotacoes');
+              }}
+            />
+          )}
           {activeTab === 'catalogo' && (
             <CatalogSearch
               onUseCode={(payload) => {

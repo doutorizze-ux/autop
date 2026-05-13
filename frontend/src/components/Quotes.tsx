@@ -10,8 +10,6 @@ import {
     Download,
     Loader2,
     RefreshCw,
-    History,
-    FolderOpen,
     Clock3,
 } from 'lucide-react';
 
@@ -48,14 +46,6 @@ type VariantGroup = {
     exactMatch: boolean;
 };
 
-type QuoteHistoryEntry = {
-    id: string;
-    createdAt: string;
-    itemCount: number;
-    items: QuoteItemInput[];
-    title: string;
-};
-
 type QuoteSearchResponse = {
     jobId?: string;
     status?: 'running' | 'completed' | 'failed' | 'cancelled';
@@ -73,10 +63,8 @@ const apiBase = API_URL;
 const activeQuoteJobStorageKey = 'active_quote_job_id';
 const quotePrefillStorageKey = 'quote_prefill_item';
 
-const buildItemLabel = (item: QuoteItemInput) => {
-    const query = String(item.query || '').trim();
-    const description = String(item.description || '').trim();
-    return description ? `${query} - ${description}` : query;
+type QuotesProps = {
+    openHistoryId?: string;
 };
 
 const formatDateTime = (value?: string) => {
@@ -187,20 +175,15 @@ const downloadBlob = (blob: BlobPart, filename: string) => {
     window.URL.revokeObjectURL(url);
 };
 
-export const Quotes = () => {
+export const Quotes = ({ openHistoryId }: QuotesProps) => {
     const [partList, setPartList] = useState<QuoteItemInput[]>([]);
     const [newPart, setNewPart] = useState('');
     const [newDescription, setNewDescription] = useState('');
     const [quoteMatrix, setQuoteMatrix] = useState<QuoteMatrix>({});
     const [suppliers, setSuppliers] = useState<string[]>([]);
     const [isSearching, setIsSearching] = useState(false);
-    const [history, setHistory] = useState<QuoteHistoryEntry[]>([]);
-    const [isHistoryLoading, setIsHistoryLoading] = useState(false);
-    const [historyError, setHistoryError] = useState('');
-    const [selectedHistoryIds, setSelectedHistoryIds] = useState<string[]>([]);
     const [currentQuoteId, setCurrentQuoteId] = useState('');
     const [currentCreatedAt, setCurrentCreatedAt] = useState('');
-    const [activeHistoryId, setActiveHistoryId] = useState('');
     const [activeJobId, setActiveJobId] = useState(() => localStorage.getItem(activeQuoteJobStorageKey) || '');
     const [quoteJobStatus, setQuoteJobStatus] = useState('');
     const [quoteJobError, setQuoteJobError] = useState('');
@@ -216,25 +199,6 @@ export const Quotes = () => {
             });
         }, 80);
     };
-
-    const loadHistory = async () => {
-        setIsHistoryLoading(true);
-        setHistoryError('');
-
-        try {
-            const response = await axios.get<QuoteHistoryEntry[]>(`${apiBase}/api/quotes/history`);
-            setHistory(response.data);
-        } catch (error) {
-            console.error('Load Quote History Error:', error);
-            setHistoryError('Não foi possível carregar o histórico agora.');
-        } finally {
-            setIsHistoryLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        void loadHistory();
-    }, []);
 
     const applyQuoteJob = async (data: QuoteSearchResponse) => {
         setQuoteJobStatus(data.status || '');
@@ -268,8 +232,6 @@ export const Quotes = () => {
         if (data.status === 'completed') {
             setCurrentQuoteId(data.quoteId || '');
             setCurrentCreatedAt(data.completedAt || data.createdAt);
-            setActiveHistoryId(data.quoteId || '');
-            await loadHistory();
             scrollToResults();
         }
     };
@@ -419,7 +381,6 @@ export const Quotes = () => {
         setSuppliers([]);
         setCurrentQuoteId('');
         setCurrentCreatedAt('');
-        setActiveHistoryId('');
         setQuoteJobStatus('running');
         setQuoteJobError('');
 
@@ -488,7 +449,6 @@ export const Quotes = () => {
     };
 
     const handleOpenHistory = async (quoteId: string) => {
-        setActiveHistoryId(quoteId);
         try {
             const response = await axios.get<QuoteSearchResponse>(`${apiBase}/api/quotes/history/${quoteId}`);
             setPartList(
@@ -514,68 +474,10 @@ export const Quotes = () => {
         }
     };
 
-    const handleExportSaved = async (quoteId: string, type: 'pdf' | 'excel') => {
-        try {
-            const response = await axios.get(`${apiBase}/api/quotes/history/${quoteId}/export/${type}`, {
-                responseType: 'blob',
-            });
-
-            downloadBlob(
-                response.data,
-                `orcamento-${quoteId}.${type === 'pdf' ? 'pdf' : 'xlsx'}`
-            );
-        } catch (error) {
-            console.error('Export Saved Quote Error:', error);
-            alert('Não foi possível exportar a cotação salva.');
-        }
-    };
-
-    const toggleHistorySelection = (quoteId: string) => {
-        setSelectedHistoryIds((current) =>
-            current.includes(quoteId) ? current.filter((id) => id !== quoteId) : [...current, quoteId]
-        );
-    };
-
-    const handleExportSelectedHistoryPdf = async () => {
-        if (selectedHistoryIds.length === 0) {
-            alert('Selecione pelo menos um orçamento do histórico.');
-            return;
-        }
-
-        try {
-            const response = await axios.post(
-                `${apiBase}/api/quotes/history/export/pdf`,
-                { ids: selectedHistoryIds },
-                { responseType: 'blob' }
-            );
-
-            downloadBlob(response.data, `orcamentos-selecionados-${Date.now()}.pdf`);
-        } catch (error) {
-            console.error('Export Selected Quotes PDF Error:', error);
-            alert('Não foi possível gerar o PDF com os orçamentos selecionados.');
-        }
-    };
-
-    const handleDeleteHistory = async (quoteId: string) => {
-        const confirmed = window.confirm('Tem certeza que deseja excluir esta cotação salva?');
-        if (!confirmed) return;
-
-        try {
-            await axios.delete(`${apiBase}/api/quotes/history/${quoteId}`);
-            setSelectedHistoryIds((current) => current.filter((id) => id !== quoteId));
-
-            if (activeHistoryId === quoteId) {
-                setActiveHistoryId('');
-                setCurrentQuoteId('');
-                setCurrentCreatedAt('');
-            }
-
-            await loadHistory();
-        } catch (error) {
-            console.error('Delete Saved Quote Error:', error);
-            alert('Não foi possível excluir a cotação salva.');
-        }
-    };
+    useEffect(() => {
+        if (!openHistoryId) return;
+        void handleOpenHistory(openHistoryId);
+    }, [openHistoryId]);
 
     const hasResults = partList.length > 0 && suppliers.length > 0;
 
@@ -1083,88 +985,6 @@ export const Quotes = () => {
                     </div>
                 </div>
             )}
-
-            <div className="history-panel">
-                <div className="history-panel-header">
-                    <div>
-                        <h3>
-                            <History size={18} /> Histórico de Orçamentos
-                        </h3>
-                        <p>Consulte cotações anteriores por data e baixe PDF/Excel novamente.</p>
-                    </div>
-                    <div className="history-header-actions">
-                        <button
-                            className="history-batch-btn"
-                            type="button"
-                            onClick={() => void handleExportSelectedHistoryPdf()}
-                            disabled={selectedHistoryIds.length === 0}
-                        >
-                            <FileText size={16} /> PDF selecionados ({selectedHistoryIds.length})
-                        </button>
-                        <button className="history-refresh-btn" onClick={() => void loadHistory()} disabled={isHistoryLoading}>
-                            {isHistoryLoading ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
-                            Atualizar
-                        </button>
-                    </div>
-                </div>
-
-                {historyError && <div className="history-error">{historyError}</div>}
-
-                {history.length === 0 && !isHistoryLoading ? (
-                    <div className="history-empty">Nenhuma cotação salva ainda.</div>
-                ) : (
-                    <div className="history-list">
-                        {history.map((entry) => (
-                            <div
-                                key={entry.id}
-                                className={`history-card ${activeHistoryId === entry.id ? 'history-card-active' : ''}`}
-                            >
-                                <label className="history-select">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedHistoryIds.includes(entry.id)}
-                                        onChange={() => toggleHistorySelection(entry.id)}
-                                    />
-                                </label>
-                                <div className="history-card-main">
-                                    <div className="history-card-header">
-                                        <span className="history-date">
-                                            <Clock3 size={14} /> {formatDateTime(entry.createdAt)}
-                                        </span>
-                                        <span className="history-count">{entry.itemCount} item(ns)</span>
-                                    </div>
-                                    <div className="history-title">{entry.title}</div>
-                                    <div className="history-items-preview">
-                                        {entry.items.slice(0, 3).map((item, index) => (
-                                            <span key={`${entry.id}-${item.query}-${index}`}>{buildItemLabel(item)}</span>
-                                        ))}
-                                        {entry.items.length > 3 && <span>+{entry.items.length - 3} itens</span>}
-                                    </div>
-                                </div>
-
-                                <div className="history-card-actions">
-                                    <button type="button" onClick={() => void handleOpenHistory(entry.id)}>
-                                        <FolderOpen size={15} /> Abrir
-                                    </button>
-                                    <button type="button" onClick={() => void handleExportSaved(entry.id, 'pdf')}>
-                                        <FileText size={15} /> PDF
-                                    </button>
-                                    <button type="button" onClick={() => void handleExportSaved(entry.id, 'excel')}>
-                                        <Download size={15} /> Excel
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="delete-history-button"
-                                        onClick={() => void handleDeleteHistory(entry.id)}
-                                    >
-                                        <Trash2 size={15} /> Excluir
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
 
             <style>{`
                 .quotes-container { display: flex; flex-direction: column; gap: 2rem; }
