@@ -306,7 +306,7 @@ function drawPDFTableHeader(doc: PDFKit.PDFDocument, suppliers: string[]) {
     return { firstColumnWidth, colWidth, startX };
 }
 
-function renderPDFSections(res: Response, sections: QuotePdfSection[], filenamePrefix: string) {
+function renderPDFSectionsLegacy(res: Response, sections: QuotePdfSection[], filenamePrefix: string) {
     const doc = new PDFDocument({ layout: 'landscape', margin: 30 });
     const filename = `${filenamePrefix}-${Date.now()}.pdf`;
 
@@ -415,12 +415,161 @@ function renderPDFSections(res: Response, sections: QuotePdfSection[], filenameP
     doc.end();
 }
 
+function renderPDFSections(res: Response, sections: QuotePdfSection[], filenamePrefix: string) {
+    const doc = new PDFDocument({ layout: 'landscape', margin: 36, size: 'A4' });
+    const filename = `${filenamePrefix}-${Date.now()}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+
+    doc.pipe(res);
+
+    const pageBottom = () => doc.page.height - doc.page.margins.bottom;
+    const startX = doc.page.margins.left;
+    const tableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const columns = {
+        supplier: 118,
+        price: 76,
+        code: 86,
+        brand: 92,
+        stock: 74,
+        product: tableWidth - 118 - 76 - 86 - 92 - 74,
+    };
+
+    const ensureSpace = (height: number) => {
+        if (doc.y + height <= pageBottom()) return;
+        doc.addPage({ layout: 'landscape', margin: 36, size: 'A4' });
+    };
+
+    const parsePdfPrice = (value: unknown) => {
+        if (typeof value === 'number') return value;
+        const normalized = String(value || '')
+            .replace(/\s/g, '')
+            .replace(/\./g, '')
+            .replace(',', '.')
+            .replace(/[^\d.-]/g, '');
+        const parsed = Number.parseFloat(normalized);
+        return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
+    };
+
+    const drawTableHeader = () => {
+        const y = doc.y;
+        doc.font('Helvetica-Bold').fontSize(8).fillColor('#111827');
+        doc.text('FORNECEDOR', startX + 6, y, { width: columns.supplier - 8 });
+        doc.text('PRECO', startX + columns.supplier + 6, y, { width: columns.price - 8, align: 'right' });
+        doc.text('CODIGO', startX + columns.supplier + columns.price + 6, y, { width: columns.code - 8 });
+        doc.text('FABRICANTE', startX + columns.supplier + columns.price + columns.code + 6, y, { width: columns.brand - 8 });
+        doc.text('ESTOQUE', startX + columns.supplier + columns.price + columns.code + columns.brand + 6, y, { width: columns.stock - 8 });
+        doc.text('PECA RETORNADA', startX + columns.supplier + columns.price + columns.code + columns.brand + columns.stock + 6, y, { width: columns.product - 8 });
+        doc.moveDown(0.7);
+        doc.moveTo(startX, doc.y).lineTo(startX + tableWidth, doc.y).strokeColor('#111827').lineWidth(0.8).stroke();
+        doc.moveDown(0.35);
+    };
+
+    const drawSupplierRow = (supplier: string, result: any, bestPrice: number) => {
+        const price = result && !result.error ? parsePdfPrice(result.price) : Number.POSITIVE_INFINITY;
+        const isBest = price === bestPrice && bestPrice !== Number.POSITIVE_INFINITY;
+        const rowHeight = 44;
+        ensureSpace(rowHeight + 8);
+
+        const y = doc.y;
+        if (isBest) {
+            doc.save();
+            doc.fillColor('#D1FAE5').rect(startX, y - 3, tableWidth, rowHeight).fill();
+            doc.restore();
+        }
+
+        const xSupplier = startX;
+        const xPrice = xSupplier + columns.supplier;
+        const xCode = xPrice + columns.price;
+        const xBrand = xCode + columns.code;
+        const xStock = xBrand + columns.brand;
+        const xProduct = xStock + columns.stock;
+
+        doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#111827')
+            .text(supplier, xSupplier + 6, y + 6, { width: columns.supplier - 8, height: 28, ellipsis: true });
+
+        if (result && !result.error) {
+            doc.font(isBest ? 'Helvetica-Bold' : 'Helvetica').fontSize(9).fillColor(isBest ? '#065F46' : '#111827')
+                .text(`R$ ${price.toFixed(2)}`, xPrice + 6, y + 6, { width: columns.price - 8, align: 'right' });
+            doc.font('Helvetica').fontSize(7.5).fillColor('#374151')
+                .text(String(result.code || '-'), xCode + 6, y + 6, { width: columns.code - 8, height: 28, ellipsis: true });
+            doc.text(String(result.brand || '-'), xBrand + 6, y + 6, { width: columns.brand - 8, height: 28, ellipsis: true });
+            doc.text(String(result.stockText || result.stock || '0'), xStock + 6, y + 6, { width: columns.stock - 8, height: 28, ellipsis: true });
+            doc.text(String(result.product || 'Peca sem descricao'), xProduct + 6, y + 6, { width: columns.product - 8, height: 16, ellipsis: true });
+            if (result.application) {
+                doc.fontSize(6.8).fillColor('#6B7280')
+                    .text(String(result.application), xProduct + 6, y + 23, { width: columns.product - 8, height: 14, ellipsis: true });
+            }
+        } else {
+            doc.font('Helvetica').fontSize(8).fillColor('#9CA3AF')
+                .text(result?.error ? 'Erro na consulta' : 'Sem retorno', xPrice + 6, y + 12, { width: tableWidth - columns.supplier - 8 });
+        }
+
+        doc.y = y + rowHeight;
+        doc.moveTo(startX, doc.y).lineTo(startX + tableWidth, doc.y).strokeColor('#E5E7EB').lineWidth(0.5).stroke();
+        doc.moveDown(0.25);
+    };
+
+    doc.fontSize(18).font('Helvetica-Bold').fillColor('#111827').text('Planilha de Confronto de Precos', { align: 'center' });
+    doc.moveDown(0.2);
+    doc.fontSize(8).font('Helvetica').fillColor('#4B5563').text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, {
+        align: 'right',
+    });
+    doc.moveDown(0.8);
+
+    sections.forEach((section, sectionIndex) => {
+        ensureSpace(84);
+
+        if (sectionIndex > 0) {
+            doc.moveDown(0.6);
+            doc.moveTo(startX, doc.y).lineTo(startX + tableWidth, doc.y).strokeColor('#CBD5E1').lineWidth(1).stroke();
+            doc.moveDown(0.6);
+        }
+
+        doc.font('Helvetica-Bold').fontSize(12).fillColor('#111827').text(section.title);
+        if (section.subtitle) {
+            doc.font('Helvetica').fontSize(8).fillColor('#4B5563').text(section.subtitle);
+        }
+        doc.moveDown(0.5);
+
+        section.items.forEach((item, itemIndex) => {
+            ensureSpace(94);
+            if (itemIndex > 0) {
+                doc.moveDown(0.4);
+            }
+
+            doc.font('Helvetica-Bold').fontSize(10).fillColor('#111827').text(`Pesquisa: ${item.query}`);
+            if (item.description) {
+                doc.font('Helvetica').fontSize(8).fillColor('#4B5563').text(String(item.description), {
+                    width: tableWidth,
+                    ellipsis: true,
+                });
+            }
+            doc.moveDown(0.4);
+            drawTableHeader();
+
+            const selectedResults = section.suppliers.map((supplier: string) => section.selectedOffers[item.query]?.[supplier] || null);
+            const validPrices = selectedResults
+                .filter((result) => result && !result.error)
+                .map((result) => parsePdfPrice(result.price));
+            const bestPrice = validPrices.length ? Math.min(...validPrices) : Number.POSITIVE_INFINITY;
+
+            section.suppliers.forEach((supplier: string) => {
+                drawSupplierRow(supplier, section.selectedOffers[item.query]?.[supplier] || null, bestPrice);
+            });
+        });
+    });
+
+    doc.end();
+}
+
 function renderPDF(res: Response, items: QuoteItem[], suppliers: string[], matrix: QuoteMatrix, selectedOffers: SelectedOffersMatrix, filenamePrefix: string) {
     renderPDFSections(
         res,
         [
             {
-                title: 'Planilha de Confronto de Precos',
+                title: 'Cotacao',
                 items,
                 suppliers,
                 matrix,
