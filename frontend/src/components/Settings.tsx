@@ -1,8 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { Save, User, Key, Shield, MessageSquare, AlertCircle, CheckCircle } from 'lucide-react';
+import { Save, User, Key, Shield, MessageSquare, AlertCircle, CheckCircle, Users, Plus, Trash2 } from 'lucide-react';
 import { API_URL } from '../services/api';
+
+type EmployeeUser = {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    createdAt: string;
+};
 
 export const Settings = () => {
     const { user } = useAuth();
@@ -29,10 +37,19 @@ export const Settings = () => {
         color: localStorage.getItem('theme_color') || '#0056b3',
         logo: localStorage.getItem('theme_logo') || ''
     });
+    const [employees, setEmployees] = useState<EmployeeUser[]>([]);
+    const [employeeForm, setEmployeeForm] = useState({
+        id: '',
+        name: '',
+        email: '',
+        password: '',
+        role: 'FUNCIONARIO',
+    });
 
     useEffect(() => {
         if (user?.role === 'ADMIN') {
             fetchSystemConfig();
+            fetchEmployees();
         }
     }, [user]);
 
@@ -92,6 +109,70 @@ export const Settings = () => {
         }
     };
 
+    const fetchEmployees = async () => {
+        try {
+            const response = await axios.get<EmployeeUser[]>(`${API_URL}/api/auth/users`);
+            setEmployees(response.data);
+        } catch (err) {
+            console.error('Erro ao buscar funcionarios');
+        }
+    };
+
+    const resetEmployeeForm = () => {
+        setEmployeeForm({
+            id: '',
+            name: '',
+            email: '',
+            password: '',
+            role: 'FUNCIONARIO',
+        });
+    };
+
+    const handleEmployeeSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+
+        try {
+            if (employeeForm.id) {
+                await axios.put(`${API_URL}/api/auth/users/${employeeForm.id}`, employeeForm);
+                setMessage({ type: 'success', text: 'Funcionario atualizado com sucesso!' });
+            } else {
+                await axios.post(`${API_URL}/api/auth/users`, employeeForm);
+                setMessage({ type: 'success', text: 'Funcionario criado com sucesso!' });
+            }
+
+            resetEmployeeForm();
+            await fetchEmployees();
+        } catch (err: any) {
+            setMessage({ type: 'error', text: err.response?.data?.message || 'Erro ao salvar funcionario' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleEditEmployee = (employee: EmployeeUser) => {
+        setEmployeeForm({
+            id: employee.id,
+            name: employee.name,
+            email: employee.email,
+            password: '',
+            role: employee.role,
+        });
+    };
+
+    const handleDeleteEmployee = async (employee: EmployeeUser) => {
+        const confirmed = window.confirm(`Excluir o acesso de ${employee.name}?`);
+        if (!confirmed) return;
+
+        try {
+            await axios.delete(`${API_URL}/api/auth/users/${employee.id}`);
+            setMessage({ type: 'success', text: 'Funcionario removido.' });
+            await fetchEmployees();
+        } catch (err: any) {
+            setMessage({ type: 'error', text: err.response?.data?.message || 'Erro ao excluir funcionario' });
+        }
+    };
+
     return (
         <div className="settings-container">
             <h1 className="page-title">Configurações</h1>
@@ -105,6 +186,15 @@ export const Settings = () => {
                         <User size={18} />
                         <span>Meu Perfil</span>
                     </button>
+                    {user?.role === 'ADMIN' && (
+                        <button 
+                            className={`settings-nav-item ${activeSection === 'funcionarios' ? 'active' : ''}`}
+                            onClick={() => setActiveSection('funcionarios')}
+                        >
+                            <Users size={18} />
+                            <span>Funcionarios</span>
+                        </button>
+                    )}
                     {user?.role === 'ADMIN' && (
                         <button 
                             className={`settings-nav-item ${activeSection === 'ia' ? 'active' : ''}`}
@@ -190,6 +280,99 @@ export const Settings = () => {
                                     <span>{loading ? 'Salvando...' : 'Atualizar Perfil'}</span>
                                 </button>
                             </form>
+                        </div>
+                    )}
+
+                    {activeSection === 'funcionarios' && user?.role === 'ADMIN' && (
+                        <div className="settings-section">
+                            <div className="section-header">
+                                <h2>Acessos dos Funcionarios</h2>
+                                <p>Crie logins individuais para atendimento WhatsApp, pesquisas e cotações.</p>
+                            </div>
+
+                            <form onSubmit={handleEmployeeSubmit} className="employee-form">
+                                <div className="employee-form-grid">
+                                    <div className="form-group">
+                                        <label>Nome</label>
+                                        <input
+                                            className="form-input"
+                                            value={employeeForm.name}
+                                            onChange={e => setEmployeeForm({ ...employeeForm, name: e.target.value })}
+                                            placeholder="Nome do funcionario"
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>E-mail de acesso</label>
+                                        <input
+                                            type="email"
+                                            className="form-input"
+                                            value={employeeForm.email}
+                                            onChange={e => setEmployeeForm({ ...employeeForm, email: e.target.value })}
+                                            placeholder="funcionario@loja.com"
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>{employeeForm.id ? 'Nova senha (opcional)' : 'Senha'}</label>
+                                        <input
+                                            type="password"
+                                            className="form-input"
+                                            value={employeeForm.password}
+                                            onChange={e => setEmployeeForm({ ...employeeForm, password: e.target.value })}
+                                            placeholder={employeeForm.id ? 'Deixe em branco para manter' : 'Minimo 6 caracteres'}
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Permissao</label>
+                                        <select
+                                            className="form-input"
+                                            value={employeeForm.role}
+                                            onChange={e => setEmployeeForm({ ...employeeForm, role: e.target.value })}
+                                        >
+                                            <option value="FUNCIONARIO">Funcionario</option>
+                                            <option value="ADMIN">Administrador</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="employee-form-actions">
+                                    <button type="submit" className="btn-primary" disabled={loading}>
+                                        {employeeForm.id ? <Save size={18} /> : <Plus size={18} />}
+                                        <span>{employeeForm.id ? 'Salvar funcionario' : 'Criar funcionario'}</span>
+                                    </button>
+                                    {employeeForm.id && (
+                                        <button type="button" className="btn-secondary" onClick={resetEmployeeForm}>
+                                            Cancelar edicao
+                                        </button>
+                                    )}
+                                </div>
+                            </form>
+
+                            <div className="employee-list">
+                                {employees.map((employee) => (
+                                    <div className="employee-card" key={employee.id}>
+                                        <div className="employee-main">
+                                            <strong>{employee.name}</strong>
+                                            <span>{employee.email}</span>
+                                        </div>
+                                        <span className={`employee-role ${employee.role === 'ADMIN' ? 'admin' : ''}`}>
+                                            {employee.role === 'ADMIN' ? 'Admin' : 'Funcionario'}
+                                        </span>
+                                        <div className="employee-actions">
+                                            <button type="button" onClick={() => handleEditEmployee(employee)}>
+                                                Editar
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="danger"
+                                                onClick={() => void handleDeleteEmployee(employee)}
+                                                disabled={employee.id === user.id}
+                                            >
+                                                <Trash2 size={15} /> Excluir
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
 
@@ -458,6 +641,98 @@ export const Settings = () => {
                     background: rgba(16, 185, 129, 0.1);
                     color: #10b981;
                 }
+                .employee-form {
+                    background: var(--bg-color);
+                    border: 1px solid var(--border-color);
+                    border-radius: 8px;
+                    padding: 1rem;
+                    margin-bottom: 1.25rem;
+                }
+                .employee-form-grid {
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 1rem;
+                }
+                .employee-form-actions {
+                    display: flex;
+                    gap: 0.75rem;
+                    align-items: center;
+                    margin-top: 1rem;
+                    flex-wrap: wrap;
+                }
+                .btn-secondary {
+                    border: 1px solid var(--border-color);
+                    background: var(--panel-bg);
+                    color: var(--text-main);
+                    border-radius: 8px;
+                    padding: 0.75rem 1rem;
+                    cursor: pointer;
+                    font-weight: 700;
+                }
+                .employee-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.75rem;
+                }
+                .employee-card {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) auto auto;
+                    gap: 1rem;
+                    align-items: center;
+                    border: 1px solid var(--border-color);
+                    border-radius: 8px;
+                    padding: 0.9rem 1rem;
+                    background: var(--panel-bg);
+                }
+                .employee-main {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.2rem;
+                    min-width: 0;
+                }
+                .employee-main span {
+                    color: var(--text-muted);
+                    font-size: 0.85rem;
+                    overflow-wrap: anywhere;
+                }
+                .employee-role {
+                    border-radius: 999px;
+                    padding: 0.35rem 0.65rem;
+                    font-size: 0.78rem;
+                    color: #0369a1;
+                    background: #e0f2fe;
+                    font-weight: 700;
+                }
+                .employee-role.admin {
+                    color: #7c3aed;
+                    background: #ede9fe;
+                }
+                .employee-actions {
+                    display: flex;
+                    gap: 0.5rem;
+                    flex-wrap: wrap;
+                    justify-content: flex-end;
+                }
+                .employee-actions button {
+                    border: 1px solid var(--border-color);
+                    background: #fff;
+                    color: var(--text-main);
+                    border-radius: 8px;
+                    padding: 0.55rem 0.75rem;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.35rem;
+                    font-weight: 700;
+                }
+                .employee-actions button.danger {
+                    color: #ef4444;
+                    border-color: #fecaca;
+                }
+                .employee-actions button:disabled {
+                    opacity: 0.45;
+                    cursor: not-allowed;
+                }
                 
                 @media (max-width: 768px) {
                     .settings-layout {
@@ -485,6 +760,17 @@ export const Settings = () => {
                     }
                     .password-grid {
                         grid-template-columns: 1fr !important;
+                    }
+                    .employee-form-grid,
+                    .employee-card {
+                        grid-template-columns: 1fr;
+                    }
+                    .employee-actions,
+                    .employee-actions button,
+                    .employee-form-actions .btn-primary,
+                    .employee-form-actions .btn-secondary {
+                        width: 100%;
+                        justify-content: center;
                     }
                 }
             `}</style>
