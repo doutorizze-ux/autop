@@ -528,6 +528,10 @@ export const searchQuote = async (req: Request, res: Response) => {
             return res.status(400).json({ message: 'Lista de produtos e obrigatoria' });
         }
 
+        if (items.length > 1) {
+            return res.status(400).json({ message: 'Informe apenas um codigo ou produto por cotacao.' });
+        }
+
         const job: QuoteJob = {
             id: randomUUID(),
             status: 'running',

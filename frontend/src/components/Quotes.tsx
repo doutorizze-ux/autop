@@ -359,7 +359,6 @@ export const Quotes = () => {
                     if (alreadyExists) return current;
 
                     return [
-                        ...current,
                         {
                             query,
                             description: description || undefined,
@@ -388,15 +387,7 @@ export const Quotes = () => {
             return;
         }
 
-        const alreadyExists = partList.some((item) => item.query.toLowerCase() === query.toLowerCase());
-        if (alreadyExists) {
-            setNewPart('');
-            setNewDescription('');
-            return;
-        }
-
-        setPartList((current) => [
-            ...current,
+        setPartList([
             {
                 query,
                 description: description || undefined,
@@ -438,7 +429,10 @@ export const Quotes = () => {
             await applyQuoteJob(response.data);
         } catch (error) {
             console.error('Search Quote Error:', error);
-            alert('Erro ao buscar preços. Verifique se os fornecedores estão configurados corretamente.');
+            const message = axios.isAxiosError(error)
+                ? error.response?.data?.message
+                : '';
+            alert(message || 'Erro ao buscar preços. Verifique se os fornecedores estão configurados corretamente.');
             setIsSearching(false);
             setQuoteJobStatus('');
         } finally {
@@ -736,7 +730,7 @@ export const Quotes = () => {
                 {partList.length > 0 && (
                     <div className="part-list">
                         <div className="part-list-header">
-                            <h4>Lista de Cotação ({partList.length} itens)</h4>
+                            <h4>Item da Cotação</h4>
                             {currentCreatedAt && (
                                 <span className="quote-meta">
                                     <Clock3 size={14} /> {formatDateTime(currentCreatedAt)}
