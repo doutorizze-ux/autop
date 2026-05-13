@@ -15,6 +15,7 @@ debug_error.png
 *.log
 client-install.config.json
 local-agent/cloud-agent.config.json
+dist-agent/
 backups/
 local-agent/browser-profiles/
 scraping/tmp-*/
