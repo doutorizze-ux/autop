@@ -31,13 +31,31 @@ Deixe `VITE_API_URL` vazio quando frontend e backend estiverem no mesmo compose/
 
 ## Subir agentes no PC da loja
 
-No PowerShell, dentro da pasta do projeto:
+Para uso da loja, prefira o atalho:
+
+```text
+Iniciar Agentes Autopecas
+```
+
+Ele usa a configuracao local em:
+
+```text
+local-agent/cloud-agent.config.json
+```
+
+Para criar os atalhos na Area de Trabalho:
+
+```powershell
+.\scripts\create-agent-desktop-shortcuts.ps1
+```
+
+Se precisar iniciar manualmente no PowerShell, dentro da pasta do projeto:
 
 ```powershell
 .\local-agent\start-supplier-agents.ps1 `
   -BackendUrl "https://SEU-DOMINIO" `
   -Token "MESMO_VALOR_DO_LOCAL_AGENT_TOKEN" `
-  -Suppliers "Comdip","KKI","Kaizen","Real Moto Pecas","Furacao","Sky Pecas","DPK" `
+  -Suppliers "Comdip","KKI","Real Moto Pecas","Furacao","Sky Pecas","DPK" `
   -SearchWorkers "1"
 ```
 

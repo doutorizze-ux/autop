@@ -26,6 +26,35 @@ Para deixar as buscas mais rapidas e evitar que o servidor do Coolify acesse dir
 
 Cada processo anuncia ao backend quais fornecedores atende. Quando uma cotacao dispara varias buscas ao mesmo tempo, o backend entrega a tarefa apenas para o agente daquele fornecedor.
 
+## Modo loja: iniciar com duplo clique
+
+No PC da loja, use o arquivo:
+
+```text
+Iniciar Agentes Autopecas.cmd
+```
+
+Ele le a configuracao em:
+
+```text
+local-agent/cloud-agent.config.json
+```
+
+Se o arquivo nao existir, o sistema cria a configuracao a partir do exemplo e abre o Bloco de Notas para preencher.
+
+Para criar atalhos na Area de Trabalho:
+
+```powershell
+.\scripts\create-agent-desktop-shortcuts.ps1
+```
+
+Isso cria:
+
+- `Iniciar Agentes Autopecas`
+- `Parar Agentes Autopecas`
+
+O Kaizen nao fica na lista padrao enquanto nao estiver cadastrado no sistema. Para ativar depois, adicione `"Kaizen"` no array `suppliers` do arquivo `local-agent/cloud-agent.config.json`.
+
 Se quiser iniciar somente um fornecedor:
 
 ```powershell

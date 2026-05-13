@@ -1,0 +1,14 @@
+{
+  "backendUrl": "https://api.centroautomotivo0058.store",
+  "token": "COLOQUE_AQUI_O_LOCAL_AGENT_TOKEN",
+  "suppliers": [
+    "Comdip",
+    "KKI",
+    "Real Moto Pecas",
+    "Furacao",
+    "Sky Pecas",
+    "DPK"
+  ],
+  "searchWorkers": "1",
+  "headless": "true"
+}
