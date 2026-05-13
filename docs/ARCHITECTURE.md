@@ -51,7 +51,8 @@ O fluxo de cotacao atual e:
 
 - `SCRAPER_CONCURRENCY`: quantidade de fornecedores em paralelo por produto. Padrao: `3`.
 - `SCRAPER_SUPPLIER_TIMEOUT_MS`: timeout de cada fornecedor no backend. Padrao: `165000`.
-- `SCRAPER_CACHE_TTL_MS`: TTL do cache de resultados no backend e no engine. Padrao: `600000`.
+- `SCRAPER_RESULT_CACHE_ENABLED`: liga cache de resultados de fornecedores quando `true`. Padrao: `false`, para cada cotacao buscar preco atualizado.
+- `SCRAPER_CACHE_TTL_MS`: TTL do cache de resultados no backend e no engine quando o cache estiver ligado. Padrao: `0`.
 - `SCRAPER_ENGINE_CACHE_TTL_MS`: TTL especifico do cache do engine, se quiser separar do backend.
 - `SCRAPER_CACHE_MAX_ENTRIES`: limite de entradas em cache por processo. Padrao: `500`.
 - `SCRAPER_PAGE_TIMEOUT_MS`: timeout padrao do Playwright por pagina. Padrao: `90000`.

@@ -81,15 +81,16 @@ HEADLESS=false node run-search.js ... (Linux/Mac)
  
 ---
 
-## 5. Operacao com cache e concorrencia
+## 5. Operacao sem cache de preco e com concorrencia
 
-O scraping agora mantem um cache curto por fornecedor/produto e uma fila exclusiva por fornecedor. Isso evita repetir a mesma consulta em sequencia e impede que dois workers usem simultaneamente o mesmo perfil persistente do Chrome.
+O scraping mantem uma fila exclusiva por fornecedor para impedir que dois workers usem simultaneamente o mesmo perfil persistente do Chrome. Cache de resultado fica desligado por padrao, porque cotacao precisa consultar preco atualizado mesmo quando o mesmo codigo e pesquisado em sequencia.
 
 Variaveis recomendadas:
 
 ```bash
-SCRAPER_CACHE_TTL_MS=600000
-SCRAPER_ENGINE_CACHE_TTL_MS=600000
+SCRAPER_RESULT_CACHE_ENABLED=false
+SCRAPER_CACHE_TTL_MS=0
+SCRAPER_ENGINE_CACHE_TTL_MS=0
 SCRAPER_CACHE_MAX_ENTRIES=500
 SCRAPER_PAGE_TIMEOUT_MS=90000
 SCRAPER_SUPPLIER_TIMEOUT_MS=165000

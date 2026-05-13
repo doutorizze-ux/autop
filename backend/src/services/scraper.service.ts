@@ -19,6 +19,15 @@ function parsePositiveInt(value: string | undefined, fallback: number) {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function parseNonNegativeInt(value: string | undefined, fallback: number) {
+    const parsed = Number.parseInt(String(value || ''), 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function isResultCacheEnabled() {
+    return String(process.env.SCRAPER_RESULT_CACHE_ENABLED || '').trim().toLowerCase() === 'true';
+}
+
 function clonePayload<T>(value: T): T {
     if (value === undefined || value === null) {
         return value;
@@ -319,10 +328,11 @@ async function executeSupplierSearch(supplier: any, productName: string) {
 }
 
 async function executeSupplierSearchWithGuards(supplier: any, productName: string) {
-    const cacheTtlMs = parsePositiveInt(process.env.SCRAPER_CACHE_TTL_MS, 10 * 60 * 1000);
+    const cacheEnabled = isResultCacheEnabled();
+    const cacheTtlMs = cacheEnabled ? parseNonNegativeInt(process.env.SCRAPER_CACHE_TTL_MS, 0) : 0;
     const timeoutMs = parsePositiveInt(process.env.SCRAPER_SUPPLIER_TIMEOUT_MS, 165_000);
     const cacheKey = getSupplierCacheKey(supplier, productName);
-    const cached = supplierSearchCache.get(cacheKey);
+    const cached = cacheEnabled ? supplierSearchCache.get(cacheKey) : null;
 
     if (cached && cached.expiresAt > Date.now()) {
         return clonePayload(cached.value);
@@ -330,6 +340,8 @@ async function executeSupplierSearchWithGuards(supplier: any, productName: strin
 
     if (cached) {
         supplierSearchCache.delete(cacheKey);
+    } else if (!cacheEnabled && supplierSearchCache.size > 0) {
+        supplierSearchCache.clear();
     }
 
     let result;

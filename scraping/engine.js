@@ -843,6 +843,15 @@ function parsePositiveInt(value, fallback) {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function parseNonNegativeInt(value, fallback) {
+    const parsed = Number.parseInt(String(value || ''), 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function isResultCacheEnabled() {
+    return String(process.env.SCRAPER_RESULT_CACHE_ENABLED || '').trim().toLowerCase() === 'true';
+}
+
 function clonePayload(value) {
     if (value === undefined || value === null) {
         return value;
@@ -1157,9 +1166,12 @@ async function scrapeProductUnsafe(supplier, productName) {
 }
 
 async function scrapeProduct(supplier, productName) {
-    const cacheTtlMs = parsePositiveInt(process.env.SCRAPER_ENGINE_CACHE_TTL_MS || process.env.SCRAPER_CACHE_TTL_MS, 10 * 60 * 1000);
+    const cacheEnabled = isResultCacheEnabled();
+    const cacheTtlMs = cacheEnabled
+        ? parseNonNegativeInt(process.env.SCRAPER_ENGINE_CACHE_TTL_MS || process.env.SCRAPER_CACHE_TTL_MS, 0)
+        : 0;
     const cacheKey = getSupplierSearchCacheKey(supplier, productName);
-    const cached = supplierResultCache.get(cacheKey);
+    const cached = cacheEnabled ? supplierResultCache.get(cacheKey) : null;
 
     if (cached && cached.expiresAt > Date.now()) {
         return clonePayload(cached.value);
@@ -1167,10 +1179,12 @@ async function scrapeProduct(supplier, productName) {
 
     if (cached) {
         supplierResultCache.delete(cacheKey);
+    } else if (!cacheEnabled && supplierResultCache.size > 0) {
+        supplierResultCache.clear();
     }
 
     return runExclusiveForSupplier(supplier, async () => {
-        const secondLook = supplierResultCache.get(cacheKey);
+        const secondLook = cacheEnabled ? supplierResultCache.get(cacheKey) : null;
         if (secondLook && secondLook.expiresAt > Date.now()) {
             return clonePayload(secondLook.value);
         }
