@@ -359,6 +359,7 @@ export const Quotes = () => {
                     if (alreadyExists) return current;
 
                     return [
+                        ...current,
                         {
                             query,
                             description: description || undefined,
@@ -387,7 +388,15 @@ export const Quotes = () => {
             return;
         }
 
-        setPartList([
+        const alreadyExists = partList.some((item) => item.query.toLowerCase() === query.toLowerCase());
+        if (alreadyExists) {
+            setNewPart('');
+            setNewDescription('');
+            return;
+        }
+
+        setPartList((current) => [
+            ...current,
             {
                 query,
                 description: description || undefined,
@@ -688,7 +697,7 @@ export const Quotes = () => {
                 <div>
                     <h1 className="page-title">Orçamento Simultâneo</h1>
                     <p className="page-subtitle">
-                        Pesquise uma peça em todos os fornecedores cadastrados ao mesmo tempo.
+                        Monte uma fila de códigos; cada item é pesquisado em todos os fornecedores antes do próximo começar.
                     </p>
                 </div>
             </div>
@@ -730,7 +739,7 @@ export const Quotes = () => {
                 {partList.length > 0 && (
                     <div className="part-list">
                         <div className="part-list-header">
-                            <h4>Item da Cotação</h4>
+                            <h4>Fila de Cotação ({partList.length} {partList.length === 1 ? 'item' : 'itens'})</h4>
                             {currentCreatedAt && (
                                 <span className="quote-meta">
                                     <Clock3 size={14} /> {formatDateTime(currentCreatedAt)}
@@ -763,7 +772,7 @@ export const Quotes = () => {
                                 </>
                             ) : (
                                 <>
-                                    <RefreshCw size={20} /> Iniciar Orçamento em Todos os Fornecedores
+                                    <RefreshCw size={20} /> Iniciar Fila de Orçamentos
                                 </>
                             )}
                         </button>
