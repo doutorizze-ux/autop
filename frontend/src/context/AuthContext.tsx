@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import axios from 'axios';
 import {jwtDecode} from 'jwt-decode';
 import { API_URL } from '../services/api';
+import { connectSocket, disconnectSocket } from '../services/socket';
 
 interface User {
   id: string;
@@ -34,6 +35,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             logout();
           } else {
             axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+            connectSocket(token);
             const response = await axios.get(`${API_URL}/api/auth/me`);
             setUser(response.data);
           }
@@ -52,6 +54,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setToken(newToken);
     setUser(userData);
     axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+    connectSocket(newToken);
   };
 
   const logout = () => {
@@ -59,6 +62,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setToken(null);
     setUser(null);
     delete axios.defaults.headers.common['Authorization'];
+    disconnectSocket();
   };
 
   if (loading) return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Carregando...</div>;

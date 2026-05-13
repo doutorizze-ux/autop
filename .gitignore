@@ -5,6 +5,7 @@ dist
 *.db-journal
 sessions
 backend/sessions
+backend/data/whatsapp-sessions/
 scraping/node_modules
 frontend/dist
 .DS_Store

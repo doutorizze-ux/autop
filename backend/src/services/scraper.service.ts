@@ -388,7 +388,8 @@ export class ScraperService {
 
     static async searchMultipleProducts(
         productNames: string[],
-        socketId?: string,
+        progressRoom?: string,
+        progressContext: Record<string, any> = {},
         onProgress?: (payload: { supplier: string; productName: string; result: any }) => void,
         shouldCancel?: () => boolean
     ) {
@@ -427,8 +428,11 @@ export class ScraperService {
                             result: entry,
                         };
                         onProgress?.(progressPayload);
-                        if (socketId) {
-                            io.to(socketId).emit('quote_progress', progressPayload);
+                        if (progressRoom) {
+                            io.to(progressRoom).emit('quote_progress', {
+                                ...progressPayload,
+                                ...progressContext,
+                            });
                         }
                     }
                     return normalizedResults;

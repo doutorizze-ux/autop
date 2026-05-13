@@ -14,17 +14,24 @@ model User {
   password  String
   role      String   @default("FUNCIONARIO") // ADMIN ou FUNCIONARIO
   createdAt DateTime @default(now())
+  clients   Client[]
+  quotes    Quote[]
 }
 
 model Client {
   id        String   @id @default(uuid())
   name      String
-  phone     String   @unique
+  phone     String
   whatsappJid String?
   status    String   @default("NOVO") // NOVO, EM_ATENDIMENTO, FINALIZADO
   history   String?  // Can be JSON string or simple text for now
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([userId, phone])
+  @@index([userId])
 }
 
 model Supplier {
@@ -64,6 +71,8 @@ model Quote {
   id        String   @id @default(uuid())
   product   String
   results   String   // Store as JSON string
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
 }
 

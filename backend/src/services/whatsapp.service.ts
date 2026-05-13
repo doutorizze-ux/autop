@@ -23,7 +23,6 @@ const prisma = new PrismaClient();
 const whatsappIdentityMapPath = path.join(__dirname, '../../data/whatsapp-identity-map.json');
 const whatsappIdentityCache = new Map<string, string>();
 let whatsappIdentityCacheLoaded = false;
-const whatsappStore = makeInMemoryStore({});
 
 type StoredChatMessage = {
     text: string;
@@ -39,6 +38,8 @@ type StoredChatMedia = {
     mimetype?: string;
     fileName?: string;
 };
+
+type SocketEventEmitter = (event: string, payload: Record<string, any>) => void;
 
 function normalizeWhatsappPhone(jid: string) {
     return String(jid || '').replace(/@s\.whatsapp\.net$/, '').replace(/\D/g, '');
@@ -159,8 +160,9 @@ async function resolveRealJidFromIdentityMap(jid?: string) {
     return whatsappIdentityCache.get(normalizedJid) || '';
 }
 
-async function applyIdentityMappingsToUnresolvedClients() {
+async function applyIdentityMappingsToUnresolvedClients(userId: string) {
     const unresolvedClients = (await prisma.client.findMany({
+        where: { userId },
         orderBy: { updatedAt: 'desc' },
     })).filter((client) => isUnresolvedPhone(client.phone));
 
@@ -391,8 +393,10 @@ function readClientHistory(history?: string | null): StoredChatMessage[] {
     return [{ text: history, fromMe: false, timestamp: Math.floor(Date.now() / 1000) }];
 }
 
-async function appendClientMessage(clientId: string, message: StoredChatMessage) {
-    const client = await prisma.client.findUnique({ where: { id: clientId } });
+async function appendClientMessage(clientId: string, message: StoredChatMessage, userId?: string) {
+    const client = userId
+        ? await prisma.client.findFirst({ where: { id: clientId, userId } })
+        : await prisma.client.findUnique({ where: { id: clientId } });
     if (!client) return null;
 
     const history = readClientHistory(client.history);
@@ -432,6 +436,8 @@ function mergeChatHistories(...histories: Array<string | null | undefined>) {
 }
 
 async function enrichExistingClientPhoneFromWhatsappIdentity(params: {
+    userId: string;
+    emit: SocketEventEmitter;
     realJid?: string;
     name?: string;
 }) {
@@ -442,6 +448,7 @@ async function enrichExistingClientPhoneFromWhatsappIdentity(params: {
     if (!realPhone || !contactName) return null;
 
     const clients = await prisma.client.findMany({
+        where: { userId: params.userId },
         orderBy: { updatedAt: 'desc' },
     });
     const existingWithPhone = clients.find((client) => client.phone === realPhone);
@@ -463,7 +470,7 @@ async function enrichExistingClientPhoneFromWhatsappIdentity(params: {
             },
         });
         await prisma.client.delete({ where: { id: unresolvedClient.id } }).catch(() => null);
-        io.emit('client_deleted', { id: unresolvedClient.id });
+        params.emit('client_deleted', { id: unresolvedClient.id });
         return mergedClient;
     }
 
@@ -480,6 +487,7 @@ async function enrichExistingClientPhoneFromWhatsappIdentity(params: {
 }
 
 async function upsertClientFromWhatsapp(params: {
+    userId: string;
     jid: string;
     realJid?: string;
     name?: string;
@@ -500,12 +508,13 @@ async function upsertClientFromWhatsapp(params: {
         .filter((item, index, list) => list.indexOf(item) === index);
 
     let existing = realPhone
-        ? await prisma.client.findUnique({ where: { phone: realPhone } })
+        ? await prisma.client.findFirst({ where: { userId: params.userId, phone: realPhone } })
         : null;
 
     if (!existing) {
         existing = await prisma.client.findFirst({
             where: {
+                userId: params.userId,
                 OR: [
                     { whatsappJid: technicalJid },
                     ...(realJid ? [{ whatsappJid: realJid }] : []),
@@ -518,6 +527,7 @@ async function upsertClientFromWhatsapp(params: {
     if (!existing && !realPhone && isUnresolvedPhone(phone) && params.name) {
         const contactName = normalizeContactName(params.name);
         const clients = await prisma.client.findMany({
+            where: { userId: params.userId },
             orderBy: { updatedAt: 'desc' },
         });
         existing = clients.find((client) =>
@@ -529,6 +539,7 @@ async function upsertClientFromWhatsapp(params: {
     if (existing && realPhone && technicalPhone && technicalPhone !== realPhone) {
         await prisma.client.deleteMany({
             where: {
+                userId: params.userId,
                 NOT: { id: existing.id },
                 OR: [
                     { phone: technicalPhone },
@@ -556,11 +567,14 @@ async function upsertClientFromWhatsapp(params: {
     }
 
     return prisma.client.create({
-        data: updateData,
+        data: {
+            ...updateData,
+            userId: params.userId,
+        },
     });
 }
 
-async function syncHistoryPhoneMappings(historySync: any) {
+async function syncHistoryPhoneMappings(historySync: any, userId: string, emit: SocketEventEmitter) {
     const mappings = Array.isArray(historySync?.phoneNumberToLidMappings)
         ? historySync.phoneNumberToLidMappings
         : [];
@@ -587,19 +601,20 @@ async function syncHistoryPhoneMappings(historySync: any) {
     }
 
     if (remembered > 0) {
-        const result = await applyIdentityMappingsToUnresolvedClients();
+        const result = await applyIdentityMappingsToUnresolvedClients(userId);
         if (result.updated > 0) {
             const refreshedClients = await prisma.client.findMany({
+                where: { userId },
                 orderBy: { updatedAt: 'desc' },
             });
             refreshedClients
                 .filter((client) => !isUnresolvedPhone(client.phone))
-                .forEach((client) => io.emit('client_upserted', client));
+                .forEach((client) => emit('client_upserted', client));
         }
     }
 }
 
-class WhatsAppService {
+class WhatsAppSession {
     public sock: any = null;
     public qr: string | null = null;
     public status: 'connecting' | 'connected' | 'disconnected' | 'qr' = 'disconnected';
@@ -607,8 +622,30 @@ class WhatsAppService {
     private initializing = false;
     private generation = 0;
     private activeSessionPath = '';
-    private readonly sessionRoot = path.join(__dirname, '../../data/whatsapp-sessions');
-    private readonly activeSessionMarker = path.join(this.sessionRoot, 'active-session.txt');
+    private readonly store = makeInMemoryStore({});
+    private readonly sessionRoot: string;
+    private readonly activeSessionMarker: string;
+
+    constructor(private readonly userId: string) {
+        const safeUserId = userId.replace(/[^a-zA-Z0-9_-]/g, '_');
+        this.sessionRoot = path.join(__dirname, '../../data/whatsapp-sessions', safeUserId);
+        this.activeSessionMarker = path.join(this.sessionRoot, 'active-session.txt');
+    }
+
+    get snapshot() {
+        return {
+            status: this.status,
+            qr: this.qr,
+            error: this.lastError,
+        };
+    }
+
+    private emit(event: string, payload: Record<string, any> = {}) {
+        io.to(`user:${this.userId}`).emit(event, {
+            ...payload,
+            userId: this.userId,
+        });
+    }
 
     async init() {
         if (this.initializing) return;
@@ -616,7 +653,7 @@ class WhatsAppService {
         const generation = ++this.generation;
         this.status = 'connecting';
         this.lastError = null;
-        io.emit('whatsapp_status', { status: 'connecting' });
+        this.emit('whatsapp_status', { status: 'connecting' });
 
         try {
             this.closeSocket();
@@ -638,7 +675,7 @@ class WhatsAppService {
                 markOnlineOnConnect: false,
             });
 
-            whatsappStore.bind(this.sock.ev);
+            this.store.bind(this.sock.ev);
 
             this.sock.ev.on('connection.update', async (update: any) => {
                 if (generation !== this.generation) return;
@@ -647,7 +684,7 @@ class WhatsAppService {
                 if (qr) {
                     this.qr = await QRCode.toDataURL(qr);
                     this.status = 'qr';
-                    io.emit('whatsapp_status', { status: 'qr', qr: this.qr });
+                    this.emit('whatsapp_status', { status: 'qr', qr: this.qr });
                 }
 
                 if (connection === 'close') {
@@ -659,7 +696,7 @@ class WhatsAppService {
                     this.lastError = restartRequired
                         ? 'WhatsApp pediu reinício da conexão para concluir o pareamento.'
                         : `Conexão fechada pelo WhatsApp. Código: ${statusCode || 'desconhecido'}`;
-                    io.emit('whatsapp_status', { status: this.status });
+                    this.emit('whatsapp_status', { status: this.status });
                     console.log(`WhatsApp connection closed. statusCode=${statusCode || 'unknown'} shouldReconnect=${shouldReconnect}`);
 
                     if (statusCode === DisconnectReason.loggedOut) {
@@ -678,7 +715,7 @@ class WhatsAppService {
                     this.qr = null;
                     this.lastError = null;
                     await this.syncKnownContacts();
-                    io.emit('whatsapp_status', { status: 'connected' });
+                    this.emit('whatsapp_status', { status: 'connected' });
                     console.log('WhatsApp connection opened');
                 }
             });
@@ -689,11 +726,12 @@ class WhatsAppService {
                 try {
                     await rememberWhatsappIdentity(lid, jid);
                     const client = await upsertClientFromWhatsapp({
+                        userId: this.userId,
                         jid: lid,
                         realJid: jid,
                     });
                     if (client) {
-                        io.emit('client_upserted', client);
+                        this.emit('client_upserted', client);
                     }
                 } catch (error) {
                     console.error('Erro ao sincronizar telefone real do WhatsApp:', error);
@@ -719,12 +757,13 @@ class WhatsAppService {
                         await rememberWhatsappIdentity(lidJid, realJid);
 
                         const client = await upsertClientFromWhatsapp({
+                            userId: this.userId,
                             jid: lidJid,
                             realJid,
                             name: chat?.name,
                         });
                         if (client) {
-                            io.emit('client_upserted', client);
+                            this.emit('client_upserted', client);
                         }
                     }
 
@@ -733,7 +772,7 @@ class WhatsAppService {
                         await this.syncContacts(contacts);
                     }
 
-                    await applyIdentityMappingsToUnresolvedClients();
+                    await applyIdentityMappingsToUnresolvedClients(this.userId);
                 } catch (error) {
                     console.error('Erro ao processar historico do WhatsApp:', error);
                 }
@@ -747,7 +786,7 @@ class WhatsAppService {
                     if (historySyncNotification) {
                         try {
                             const historySync = await downloadHistory(historySyncNotification, {});
-                            await syncHistoryPhoneMappings(historySync);
+                            await syncHistoryPhoneMappings(historySync, this.userId, this.emit.bind(this));
                         } catch (error) {
                             console.error('Erro ao processar mapeamentos do historico do WhatsApp:', error);
                         }
@@ -766,11 +805,13 @@ class WhatsAppService {
                             findRealWhatsappJidDeep(msg)
                         );
                         const enrichedClient = await enrichExistingClientPhoneFromWhatsappIdentity({
+                            userId: this.userId,
+                            emit: this.emit.bind(this),
                             realJid: statusRealJid,
                             name: msg.pushName,
                         });
                         if (enrichedClient) {
-                            io.emit('client_upserted', enrichedClient);
+                            this.emit('client_upserted', enrichedClient);
                         }
                         continue;
                     }
@@ -800,6 +841,7 @@ class WhatsAppService {
 
                     if (sender) {
                         let client = await upsertClientFromWhatsapp({
+                            userId: this.userId,
                             jid: sender,
                             realJid: resolvedRealJid,
                             name: pushName,
@@ -812,10 +854,10 @@ class WhatsAppService {
                                 fromMe: false,
                                 timestamp: Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000),
                                 media,
-                            }) || client;
+                            }, this.userId) || client;
 
-                            io.emit('client_upserted', client);
-                            io.emit('incoming_message', {
+                            this.emit('client_upserted', client);
+                            this.emit('incoming_message', {
                                 from: sender,
                                 clientId: client.id,
                                 phone: client.phone,
@@ -835,7 +877,7 @@ class WhatsAppService {
             this.status = 'disconnected';
             this.qr = null;
             this.lastError = error instanceof Error ? error.message : String(error);
-            io.emit('whatsapp_status', { status: 'disconnected' });
+            this.emit('whatsapp_status', { status: 'disconnected' });
         } finally {
             this.initializing = false;
         }
@@ -853,11 +895,13 @@ class WhatsAppService {
 
                 if (realJid && contactName) {
                     const enrichedClient = await enrichExistingClientPhoneFromWhatsappIdentity({
+                        userId: this.userId,
+                        emit: this.emit.bind(this),
                         realJid,
                         name: contactName,
                     });
                     if (enrichedClient) {
-                        io.emit('client_upserted', enrichedClient);
+                        this.emit('client_upserted', enrichedClient);
                     }
                 }
 
@@ -866,12 +910,13 @@ class WhatsAppService {
                 await rememberWhatsappIdentity(technicalJid, realJid);
 
                 const client = await upsertClientFromWhatsapp({
+                    userId: this.userId,
                     jid: technicalJid,
                     realJid,
                     name: contactName,
                 });
                 if (client) {
-                    io.emit('client_upserted', client);
+                    this.emit('client_upserted', client);
                 }
             } catch (error) {
                 console.error('Erro ao atualizar contato do WhatsApp:', error);
@@ -880,7 +925,7 @@ class WhatsAppService {
     }
 
     private async syncKnownContacts() {
-        const contacts = Object.values((whatsappStore as any).contacts || {});
+        const contacts = Object.values((this.store as any).contacts || {});
         if (contacts.length > 0) {
             await this.syncContacts(contacts);
         }
@@ -892,7 +937,7 @@ class WhatsAppService {
         }
 
         await this.syncKnownContacts();
-        return applyIdentityMappingsToUnresolvedClients();
+        return applyIdentityMappingsToUnresolvedClients(this.userId);
     }
 
     private closeSocket() {
@@ -961,6 +1006,7 @@ class WhatsAppService {
         const digits = normalizeWhatsappPhone(jid);
         let client = await prisma.client.findFirst({
             where: {
+                userId: this.userId,
                 OR: [
                     { whatsappJid: jid },
                     { phone: digits },
@@ -974,16 +1020,64 @@ class WhatsAppService {
                 text,
                 fromMe: true,
                 timestamp: Math.floor(Date.now() / 1000),
-            }) || client;
-            io.emit('client_upserted', client);
+            }, this.userId) || client;
+            this.emit('client_upserted', client);
         }
 
-        io.emit('message_sent', {
+        this.emit('message_sent', {
             to: jid,
             clientId: client?.id,
             text,
             timestamp: Math.floor(Date.now() / 1000),
         });
+    }
+}
+
+class WhatsAppService {
+    private sessions = new Map<string, WhatsAppSession>();
+
+    private getSession(userId: string) {
+        const normalizedUserId = String(userId || '').trim();
+        if (!normalizedUserId) {
+            throw new Error('Usuario nao autenticado.');
+        }
+
+        let session = this.sessions.get(normalizedUserId);
+        if (!session) {
+            session = new WhatsAppSession(normalizedUserId);
+            this.sessions.set(normalizedUserId, session);
+        }
+
+        return session;
+    }
+
+    getStatus(userId: string) {
+        const normalizedUserId = String(userId || '').trim();
+        const session = normalizedUserId ? this.sessions.get(normalizedUserId) : null;
+
+        return session?.snapshot || {
+            status: 'disconnected' as const,
+            qr: null,
+            error: null,
+        };
+    }
+
+    async init(userId: string) {
+        await this.getSession(userId).init();
+        return this.getStatus(userId);
+    }
+
+    async reconnect(userId: string, forceNewSession = false) {
+        await this.getSession(userId).reconnect(forceNewSession);
+        return this.getStatus(userId);
+    }
+
+    async sendMessage(userId: string, to: string, text: string) {
+        return this.getSession(userId).sendMessage(to, text);
+    }
+
+    async syncUnresolvedClientPhones(userId: string) {
+        return this.getSession(userId).syncUnresolvedClientPhones();
     }
 }
 

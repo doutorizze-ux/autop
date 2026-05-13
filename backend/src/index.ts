@@ -5,6 +5,7 @@ import http from 'http';
 import path from 'path';
 import fs from 'fs';
 import { Server } from 'socket.io';
+import jwt from 'jsonwebtoken';
 import authRoutes from './routes/auth.routes';
 import clientRoutes from './routes/client.routes';
 import whatsappRoutes from './routes/whatsapp.routes';
@@ -29,9 +30,30 @@ const io = new Server(server, {
 
 export { io };
 
-import { whatsappService } from './services/whatsapp.service';
-
 const PORT = process.env.PORT || 5000;
+
+io.use((socket, next) => {
+    const token = String(socket.handshake.auth?.token || '').trim();
+
+    if (!token) {
+        next(new Error('Token nao informado'));
+        return;
+    }
+
+    try {
+        socket.data.user = jwt.verify(token, process.env.JWT_SECRET || 'secret') as { userId: string; role: string };
+        next();
+    } catch (_) {
+        next(new Error('Token invalido'));
+    }
+});
+
+io.on('connection', (socket) => {
+    const userId = String(socket.data.user?.userId || '').trim();
+    if (userId) {
+        socket.join(`user:${userId}`);
+    }
+});
 
 app.use(cors());
 app.use(express.json({ limit: '12mb' }));
@@ -62,5 +84,4 @@ if (fs.existsSync(frontendDistPath)) {
 
 server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
-    whatsappService.init().catch(err => console.error('WhatsApp Init Error:', err));
 });

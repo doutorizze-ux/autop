@@ -2,6 +2,7 @@
 import axios from 'axios';
 import { API_URL } from '../services/api';
 import { socket } from '../services/socket';
+import { useAuth } from '../context/AuthContext';
 import {
     Search,
     Plus,
@@ -60,8 +61,8 @@ type QuoteSearchResponse = {
 };
 
 const apiBase = API_URL;
-const activeQuoteJobStorageKey = 'active_quote_job_id';
-const quotePrefillStorageKey = 'quote_prefill_item';
+const getActiveQuoteJobStorageKey = (userId?: string) => `active_quote_job_id:${userId || 'sem-usuario'}`;
+const getQuotePrefillStorageKey = (userId?: string) => `quote_prefill_item:${userId || 'sem-usuario'}`;
 
 type QuotesProps = {
     openHistoryId?: string;
@@ -176,6 +177,9 @@ const downloadBlob = (blob: BlobPart, filename: string) => {
 };
 
 export const Quotes = ({ openHistoryId }: QuotesProps) => {
+    const { user } = useAuth();
+    const activeQuoteJobStorageKey = getActiveQuoteJobStorageKey(user?.id);
+    const quotePrefillStorageKey = getQuotePrefillStorageKey(user?.id);
     const [partList, setPartList] = useState<QuoteItemInput[]>([]);
     const [newPart, setNewPart] = useState('');
     const [newDescription, setNewDescription] = useState('');
@@ -199,6 +203,10 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
             });
         }, 80);
     };
+
+    useEffect(() => {
+        setActiveJobId(localStorage.getItem(activeQuoteJobStorageKey) || '');
+    }, [activeQuoteJobStorageKey]);
 
     const applyQuoteJob = async (data: QuoteSearchResponse) => {
         setQuoteJobStatus(data.status || '');
@@ -258,10 +266,14 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
         }, 3000);
 
         return () => window.clearInterval(interval);
-    }, [activeJobId]);
+    }, [activeJobId, activeQuoteJobStorageKey]);
 
     useEffect(() => {
-        const handleProgress = (data: { supplier: string; productName: string; result: any }) => {
+        const handleProgress = (data: { supplier: string; productName: string; result: any; jobId?: string }) => {
+            if (data.jobId && data.jobId !== activeJobId) {
+                return;
+            }
+
             setQuoteMatrix((prev) => {
                 const next = { ...prev };
                 if (!next[data.productName]) {
@@ -302,7 +314,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
         return () => {
             socket.off('quote_progress', handleProgress);
         };
-    }, []);
+    }, [activeJobId]);
 
     useEffect(() => {
         const applyPrefill = () => {
@@ -338,7 +350,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
         applyPrefill();
         window.addEventListener('quote-prefill-ready', applyPrefill);
         return () => window.removeEventListener('quote-prefill-ready', applyPrefill);
-    }, []);
+    }, [quotePrefillStorageKey]);
 
     const handleAddPart = (event?: React.FormEvent) => {
         if (event) event.preventDefault();
@@ -389,8 +401,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                 items: partList.map((item) => ({
                     query: item.query,
                     description: item.description,
-                })),
-                socketId: socket.id
+                }))
             });
 
             if (response.data.jobId) {

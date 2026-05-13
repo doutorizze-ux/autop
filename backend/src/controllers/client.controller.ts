@@ -1,7 +1,19 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { AuthRequest } from '../middlewares/auth.middleware';
 
 const prisma = new PrismaClient();
+
+function getRequestUserId(req: Request) {
+    return String((req as AuthRequest).user?.userId || '').trim();
+}
+
+function getOwnedClientWhere(req: Request, id?: string) {
+    return {
+        ...(id ? { id } : {}),
+        userId: getRequestUserId(req),
+    };
+}
 
 function isUnresolvedPhone(value: string) {
     const raw = String(value || '');
@@ -43,6 +55,7 @@ function normalizeContactName(value: string) {
 export const getClients = async (req: Request, res: Response): Promise<void> => {
     try {
         const clients = await prisma.client.findMany({
+            where: getOwnedClientWhere(req),
             orderBy: { updatedAt: 'desc' },
         });
         const resolvedNames = new Set(
@@ -64,8 +77,15 @@ export const getClients = async (req: Request, res: Response): Promise<void> => 
 export const createClient = async (req: Request, res: Response): Promise<void> => {
     try {
         const { name, phone } = req.body;
+        const userId = getRequestUserId(req);
+
+        if (!userId) {
+            res.status(401).json({ message: 'Usuario nao autenticado.' });
+            return;
+        }
+
         const client = await prisma.client.create({
-            data: { name, phone },
+            data: { name, phone, userId },
         });
         res.status(201).json(normalizeClientForResponse(client));
     } catch (err: any) {
@@ -81,6 +101,16 @@ export const updateClientStatus = async (req: Request, res: Response): Promise<v
     try {
         const { id } = req.params;
         const { status } = req.body;
+        const existingClient = await prisma.client.findFirst({
+            where: getOwnedClientWhere(req, id),
+            select: { id: true },
+        });
+
+        if (!existingClient) {
+            res.status(404).json({ message: 'Cliente nao encontrado' });
+            return;
+        }
+
         const client = await prisma.client.update({
             where: { id },
             data: { status },
@@ -96,6 +126,15 @@ export const updateClient = async (req: Request, res: Response): Promise<void> =
         const { id } = req.params;
         const { name, phone } = req.body;
         const data: { name?: string; phone?: string } = {};
+        const existingClient = await prisma.client.findFirst({
+            where: getOwnedClientWhere(req, id),
+            select: { id: true },
+        });
+
+        if (!existingClient) {
+            res.status(404).json({ message: 'Cliente nao encontrado' });
+            return;
+        }
 
         if (typeof name === 'string' && name.trim()) {
             data.name = name.trim();
@@ -126,8 +165,8 @@ export const updateClient = async (req: Request, res: Response): Promise<void> =
 export const getClientDetails = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
-        const client = await prisma.client.findUnique({
-            where: { id },
+        const client = await prisma.client.findFirst({
+            where: getOwnedClientWhere(req, id),
         });
         if (!client) {
             res.status(404).json({ message: 'Cliente não encontrado' });
@@ -142,6 +181,16 @@ export const getClientDetails = async (req: Request, res: Response): Promise<voi
 export const deleteClient = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
+        const existingClient = await prisma.client.findFirst({
+            where: getOwnedClientWhere(req, id),
+            select: { id: true },
+        });
+
+        if (!existingClient) {
+            res.status(404).json({ message: 'Cliente nao encontrado' });
+            return;
+        }
+
         await prisma.client.delete({
             where: { id },
         });

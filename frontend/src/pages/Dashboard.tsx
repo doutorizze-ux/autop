@@ -28,7 +28,7 @@ import { socket } from '../services/socket';
 
 const suppliersAccessPassword = '080782';
 const suppliersAccessStorageKey = 'suppliers_access_granted';
-const quotePrefillStorageKey = 'quote_prefill_item';
+const getQuotePrefillStorageKey = (userId?: string) => `quote_prefill_item:${userId || 'sem-usuario'}`;
 
 const navItems = [
   { id: 'clientes', label: 'Clientes', icon: Users, caption: 'CRM e funil' },
@@ -243,7 +243,8 @@ export const Dashboard = () => {
           {activeTab === 'catalogo' && (
             <CatalogSearch
               onUseCode={(payload) => {
-                localStorage.setItem(quotePrefillStorageKey, JSON.stringify(payload));
+                localStorage.setItem(getQuotePrefillStorageKey(user?.id), JSON.stringify(payload));
+                window.dispatchEvent(new Event('quote-prefill-ready'));
                 setActiveTab('cotacoes');
               }}
             />

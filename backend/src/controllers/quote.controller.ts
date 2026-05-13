@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
 import { randomUUID } from 'crypto';
+import { AuthRequest } from '../middlewares/auth.middleware';
 
 const prisma = new PrismaClient();
 
@@ -44,6 +45,7 @@ type QuoteJobStatus = 'running' | 'completed' | 'failed' | 'cancelled';
 
 type QuoteJob = {
     id: string;
+    userId: string;
     status: QuoteJobStatus;
     items: QuoteItem[];
     suppliers: string[];
@@ -57,6 +59,18 @@ type QuoteJob = {
 };
 
 const quoteJobs = new Map<string, QuoteJob>();
+
+function getRequestUserId(req: Request) {
+    return String((req as AuthRequest).user?.userId || '').trim();
+}
+
+function getOwnedQuoteWhere(req: Request, id?: string) {
+    const userId = getRequestUserId(req);
+    return {
+        ...(id ? { id } : {}),
+        userId,
+    };
+}
 
 function buildResultIdentity(result: any) {
     const normalize = (value: unknown) =>
@@ -672,13 +686,19 @@ async function renderExcel(res: Response, items: QuoteItem[], suppliers: string[
 export const searchQuote = async (req: Request, res: Response) => {
     try {
         const items = normalizeQuoteItems(req.body);
+        const userId = getRequestUserId(req);
 
         if (items.length === 0) {
             return res.status(400).json({ message: 'Lista de produtos e obrigatoria' });
         }
 
+        if (!userId) {
+            return res.status(401).json({ message: 'Usuario nao autenticado.' });
+        }
+
         const job: QuoteJob = {
             id: randomUUID(),
+            userId,
             status: 'running',
             items,
             suppliers: [],
@@ -690,7 +710,7 @@ export const searchQuote = async (req: Request, res: Response) => {
 
         quoteJobs.set(job.id, job);
 
-        void runQuoteJob(job, req.body.socketId);
+        void runQuoteJob(job);
 
         return res.status(202).json(serializeQuoteJob(job));
     } catch (err) {
@@ -699,12 +719,13 @@ export const searchQuote = async (req: Request, res: Response) => {
     }
 };
 
-async function runQuoteJob(job: QuoteJob, socketId?: string) {
+async function runQuoteJob(job: QuoteJob) {
     try {
         const productNames = job.items.map((item) => item.query);
         const matrix = await ScraperService.searchMultipleProducts(
             productNames,
-            socketId,
+            `user:${job.userId}`,
+            { jobId: job.id },
             ({ supplier, productName, result }) => {
                 if (!job.matrix[productName]) {
                     job.matrix[productName] = [];
@@ -748,6 +769,7 @@ async function runQuoteJob(job: QuoteJob, socketId?: string) {
             data: {
                 product: job.items.map((item) => item.label).join(' | '),
                 results: JSON.stringify(payload),
+                userId: job.userId,
             },
         });
 
@@ -768,8 +790,9 @@ async function runQuoteJob(job: QuoteJob, socketId?: string) {
 
 export const getQuoteJob = async (req: Request, res: Response) => {
     const job = quoteJobs.get(req.params.jobId);
+    const userId = getRequestUserId(req);
 
-    if (!job) {
+    if (!job || job.userId !== userId) {
         return res.status(404).json({ message: 'Orcamento em andamento nao encontrado.' });
     }
 
@@ -778,8 +801,9 @@ export const getQuoteJob = async (req: Request, res: Response) => {
 
 export const cancelQuoteJob = async (req: Request, res: Response) => {
     const job = quoteJobs.get(req.params.jobId);
+    const userId = getRequestUserId(req);
 
-    if (!job) {
+    if (!job || job.userId !== userId) {
         return res.status(404).json({ message: 'Orcamento em andamento nao encontrado.' });
     }
 
@@ -793,9 +817,10 @@ export const cancelQuoteJob = async (req: Request, res: Response) => {
     return res.json(serializeQuoteJob(job));
 };
 
-export const listQuoteHistory = async (_req: Request, res: Response) => {
+export const listQuoteHistory = async (req: Request, res: Response) => {
     try {
         const quotes = await prisma.quote.findMany({
+            where: getOwnedQuoteWhere(req),
             orderBy: { createdAt: 'desc' },
         });
 
@@ -819,8 +844,8 @@ export const listQuoteHistory = async (_req: Request, res: Response) => {
 
 export const getQuoteHistoryById = async (req: Request, res: Response) => {
     try {
-        const quote = await prisma.quote.findUnique({
-            where: { id: req.params.id },
+        const quote = await prisma.quote.findFirst({
+            where: getOwnedQuoteWhere(req, req.params.id),
         });
 
         if (!quote) {
@@ -844,8 +869,8 @@ export const getQuoteHistoryById = async (req: Request, res: Response) => {
 
 export const deleteQuoteHistory = async (req: Request, res: Response) => {
     try {
-        const existingQuote = await prisma.quote.findUnique({
-            where: { id: req.params.id },
+        const existingQuote = await prisma.quote.findFirst({
+            where: getOwnedQuoteWhere(req, req.params.id),
             select: { id: true },
         });
 
@@ -886,8 +911,8 @@ export const exportExcel = async (req: Request, res: Response) => {
 
 export const exportSavedQuotePDF = async (req: Request, res: Response) => {
     try {
-        const quote = await prisma.quote.findUnique({
-            where: { id: req.params.id },
+        const quote = await prisma.quote.findFirst({
+            where: getOwnedQuoteWhere(req, req.params.id),
         });
 
         if (!quote) {
@@ -920,7 +945,10 @@ export const exportMultipleSavedQuotesPDF = async (req: Request, res: Response) 
         }
 
         const quotes = await prisma.quote.findMany({
-            where: { id: { in: ids } },
+            where: {
+                id: { in: ids },
+                userId: getRequestUserId(req),
+            },
         });
 
         if (quotes.length === 0) {
@@ -955,8 +983,8 @@ export const exportMultipleSavedQuotesPDF = async (req: Request, res: Response) 
 
 export const exportSavedQuoteExcel = async (req: Request, res: Response) => {
     try {
-        const quote = await prisma.quote.findUnique({
-            where: { id: req.params.id },
+        const quote = await prisma.quote.findFirst({
+            where: getOwnedQuoteWhere(req, req.params.id),
         });
 
         if (!quote) {
