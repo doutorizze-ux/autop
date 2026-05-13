@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Plus, Search, Phone, History, ChevronRight, Trash2 } from 'lucide-react';
+import { API_URL } from '../services/api';
 
 interface Client {
   id: string;
@@ -38,7 +39,7 @@ export const Clients = ({ onOpenAttendance }: ClientsProps) => {
   const fetchClients = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/clients`);
+      const response = await axios.get(`${API_URL}/api/clients`);
       setClients(response.data);
     } catch (err) {
       setError('Erro ao buscar clientes');
@@ -54,7 +55,7 @@ export const Clients = ({ onOpenAttendance }: ClientsProps) => {
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/clients`, {
+      await axios.post(`${API_URL}/api/clients`, {
         name: newName,
         phone: newPhone
       });
@@ -72,7 +73,7 @@ export const Clients = ({ onOpenAttendance }: ClientsProps) => {
     if (!confirmed) return;
 
     try {
-      await axios.delete(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/clients/${client.id}`);
+      await axios.delete(`${API_URL}/api/clients/${client.id}`);
       setClients(current => current.filter(item => item.id !== client.id));
     } catch (err: any) {
       alert(err.response?.data?.message || 'Erro ao excluir lead');

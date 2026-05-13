@@ -78,3 +78,22 @@ HEADLESS=false node run-search.js ... (Linux/Mac)
 
 > [!IMPORTANT]
 > Certifique-se de que o servidor Coolify tenha as dependências do Playwright instaladas. No Dockerfile do seu serviço de scraping, deve haver o comando `npx playwright install --with-deps chromium`.
+ 
+---
+
+## 5. Operacao com cache e concorrencia
+
+O scraping agora mantem um cache curto por fornecedor/produto e uma fila exclusiva por fornecedor. Isso evita repetir a mesma consulta em sequencia e impede que dois workers usem simultaneamente o mesmo perfil persistente do Chrome.
+
+Variaveis recomendadas:
+
+```bash
+SCRAPER_CACHE_TTL_MS=600000
+SCRAPER_ENGINE_CACHE_TTL_MS=600000
+SCRAPER_CACHE_MAX_ENTRIES=500
+SCRAPER_PAGE_TIMEOUT_MS=90000
+SCRAPER_SUPPLIER_TIMEOUT_MS=165000
+SCRAPER_CONCURRENCY=3
+```
+
+Para aumentar velocidade, prefira subir `SCRAPER_CONCURRENCY` aos poucos e observar tempo medio/erro por fornecedor. Fornecedores diferentes rodam em paralelo; o mesmo fornecedor fica serializado para preservar estabilidade de sessao.

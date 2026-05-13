@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { useEffect, useRef, useState } from 'react';
+import { API_URL } from '../services/api';
 import { socket } from '../services/socket';
 import { CheckCircle2, RefreshCcw, WifiOff } from 'lucide-react';
 
@@ -13,7 +14,7 @@ export const WhatsAppConnect = () => {
         try {
             setStatus('connecting');
             setErrorMessage('');
-            const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/whatsapp/reconnect`);
+            const response = await axios.post(`${API_URL}/api/whatsapp/reconnect`);
             setStatus(response.data.status);
             setQrCode(response.data.qr || null);
             setErrorMessage(response.data.error || '');
@@ -27,7 +28,7 @@ export const WhatsAppConnect = () => {
     useEffect(() => {
         const fetchInitialStatus = async () => {
             try {
-                const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/whatsapp/status`);
+                const response = await axios.get(`${API_URL}/api/whatsapp/status`);
                 setStatus(response.data.status);
                 setQrCode(response.data.qr || null);
                 setErrorMessage(response.data.error || '');

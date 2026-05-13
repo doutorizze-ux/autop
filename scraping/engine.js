@@ -835,6 +835,76 @@ async function captureDebugState(page) {
 }
 
 let globalBrowserPromise = null;
+const supplierRunQueues = new Map();
+const supplierResultCache = new Map();
+
+function parsePositiveInt(value, fallback) {
+    const parsed = Number.parseInt(String(value || ''), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function clonePayload(value) {
+    if (value === undefined || value === null) {
+        return value;
+    }
+
+    return JSON.parse(JSON.stringify(value));
+}
+
+function getSupplierRunKey(supplier) {
+    return safeString(supplier.id || supplier.name || supplier.url)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'supplier';
+}
+
+function getSupplierSearchCacheKey(supplier, productName) {
+    return [
+        getSupplierRunKey(supplier),
+        safeString(supplier.updatedAt),
+        safeString(productName).toLowerCase(),
+    ].join('::');
+}
+
+function isCacheableResult(result) {
+    return Array.isArray(result) && result.length > 0 && result.some((entry) => entry && !entry.error);
+}
+
+function pruneResultCache() {
+    const now = Date.now();
+    for (const [key, entry] of supplierResultCache.entries()) {
+        if (entry.expiresAt <= now) {
+            supplierResultCache.delete(key);
+        }
+    }
+
+    const maxEntries = parsePositiveInt(process.env.SCRAPER_CACHE_MAX_ENTRIES, 500);
+    while (supplierResultCache.size > maxEntries) {
+        const oldestKey = supplierResultCache.keys().next().value;
+        if (!oldestKey) break;
+        supplierResultCache.delete(oldestKey);
+    }
+}
+
+async function runExclusiveForSupplier(supplier, operation) {
+    const key = getSupplierRunKey(supplier);
+    const previous = supplierRunQueues.get(key) || Promise.resolve();
+    let current;
+
+    current = previous
+        .catch(() => {})
+        .then(operation)
+        .finally(() => {
+            if (supplierRunQueues.get(key) === current) {
+                supplierRunQueues.delete(key);
+            }
+        });
+
+    supplierRunQueues.set(key, current);
+    return current;
+}
 
 function getBrowser() {
     if (!globalBrowserPromise) {
@@ -871,14 +941,15 @@ function getBrowser() {
     return globalBrowserPromise;
 }
 
-async function scrapeProduct(supplier, productName) {
+async function scrapeProductUnsafe(supplier, productName) {
     const browser = await getBrowser();
     const strategy = resolveStrategy(supplier);
 
     const { context, hasPreloadedSession } = await createContext(browser, supplier, strategy);
     const page = await context.newPage();
-    page.setDefaultTimeout(120000);
-    page.setDefaultNavigationTimeout(120000);
+    const defaultTimeoutMs = parsePositiveInt(process.env.SCRAPER_PAGE_TIMEOUT_MS, 90_000);
+    page.setDefaultTimeout(defaultTimeoutMs);
+    page.setDefaultNavigationTimeout(defaultTimeoutMs);
 
     try {
         console.error(`[DEBUG] Iniciando scraping para: ${supplier.name}`);
@@ -1083,6 +1154,38 @@ async function scrapeProduct(supplier, productName) {
         await context.close().catch(() => {});
         // O browser.close() foi removido para manter a instancia global viva
     }
+}
+
+async function scrapeProduct(supplier, productName) {
+    const cacheTtlMs = parsePositiveInt(process.env.SCRAPER_ENGINE_CACHE_TTL_MS || process.env.SCRAPER_CACHE_TTL_MS, 10 * 60 * 1000);
+    const cacheKey = getSupplierSearchCacheKey(supplier, productName);
+    const cached = supplierResultCache.get(cacheKey);
+
+    if (cached && cached.expiresAt > Date.now()) {
+        return clonePayload(cached.value);
+    }
+
+    if (cached) {
+        supplierResultCache.delete(cacheKey);
+    }
+
+    return runExclusiveForSupplier(supplier, async () => {
+        const secondLook = supplierResultCache.get(cacheKey);
+        if (secondLook && secondLook.expiresAt > Date.now()) {
+            return clonePayload(secondLook.value);
+        }
+
+        const result = await scrapeProductUnsafe(supplier, productName);
+        if (cacheTtlMs > 0 && isCacheableResult(result)) {
+            pruneResultCache();
+            supplierResultCache.set(cacheKey, {
+                expiresAt: Date.now() + cacheTtlMs,
+                value: clonePayload(result),
+            });
+        }
+
+        return result;
+    });
 }
 
 module.exports = { scrapeProduct };

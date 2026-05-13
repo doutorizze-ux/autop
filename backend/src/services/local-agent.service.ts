@@ -31,6 +31,7 @@ type ConnectedAgent = {
     id: string;
     name: string;
     version: string;
+    supplierFilters: string[];
     lastSeenAt: number;
 };
 
@@ -38,9 +39,62 @@ type TaskKindFilter = AgentTaskPayload['kind'] | 'any';
 
 const connectedAgents = new Map<string, ConnectedAgent>();
 const pendingTasks = new Map<string, AgentTask>();
-const agentTimeoutMs = 45_000;
-const taskTimeoutMs = 180_000;
-const sessionTaskTimeoutMs = 120_000;
+const agentTimeoutMs = Number.parseInt(process.env.LOCAL_AGENT_HEARTBEAT_TIMEOUT_MS || '45000', 10) || 45_000;
+const taskTimeoutMs = Number.parseInt(process.env.LOCAL_AGENT_TASK_TIMEOUT_MS || '180000', 10) || 180_000;
+const sessionTaskTimeoutMs = Number.parseInt(process.env.LOCAL_AGENT_SESSION_TASK_TIMEOUT_MS || '120000', 10) || 120_000;
+
+function normalizeSupplierFilter(value: unknown) {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+}
+
+function normalizeSupplierFilters(values?: unknown[]) {
+    if (!Array.isArray(values)) return [];
+
+    return Array.from(
+        new Set(
+            values
+                .map(normalizeSupplierFilter)
+                .filter(Boolean)
+        )
+    );
+}
+
+function getTaskSupplierFilters(task: AgentTask) {
+    const supplier = task.payload.supplier;
+    return [
+        supplier?.id,
+        supplier?.name,
+        supplier?.type,
+    ].map(normalizeSupplierFilter).filter(Boolean);
+}
+
+function agentAcceptsSupplier(agent: ConnectedAgent, supplier: any) {
+    if (agent.supplierFilters.length === 0) {
+        return true;
+    }
+
+    const supplierKeys = [
+        supplier?.id,
+        supplier?.name,
+        supplier?.type,
+    ].map(normalizeSupplierFilter).filter(Boolean);
+
+    return supplierKeys.some((key) => agent.supplierFilters.includes(key));
+}
+
+function agentAcceptsTask(agent: ConnectedAgent, task: AgentTask) {
+    if (agent.supplierFilters.length === 0) {
+        return true;
+    }
+
+    const taskSupplierFilters = getTaskSupplierFilters(task);
+    return taskSupplierFilters.some((key) => agent.supplierFilters.includes(key));
+}
 
 function cleanupAgents() {
     const now = Date.now();
@@ -58,8 +112,19 @@ function cleanupClaimedTask(task: AgentTask, reason: string) {
     task.reject(new Error(reason));
 }
 
+function releaseTasksClaimedByOfflineAgents() {
+    for (const task of pendingTasks.values()) {
+        if (task.status !== 'claimed' || !task.claimedBy) continue;
+        if (connectedAgents.has(task.claimedBy)) continue;
+
+        task.status = 'pending';
+        task.claimedBy = undefined;
+        task.claimedAt = undefined;
+    }
+}
+
 export class LocalAgentService {
-    static heartbeat(agentId: string, name = 'Agente Local', version = '1.0.0') {
+    static heartbeat(agentId: string, name = 'Agente Local', version = '1.0.0', supplierFilters?: unknown[]) {
         cleanupAgents();
 
         const normalizedId = String(agentId || '').trim();
@@ -71,6 +136,7 @@ export class LocalAgentService {
             id: normalizedId,
             name: String(name || 'Agente Local').trim() || 'Agente Local',
             version: String(version || '1.0.0').trim() || '1.0.0',
+            supplierFilters: normalizeSupplierFilters(supplierFilters),
             lastSeenAt: Date.now(),
         });
 
@@ -83,6 +149,11 @@ export class LocalAgentService {
     static hasActiveAgents() {
         cleanupAgents();
         return connectedAgents.size > 0;
+    }
+
+    static hasActiveAgentsForSupplier(supplier: any) {
+        cleanupAgents();
+        return Array.from(connectedAgents.values()).some((agent) => agentAcceptsSupplier(agent, supplier));
     }
 
     static listAgents() {
@@ -139,11 +210,18 @@ export class LocalAgentService {
         );
     }
 
-    static nextTask(agentId: string, name = 'Agente Local', version = '1.0.0', preferredKind: TaskKindFilter = 'any') {
-        this.heartbeat(agentId, name, version);
+    static nextTask(agentId: string, name = 'Agente Local', version = '1.0.0', preferredKind: TaskKindFilter = 'any', supplierFilters?: unknown[]) {
+        this.heartbeat(agentId, name, version, supplierFilters);
+        releaseTasksClaimedByOfflineAgents();
+
+        const agent = connectedAgents.get(agentId);
+        if (!agent) {
+            return null;
+        }
 
         const pending = Array.from(pendingTasks.values())
             .filter((entry) => entry.status === 'pending')
+            .filter((entry) => agentAcceptsTask(agent, entry))
             .sort((a, b) => a.createdAt - b.createdAt);
 
         const prioritizedKinds = preferredKind === 'any'

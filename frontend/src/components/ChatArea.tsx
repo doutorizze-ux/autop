@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { ArrowLeft, Paperclip, Search, Send, User, Users2 } from 'lucide-react';
+import { API_URL } from '../services/api';
 import { socket } from '../services/socket';
 
 interface Client {
@@ -24,8 +25,6 @@ interface Message {
     fileName?: string;
   } | null;
 }
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const normalizeContactKey = (value: string) => value.replace(/@(s\.whatsapp\.net|lid)$/, '');
 

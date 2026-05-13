@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { API_URL } from '../services/api';
 import { socket } from '../services/socket';
 import {
     Search,
@@ -68,7 +69,7 @@ type QuoteSearchResponse = {
     error?: string;
 };
 
-const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const apiBase = API_URL;
 const activeQuoteJobStorageKey = 'active_quote_job_id';
 const quotePrefillStorageKey = 'quote_prefill_item';
 

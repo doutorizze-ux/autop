@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Save, User, Key, Shield, MessageSquare, AlertCircle, CheckCircle } from 'lucide-react';
+import { API_URL } from '../services/api';
 
 export const Settings = () => {
     const { user } = useAuth();
@@ -45,7 +46,7 @@ export const Settings = () => {
 
     const fetchSystemConfig = async () => {
         try {
-            const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/config`);
+            const response = await axios.get(`${API_URL}/api/config`);
             setSystemConfig(response.data);
             const themeColor = response.data.themeColor || localStorage.getItem('theme_color') || '#0056b3';
             const themeLogo = response.data.themeLogo || localStorage.getItem('theme_logo') || '';
@@ -68,7 +69,7 @@ export const Settings = () => {
 
         setLoading(true);
         try {
-            await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/config/profile`, profileData);
+            await axios.post(`${API_URL}/api/config/profile`, profileData);
             setMessage({ type: 'success', text: 'Perfil atualizado com sucesso!' });
             setProfileData(prev => ({ ...prev, password: '', confirmPassword: '' }));
         } catch (err) {
@@ -82,7 +83,7 @@ export const Settings = () => {
         e.preventDefault();
         setLoading(true);
         try {
-            await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/config`, systemConfig);
+            await axios.post(`${API_URL}/api/config`, systemConfig);
             setMessage({ type: 'success', text: 'Configurações globais salvas!' });
         } catch (err) {
             setMessage({ type: 'error', text: 'Erro ao salvar configurações' });
@@ -239,7 +240,7 @@ export const Settings = () => {
                                 setLoading(true);
                                 const color = appearanceData.color || '#0056b3';
                                 const logo = appearanceData.logo.trim();
-                                axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/config`, {
+                                axios.post(`${API_URL}/api/config`, {
                                     ...systemConfig,
                                     themeColor: color,
                                     themeLogo: logo || null,

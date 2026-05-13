@@ -46,6 +46,20 @@ function readAgentIdentity(req: Request) {
     };
 }
 
+function readSupplierFilters(req: Request) {
+    const bodyFilters = req.body?.supplierFilters;
+    if (Array.isArray(bodyFilters)) {
+        return bodyFilters;
+    }
+
+    const raw = String(req.body?.supplierFilter || req.headers['x-local-agent-suppliers'] || '').trim();
+    if (!raw) {
+        return [];
+    }
+
+    return raw.split(',').map((entry) => entry.trim()).filter(Boolean);
+}
+
 export const agentHeartbeat = (req: Request, res: Response): void => {
     if (!isAuthorized(req)) {
         res.status(401).json({ message: 'Token do agente local invalido.' });
@@ -58,7 +72,7 @@ export const agentHeartbeat = (req: Request, res: Response): void => {
         return;
     }
 
-    res.json(LocalAgentService.heartbeat(identity.id, identity.name, identity.version));
+    res.json(LocalAgentService.heartbeat(identity.id, identity.name, identity.version, readSupplierFilters(req)));
 };
 
 export const pullNextAgentTask = (req: Request, res: Response): void => {
@@ -78,7 +92,7 @@ export const pullNextAgentTask = (req: Request, res: Response): void => {
         ? preferredKindRaw
         : 'any';
 
-    const task = LocalAgentService.nextTask(identity.id, identity.name, identity.version, preferredKind);
+    const task = LocalAgentService.nextTask(identity.id, identity.name, identity.version, preferredKind, readSupplierFilters(req));
     res.json({ task });
 };
 

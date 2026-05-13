@@ -21,6 +21,7 @@ import { Settings as SettingsComponent } from '../components/Settings';
 import { Quotes } from '../components/Quotes';
 import { Roadmap } from '../components/Roadmap';
 import { CatalogSearch } from '../components/CatalogSearch';
+import { API_URL } from '../services/api';
 import { socket } from '../services/socket';
 
 const suppliersAccessPassword = '080782';
@@ -66,7 +67,7 @@ export const Dashboard = () => {
 
     const fetchTheme = async () => {
       try {
-        const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/config`);
+        const response = await axios.get(`${API_URL}/api/config`);
         applyTheme(response.data.themeColor, response.data.themeLogo || '');
       } catch {
         applyTheme();
@@ -94,7 +95,7 @@ export const Dashboard = () => {
       setWsStatus(data.status);
     });
 
-    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/whatsapp/status`, {
+    fetch(`${API_URL}/api/whatsapp/status`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     })
       .then((r) => r.json())

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Plus, Globe, Lock, Trash2, ExternalLink, Play, Monitor } from 'lucide-react';
+import { API_URL } from '../services/api';
 
 interface Supplier {
   id: string;
@@ -78,7 +79,7 @@ export const Suppliers = () => {
     });
 
     const [activeSection, setActiveSection] = useState<'basic' | 'login' | 'mapping'>('basic');
-    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const apiBase = API_URL;
 
     useEffect(() => {
         fetchSuppliers();

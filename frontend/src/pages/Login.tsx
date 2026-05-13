@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { LogIn } from 'lucide-react';
+import { API_URL } from '../services/api';
 
 export const Login = () => {
   const [themeLogo, setThemeLogo] = useState(() => localStorage.getItem('theme_logo') || '');
@@ -12,8 +13,6 @@ export const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-
   useEffect(() => {
     const loadPublicAppearance = async () => {
       try {

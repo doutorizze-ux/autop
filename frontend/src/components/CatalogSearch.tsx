@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { Search, Plus } from 'lucide-react';
+import { API_URL } from '../services/api';
 
-const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const apiBase = API_URL;
 
 type CatalogItem = {
   code: string;

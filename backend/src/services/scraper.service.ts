@@ -7,6 +7,85 @@ const prisma = new PrismaClient();
 const enginePath = path.resolve(__dirname, '../../../scraping/engine.js');
 const { scrapeProduct } = require(enginePath);
 
+type CacheEntry = {
+    expiresAt: number;
+    value: any;
+};
+
+const supplierSearchCache = new Map<string, CacheEntry>();
+
+function parsePositiveInt(value: string | undefined, fallback: number) {
+    const parsed = Number.parseInt(String(value || ''), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function clonePayload<T>(value: T): T {
+    if (value === undefined || value === null) {
+        return value;
+    }
+
+    return JSON.parse(JSON.stringify(value));
+}
+
+function getSupplierCacheKey(supplier: any, productName: string) {
+    const supplierVersion = supplier.updatedAt instanceof Date
+        ? supplier.updatedAt.toISOString()
+        : String(supplier.updatedAt || '');
+
+    return [
+        supplier.id || supplier.name,
+        supplierVersion,
+        normalizeVariantKey(productName),
+    ].join('::');
+}
+
+function isCacheableSearchResult(result: any) {
+    if (Array.isArray(result)) {
+        return result.length > 0 && result.some((entry) => entry && !entry.error);
+    }
+
+    if (result?.items) {
+        return Array.isArray(result.items) && result.items.length > 0;
+    }
+
+    return Boolean(result && !result.error && result.price && result.price !== '---');
+}
+
+function pruneSearchCache() {
+    const now = Date.now();
+    for (const [key, entry] of supplierSearchCache.entries()) {
+        if (entry.expiresAt <= now) {
+            supplierSearchCache.delete(key);
+        }
+    }
+
+    const maxEntries = parsePositiveInt(process.env.SCRAPER_CACHE_MAX_ENTRIES, 500);
+    while (supplierSearchCache.size > maxEntries) {
+        const oldestKey = supplierSearchCache.keys().next().value;
+        if (!oldestKey) break;
+        supplierSearchCache.delete(oldestKey);
+    }
+}
+
+async function withTimeout<T>(operation: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+    let timer: NodeJS.Timeout | null = null;
+
+    try {
+        return await Promise.race([
+            operation,
+            new Promise<T>((_, reject) => {
+                timer = setTimeout(() => {
+                    reject(new Error(`${label} excedeu ${Math.round(timeoutMs / 1000)}s.`));
+                }, timeoutMs);
+            }),
+        ]);
+    } finally {
+        if (timer) {
+            clearTimeout(timer);
+        }
+    }
+}
+
 function normalizeVariantKey(value: string) {
     return String(value || '')
         .toLowerCase()
@@ -198,16 +277,89 @@ export async function runSupplierSearch(supplier: any, productName: string) {
 }
 
 async function executeSupplierSearch(supplier: any, productName: string) {
-    const useLocalAgent = process.env.LOCAL_AGENT_MODE !== 'disabled' && LocalAgentService.hasActiveAgents();
+    const localAgentEnabled = process.env.LOCAL_AGENT_MODE !== 'disabled';
+    const useLocalAgent = localAgentEnabled && LocalAgentService.hasActiveAgentsForSupplier(supplier);
     if (useLocalAgent) {
         try {
             return await LocalAgentService.dispatchSearchTask(supplier, productName);
         } catch (error) {
-            console.error(`[Local Agent] Falha para ${supplier.name}, usando fallback no servidor: ${error instanceof Error ? error.message : error}`);
+            const message = error instanceof Error ? error.message : String(error);
+            const allowServerFallback = process.env.LOCAL_AGENT_FALLBACK_ON_FAILURE === 'true';
+            console.error(`[Local Agent] Falha para ${supplier.name}: ${message}`);
+
+            if (!allowServerFallback) {
+                return {
+                    provider: supplier.name,
+                    product: productName,
+                    price: '---',
+                    error: `Erro do Bot: Agente local falhou para ${supplier.name}. ${message}`,
+                    link: supplier.url,
+                    available: false,
+                    debug: null,
+                };
+            }
+
+            console.error(`[Local Agent] Fallback no servidor habilitado para ${supplier.name}.`);
         }
     }
 
+    if (localAgentEnabled && process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH === 'true') {
+        return {
+            provider: supplier.name,
+            product: productName,
+            price: '---',
+            error: `Erro do Bot: Nenhum agente local online para ${supplier.name}.`,
+            link: supplier.url,
+            available: false,
+            debug: null,
+        };
+    }
+
     return runSupplierSearch(supplier, productName);
+}
+
+async function executeSupplierSearchWithGuards(supplier: any, productName: string) {
+    const cacheTtlMs = parsePositiveInt(process.env.SCRAPER_CACHE_TTL_MS, 10 * 60 * 1000);
+    const timeoutMs = parsePositiveInt(process.env.SCRAPER_SUPPLIER_TIMEOUT_MS, 165_000);
+    const cacheKey = getSupplierCacheKey(supplier, productName);
+    const cached = supplierSearchCache.get(cacheKey);
+
+    if (cached && cached.expiresAt > Date.now()) {
+        return clonePayload(cached.value);
+    }
+
+    if (cached) {
+        supplierSearchCache.delete(cacheKey);
+    }
+
+    let result;
+    try {
+        result = await withTimeout(
+            executeSupplierSearch(supplier, productName),
+            timeoutMs,
+            `${supplier.name} (${productName})`
+        );
+    } catch (error: any) {
+        return {
+            provider: supplier.name,
+            product: productName,
+            price: '---',
+            error: `Erro do Bot: ${error?.message || 'Fornecedor excedeu o tempo limite.'}`,
+            link: supplier.url,
+            available: false,
+            debug: null,
+        };
+    }
+
+    if (isCacheableSearchResult(result) && cacheTtlMs > 0) {
+        pruneSearchCache();
+        supplierSearchCache.set(cacheKey, {
+            expiresAt: Date.now() + cacheTtlMs,
+            value: clonePayload(result),
+        });
+    }
+
+    return result;
 }
 
 function normalizeSearchResultPayload(result: any, supplier: any, productName: string) {
@@ -229,7 +381,7 @@ export class ScraperService {
             throw new Error('Fornecedor não encontrado.');
         }
 
-        const result = await executeSupplierSearch(supplier, productName);
+        const result = await executeSupplierSearchWithGuards(supplier, productName);
         const normalized = normalizeSearchResultPayload(result, supplier, productName);
         return Array.isArray(normalized) ? normalized[0] || null : normalized;
     }
@@ -264,7 +416,7 @@ export class ScraperService {
                             debug: null,
                         };
                     }
-                    const result = await executeSupplierSearch(supplier, productName);
+                    const result = await executeSupplierSearchWithGuards(supplier, productName);
                     const normalizedPayload = normalizeSearchResultPayload(result, supplier, productName);
                     const normalizedResults = Array.isArray(normalizedPayload) ? normalizedPayload : [normalizedPayload];
 

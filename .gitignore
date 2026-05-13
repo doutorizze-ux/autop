@@ -12,3 +12,12 @@ auth.json
 creds.json
 tokens.json
 debug_error.png
+*.log
+client-install.config.json
+backups/
+local-agent/browser-profiles/
+scraping/tmp-*/
+scraping/tmp-*.png
+scraping/tmp-*.jpg
+scraping/tmp-*.html
+scraping/tmp-*.js
