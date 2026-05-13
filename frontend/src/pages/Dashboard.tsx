@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import {
+  LayoutDashboard,
   Users,
   MessageSquare,
   Briefcase,
@@ -31,19 +32,20 @@ const suppliersAccessStorageKey = 'suppliers_access_granted';
 const getQuotePrefillStorageKey = (userId?: string) => `quote_prefill_item:${userId || 'sem-usuario'}`;
 
 const navItems = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, caption: 'Menus principais' },
   { id: 'clientes', label: 'Clientes', icon: Users, caption: 'CRM e funil' },
   { id: 'atendimento', label: 'WhatsApp', icon: MessageSquare, caption: 'Conversas em tempo real' },
   { id: 'cotacoes', label: 'Orcamento Geral', icon: Search, caption: 'Codigos e confrontos' },
   { id: 'historico', label: 'Produtos Pesquisados', icon: History, caption: 'Historico de cotacoes' },
-  { id: 'roadmap', label: 'Versao e Roadmap', icon: Rocket, caption: 'Evolucao do produto' },
-  { id: 'fornecedores', label: 'Fornecedores', icon: Briefcase, caption: 'Integracoes e logins', adminOnly: true },
-  { id: 'config', label: 'Configuracoes', icon: Settings, caption: 'Preferencias do sistema' },
   { id: 'catalogo', label: 'Buscar Codigo', icon: FileSearch, caption: 'Catalogo por descricao' },
+  { id: 'fornecedores', label: 'Fornecedores', icon: Briefcase, caption: 'Integracoes e logins', adminOnly: true },
+  { id: 'roadmap', label: 'Versao e Roadmap', icon: Rocket, caption: 'Evolucao do produto' },
+  { id: 'config', label: 'Configuracoes', icon: Settings, caption: 'Preferencias do sistema' },
 ];
 
 export const Dashboard = () => {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState('clientes');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [wsStatus, setWsStatus] = useState<string>('connecting');
   const [themeLogo, setThemeLogo] = useState(() => localStorage.getItem('theme_logo') || '');
   const [showSuppliersPasswordModal, setShowSuppliersPasswordModal] = useState(false);
@@ -141,6 +143,7 @@ export const Dashboard = () => {
 
   const visibleNavItems = navItems.filter((item) => !item.adminOnly || user?.role === 'ADMIN');
   const activeItem = visibleNavItems.find((item) => item.id === activeTab) || visibleNavItems[0];
+  const dashboardMenuItems = visibleNavItems.filter((item) => item.id !== 'dashboard');
 
   return (
     <div className="layout-container">
@@ -211,6 +214,44 @@ export const Dashboard = () => {
         </header>
 
         <section className="page-content">
+          {activeTab === 'dashboard' && (
+            <div className="dashboard-home">
+              <div className="dashboard-home-header">
+                <div>
+                  <h2 className="page-title">Dashboard</h2>
+                  <p>Escolha o modulo para continuar a operacao.</p>
+                </div>
+                <span className={`dashboard-status ${wsStatus === 'connected' ? 'connected' : ''}`}>
+                  WhatsApp {wsStatus === 'connected' ? 'conectado' : 'aguardando conexao'}
+                </span>
+              </div>
+
+              <div className="dashboard-menu-grid">
+                {dashboardMenuItems.map((item) => {
+                  const Icon = item.icon;
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="dashboard-menu-card"
+                      onClick={() => handleChangeTab(item.id)}
+                    >
+                      <span className="dashboard-menu-icon">
+                        <Icon size={22} />
+                      </span>
+                      <span className="dashboard-menu-copy">
+                        <strong>{item.label}</strong>
+                        <small>{item.caption}</small>
+                      </span>
+                      <ChevronRight size={18} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {activeTab === 'clientes' && (
             <Clients
               onOpenAttendance={(clientId) => {
