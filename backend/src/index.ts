@@ -57,7 +57,13 @@ io.on('connection', (socket) => {
 
 app.use(cors());
 app.use(express.json({ limit: '12mb' }));
-app.use('/media/whatsapp', express.static(path.join(__dirname, '../data/whatsapp-media')));
+app.use('/media/whatsapp', express.static(path.join(__dirname, '../data/whatsapp-media'), {
+    setHeaders: (res) => {
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Content-Disposition', 'inline');
+    },
+}));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/api/auth', authRoutes);

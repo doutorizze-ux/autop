@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import { ArrowLeft, ExternalLink, FileText, Image as ImageIcon, Mic, Paperclip, Search, Send, User, Users2, Video } from 'lucide-react';
+import { ArrowLeft, Bot, ExternalLink, FileText, Image as ImageIcon, Loader2, Mic, Paperclip, Search, Send, User, Users2, Video } from 'lucide-react';
 import { API_URL } from '../services/api';
 import { socket } from '../services/socket';
 
@@ -220,7 +220,9 @@ const renderMessageMedia = (message: Message) => {
           <span className="message-media-icon">{renderMediaIcon(media)}</span>
           <strong>{mediaLabel}</strong>
         </div>
-        <video className="message-video" controls preload="metadata" src={mediaUrl} />
+        <video className="message-video" controls preload="metadata">
+          <source src={mediaUrl} type={media.mimetype || undefined} />
+        </video>
         <a className="message-open-link" href={mediaUrl} target="_blank" rel="noreferrer">
           <ExternalLink size={14} /> {getOpenMediaLabel(media)}
         </a>
@@ -235,7 +237,9 @@ const renderMessageMedia = (message: Message) => {
           <span className="message-media-icon">{renderMediaIcon(media)}</span>
           <strong>{mediaLabel}</strong>
         </div>
-        <audio className="message-audio" controls preload="metadata" src={mediaUrl} />
+        <audio className="message-audio" controls preload="metadata">
+          <source src={mediaUrl} type={media.mimetype || undefined} />
+        </audio>
         <a className="message-open-link" href={mediaUrl} target="_blank" rel="noreferrer">
           <ExternalLink size={14} /> {getOpenMediaLabel(media)}
         </a>
@@ -264,6 +268,7 @@ export const ChatArea = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isMobileLayout, setIsMobileLayout] = useState(() => window.innerWidth <= 768);
   const [showClientListOnMobile, setShowClientListOnMobile] = useState(() => window.innerWidth <= 768);
+  const [isSuggestingAi, setIsSuggestingAi] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const hasAttemptedPhoneSyncRef = useRef(false);
 
@@ -417,6 +422,35 @@ export const ChatArea = () => {
     }
   };
 
+  const handleSuggestAiReply = async () => {
+    if (!selectedClient || isSuggestingAi) return;
+
+    setIsSuggestingAi(true);
+    try {
+      const response = await axios.post(`${API_URL}/api/ai/whatsapp-suggestion`, {
+        clientName: selectedClient.name,
+        messages: selectedMessages.slice(-12).map((message) => ({
+          text: message.text,
+          fromMe: message.fromMe,
+          timestamp: message.timestamp,
+          mediaType: message.media?.type || '',
+        })),
+      });
+
+      const suggestion = String(response.data?.suggestion || '').trim();
+      if (!suggestion) {
+        alert('A IA nao retornou uma sugestao para esta conversa.');
+        return;
+      }
+
+      setInputText(suggestion);
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || 'Nao foi possivel gerar sugestao da IA.');
+    } finally {
+      setIsSuggestingAi(false);
+    }
+  };
+
   const handleFixSelectedPhone = async () => {
     if (!selectedClient) return;
 
@@ -557,6 +591,16 @@ export const ChatArea = () => {
           <form className="chat-input-area" onSubmit={handleSendMessage}>
             <button type="button" className="icon-btn" title="Anexar">
               <Paperclip size={20} />
+            </button>
+            <button
+              type="button"
+              className="ai-suggest-btn"
+              onClick={() => void handleSuggestAiReply()}
+              disabled={isSuggestingAi || !selectedClient}
+              title="Sugerir resposta com IA"
+            >
+              {isSuggestingAi ? <Loader2 className="spin" size={17} /> : <Bot size={17} />}
+              <span>IA</span>
             </button>
             <input
               type="text"
@@ -831,6 +875,43 @@ export const ChatArea = () => {
         .icon-btn {
           color: var(--text-muted);
           background: #eef4fb;
+        }
+
+        .ai-suggest-btn {
+          min-width: 58px;
+          height: 46px;
+          flex: 0 0 auto;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.35rem;
+          padding: 0 0.85rem;
+          border: 1px solid var(--border-color);
+          border-radius: 16px;
+          color: var(--primary-color);
+          background: #eef4fb;
+          cursor: pointer;
+          font-weight: 800;
+        }
+
+        .ai-suggest-btn:hover:not(:disabled) {
+          border-color: var(--primary-color);
+          background: #fff;
+        }
+
+        .ai-suggest-btn:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
+        }
+
+        .spin {
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          100% {
+            transform: rotate(360deg);
+          }
         }
 
         .messages-area {
@@ -1111,6 +1192,12 @@ export const ChatArea = () => {
             width: 42px;
             height: 42px;
             flex-basis: 42px;
+          }
+
+          .ai-suggest-btn {
+            height: 42px;
+            min-width: 52px;
+            padding: 0 0.65rem;
           }
 
           .chat-input-area input {

@@ -360,13 +360,32 @@ function getMediaKind(type?: string): StoredChatMedia['type'] | null {
 function getMediaExtension(mimetype?: string, fileName?: string) {
     const fileExtension = String(fileName || '').split('.').pop();
     if (fileExtension && fileExtension.length <= 8 && fileExtension !== fileName) {
-        return fileExtension.toLowerCase();
+        return fileExtension.toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
     }
 
-    const mimeExtension = String(mimetype || '').split('/').pop()?.split(';')[0];
+    const cleanMimeType = String(mimetype || '').toLowerCase().split(';')[0].trim();
+    const knownExtensions: Record<string, string> = {
+        'audio/ogg': 'ogg',
+        'audio/opus': 'ogg',
+        'audio/mpeg': 'mp3',
+        'audio/mp4': 'm4a',
+        'audio/aac': 'aac',
+        'video/mp4': 'mp4',
+        'image/jpeg': 'jpg',
+        'image/png': 'png',
+        'image/webp': 'webp',
+        'application/pdf': 'pdf',
+    };
+
+    if (knownExtensions[cleanMimeType]) {
+        return knownExtensions[cleanMimeType];
+    }
+
+    const mimeExtension = cleanMimeType.split('/').pop();
     if (mimeExtension) {
         if (mimeExtension === 'jpeg') return 'jpg';
-        if (mimeExtension.length <= 8) return mimeExtension;
+        const safeExtension = mimeExtension.replace(/[^a-z0-9]/g, '');
+        if (safeExtension.length <= 8) return safeExtension;
     }
 
     return 'bin';

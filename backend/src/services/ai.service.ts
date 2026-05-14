@@ -71,4 +71,57 @@ export class AIService {
             return "Olá! Encontramos a peça que você precisa com um ótimo preço. Como podemos prosseguir?";
         }
     }
+
+    /**
+     * Sugere uma resposta para o atendimento WhatsApp sem enviar automaticamente.
+     */
+    static async suggestWhatsappReply(params: {
+        clientName?: string;
+        messages: Array<{
+            text?: string;
+            fromMe?: boolean;
+            timestamp?: number;
+            mediaType?: string;
+        }>;
+    }) {
+        try {
+            const anthropic = await this.getClient();
+            const clientName = String(params.clientName || 'cliente').trim() || 'cliente';
+            const history = (params.messages || [])
+                .slice(-12)
+                .map((message) => {
+                    const author = message.fromMe ? 'Loja' : clientName;
+                    const text = String(message.text || '').trim();
+                    const media = message.mediaType ? ` [midia: ${message.mediaType}]` : '';
+                    return `${author}: ${text || '[sem texto]'}${media}`;
+                })
+                .join('\n');
+
+            const response = await anthropic.messages.create({
+                model: "claude-3-haiku-20240307",
+                max_tokens: 300,
+                messages: [{
+                    role: "user",
+                    content: `Voce e um assistente de atendimento de uma loja de autopecas.
+Crie UMA resposta curta, natural e profissional para WhatsApp, em portugues do Brasil.
+
+Regras:
+- Nao envie saudacao longa se a conversa ja estiver em andamento.
+- Nao invente preco, estoque, prazo, marca, garantia ou desconto.
+- Se faltar codigo, modelo, ano, motor, lado ou medida da peca, peca objetivamente o dado que falta.
+- Se o cliente mandou audio, imagem ou video e o contexto nao estiver claro, diga que recebeu e vai verificar ou peca uma informacao objetiva.
+- Nao prometa que encontrou a peca se isso nao apareceu no historico.
+- Responda apenas com o texto da mensagem, sem aspas e sem explicacoes.
+
+Historico:
+${history || 'Sem mensagens anteriores.'}`
+                }],
+            });
+
+            return response.content[0].type === 'text' ? response.content[0].text.trim() : '';
+        } catch (err: any) {
+            console.error('AI WhatsApp Suggestion Error:', err.message);
+            throw err;
+        }
+    }
 }

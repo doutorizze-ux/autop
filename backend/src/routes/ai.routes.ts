@@ -26,4 +26,20 @@ router.post('/suggest', async (req, res) => {
     }
 });
 
+router.post('/whatsapp-suggestion', async (req, res) => {
+    try {
+        const { clientName, messages } = req.body;
+        const suggestion = await AIService.suggestWhatsappReply({
+            clientName,
+            messages: Array.isArray(messages) ? messages : [],
+        });
+
+        res.json({ suggestion });
+    } catch (err: any) {
+        res.status(500).json({
+            message: err?.message || 'Erro ao gerar sugestao da IA',
+        });
+    }
+});
+
 export default router;
