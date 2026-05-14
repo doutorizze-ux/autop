@@ -18,7 +18,6 @@ import fs from 'fs/promises';
 import path from 'path';
 import pino from 'pino';
 import QRCode from 'qrcode';
-import ffmpegPath from 'ffmpeg-static';
 import { io } from '../index';
 import { BotService } from './bot.service';
 
@@ -412,8 +411,7 @@ function getStoredMediaMime(mediaKind: StoredChatMedia['type'], mimetype?: strin
 }
 
 async function convertAudioToMp3(inputPath: string, outputPath: string) {
-    const ffmpegBinary = ffmpegPath as string | null;
-    if (!ffmpegBinary) return false;
+    const ffmpegBinary = process.env.FFMPEG_PATH || 'ffmpeg';
 
     return new Promise<boolean>((resolve) => {
         const child: ChildProcessWithoutNullStreams = spawn(
