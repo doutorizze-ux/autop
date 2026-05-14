@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import { ArrowLeft, Paperclip, Search, Send, User, Users2 } from 'lucide-react';
+import { ArrowLeft, ExternalLink, FileText, Image as ImageIcon, Mic, Paperclip, Search, Send, User, Users2, Video } from 'lucide-react';
 import { API_URL } from '../services/api';
 import { socket } from '../services/socket';
 
@@ -169,6 +169,91 @@ const shouldShowMessageText = (message: Message) => {
     '[Figurinha recebida]',
   ]);
   return !mediaLabels.has(message.text.trim());
+};
+
+const getMediaLabel = (media: NonNullable<Message['media']>) => {
+  if (media.type === 'image') return 'Imagem recebida';
+  if (media.type === 'sticker') return 'Figurinha recebida';
+  if (media.type === 'video') return 'Video recebido';
+  if (media.type === 'audio') return 'Audio recebido';
+  return media.fileName || 'Documento recebido';
+};
+
+const getOpenMediaLabel = (media: NonNullable<Message['media']>) => {
+  if (media.type === 'image' || media.type === 'sticker') return 'Abrir imagem';
+  if (media.type === 'video') return 'Abrir video';
+  if (media.type === 'audio') return 'Abrir audio';
+  return 'Abrir documento';
+};
+
+const renderMediaIcon = (media: NonNullable<Message['media']>) => {
+  if (media.type === 'image' || media.type === 'sticker') return <ImageIcon size={17} />;
+  if (media.type === 'video') return <Video size={17} />;
+  if (media.type === 'audio') return <Mic size={17} />;
+  return <FileText size={17} />;
+};
+
+const renderMessageMedia = (message: Message) => {
+  if (!message.media?.url) return null;
+
+  const media = message.media;
+  const mediaUrl = resolveMediaUrl(media.url);
+  const mediaLabel = getMediaLabel(media);
+
+  if (media.type === 'image' || media.type === 'sticker') {
+    return (
+      <div className="message-media-card">
+        <a className="message-image-link" href={mediaUrl} target="_blank" rel="noreferrer" title="Abrir imagem">
+          <img className="message-image" src={mediaUrl} alt={media.fileName || mediaLabel} loading="lazy" />
+        </a>
+        <a className="message-open-link" href={mediaUrl} target="_blank" rel="noreferrer">
+          <ExternalLink size={14} /> {getOpenMediaLabel(media)}
+        </a>
+      </div>
+    );
+  }
+
+  if (media.type === 'video') {
+    return (
+      <div className="message-media-card">
+        <div className="message-media-header">
+          <span className="message-media-icon">{renderMediaIcon(media)}</span>
+          <strong>{mediaLabel}</strong>
+        </div>
+        <video className="message-video" controls preload="metadata" src={mediaUrl} />
+        <a className="message-open-link" href={mediaUrl} target="_blank" rel="noreferrer">
+          <ExternalLink size={14} /> {getOpenMediaLabel(media)}
+        </a>
+      </div>
+    );
+  }
+
+  if (media.type === 'audio') {
+    return (
+      <div className="message-media-card">
+        <div className="message-media-header">
+          <span className="message-media-icon">{renderMediaIcon(media)}</span>
+          <strong>{mediaLabel}</strong>
+        </div>
+        <audio className="message-audio" controls preload="metadata" src={mediaUrl} />
+        <a className="message-open-link" href={mediaUrl} target="_blank" rel="noreferrer">
+          <ExternalLink size={14} /> {getOpenMediaLabel(media)}
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="message-media-card">
+      <div className="message-media-header">
+        <span className="message-media-icon">{renderMediaIcon(media)}</span>
+        <strong>{mediaLabel}</strong>
+      </div>
+      <a className="message-document" href={mediaUrl} target="_blank" rel="noreferrer">
+        <ExternalLink size={14} /> {media.fileName || 'Abrir documento'}
+      </a>
+    </div>
+  );
 };
 
 export const ChatArea = () => {
@@ -454,17 +539,8 @@ export const ChatArea = () => {
           <div className="messages-area">
             {selectedMessages.map((message, index) => (
               <div key={`${message.timestamp}-${index}`} className={`message-wrapper ${message.fromMe ? 'sent' : 'received'}`}>
-                <div className="message-bubble">
-                  {message.media?.type === 'image' || message.media?.type === 'sticker' ? (
-                    <img className="message-image" src={resolveMediaUrl(message.media.url)} alt={message.media.fileName || 'Imagem recebida'} />
-                  ) : null}
-                  {message.media?.type === 'video' ? <video className="message-video" controls src={resolveMediaUrl(message.media.url)} /> : null}
-                  {message.media?.type === 'audio' ? <audio className="message-audio" controls src={resolveMediaUrl(message.media.url)} /> : null}
-                  {message.media?.type === 'document' ? (
-                    <a className="message-document" href={resolveMediaUrl(message.media.url)} target="_blank" rel="noreferrer">
-                      {message.media.fileName || 'Abrir documento'}
-                    </a>
-                  ) : null}
+                <div className={`message-bubble ${message.media ? `has-media media-${message.media.type}` : ''}`}>
+                  {renderMessageMedia(message)}
                   {shouldShowMessageText(message) ? <p>{message.text}</p> : null}
                   <span className="msg-time">
                     {new Date(message.timestamp * 1000).toLocaleTimeString([], {
@@ -790,6 +866,21 @@ export const ChatArea = () => {
           box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
         }
 
+        .message-bubble.has-media {
+          padding: 0.5rem;
+        }
+
+        .message-bubble.media-audio {
+          width: min(360px, 78vw);
+          max-width: 360px;
+        }
+
+        .message-bubble.media-image,
+        .message-bubble.media-sticker,
+        .message-bubble.media-video {
+          max-width: min(380px, 82vw);
+        }
+
         .sent .message-bubble {
           color: #fff;
           background: linear-gradient(135deg, var(--primary-color), #0c7ff2);
@@ -808,31 +899,99 @@ export const ChatArea = () => {
           line-height: 1.45;
         }
 
+        .message-media-card {
+          display: flex;
+          flex-direction: column;
+          gap: 0.55rem;
+          min-width: 0;
+        }
+
+        .message-media-header {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.15rem 0.25rem 0;
+          min-width: 0;
+        }
+
+        .message-media-header strong {
+          font-size: 0.9rem;
+          line-height: 1.25;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .message-media-icon {
+          width: 30px;
+          height: 30px;
+          border-radius: 8px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 30px;
+          background: #eef4fb;
+          color: var(--primary-color);
+        }
+
+        .sent .message-media-icon {
+          background: rgba(255, 255, 255, 0.16);
+          color: #fff;
+        }
+
+        .message-image-link {
+          display: block;
+          max-width: 100%;
+          border-radius: 12px;
+          overflow: hidden;
+          background: rgba(0, 0, 0, 0.08);
+          cursor: zoom-in;
+        }
+
         .message-image,
         .message-video {
           display: block;
-          max-width: min(320px, 100%);
-          max-height: 360px;
+          width: 100%;
+          max-width: 360px;
+          max-height: 380px;
           object-fit: contain;
-          border-radius: 10px;
+          border-radius: 12px;
           background: rgba(0, 0, 0, 0.08);
         }
 
         .message-audio {
           display: block;
-          width: min(320px, 100%);
-          max-width: 100%;
+          width: 100%;
+          min-width: 270px;
+          max-width: 340px;
+          height: 42px;
         }
 
+        .message-open-link,
         .message-document {
           display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
           max-width: 100%;
           padding: 0.55rem 0.7rem;
           color: inherit;
           background: rgba(255, 255, 255, 0.24);
           border-radius: 10px;
-          text-decoration: underline;
+          text-decoration: none;
           word-break: break-word;
+          font-size: 0.82rem;
+          font-weight: 700;
+        }
+
+        .received .message-open-link,
+        .received .message-document {
+          background: #f1f5f9;
+          color: var(--text-main);
+        }
+
+        .message-open-link:hover,
+        .message-document:hover {
+          text-decoration: underline;
         }
 
         .msg-time {
@@ -928,6 +1087,18 @@ export const ChatArea = () => {
           .message-bubble {
             max-width: 88%;
             padding: 0.65rem 0.85rem;
+          }
+
+          .message-bubble.has-media {
+            padding: 0.45rem;
+          }
+
+          .message-bubble.media-audio {
+            width: min(340px, 88vw);
+          }
+
+          .message-audio {
+            min-width: 0;
           }
 
           .chat-input-area {
