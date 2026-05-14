@@ -3,7 +3,141 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+type WhatsappReplyParams = {
+    clientName?: string;
+    trainingText?: string;
+    menuText?: string;
+    messages: Array<{
+        text?: string;
+        fromMe?: boolean;
+        timestamp?: number;
+        mediaType?: string;
+    }>;
+};
+
 export class AIService {
+    static isBillingOrCreditError(error: any) {
+        const raw = JSON.stringify(error?.error || error?.message || error || '').toLowerCase();
+        return raw.includes('credit balance') || raw.includes('billing') || raw.includes('purchase credits');
+    }
+
+    static getFriendlyErrorMessage(error: any) {
+        const raw = String(error?.message || '').toLowerCase();
+
+        if (this.isBillingOrCreditError(error)) {
+            return 'A IA da Anthropic esta sem credito. Recarregue os creditos ou atualize a chave em Configuracoes > Integracao IA.';
+        }
+
+        if (raw.includes('api key') || raw.includes('key nao configurada') || raw.includes('key nÃ£o configurada')) {
+            return 'A chave da IA nao esta configurada. Ajuste em Configuracoes > Integracao IA.';
+        }
+
+        return 'Nao foi possivel gerar a resposta da IA agora. Tente novamente em instantes.';
+    }
+
+    private static normalizeLocalText(value: unknown) {
+        return String(value || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    private static getLatestCustomerMessage(messages: WhatsappReplyParams['messages']) {
+        return [...(messages || [])].reverse().find((message) => !message.fromMe) || null;
+    }
+
+    private static findTrainingLine(trainingText: string, incomingText: string) {
+        const normalizedIncoming = this.normalizeLocalText(incomingText);
+        if (!normalizedIncoming) return '';
+
+        const groups = [
+            ['horario', 'funcionamento', 'abre', 'fecha'],
+            ['endereco', 'localizacao', 'onde fica', 'rua', 'bairro'],
+            ['pagamento', 'pix', 'cartao', 'credito', 'debito', 'parcel'],
+            ['entrega', 'delivery', 'motoboy', 'frete'],
+            ['garantia', 'troca', 'devolucao'],
+            ['desconto', 'melhor preco', 'negociar'],
+        ];
+
+        const lines = String(trainingText || '')
+            .split(/\r?\n|;/)
+            .map((line) => line.trim())
+            .filter(Boolean);
+
+        for (const group of groups) {
+            const askedAboutGroup = group.some((keyword) => normalizedIncoming.includes(keyword));
+            if (!askedAboutGroup) continue;
+
+            const matchingLine = lines.find((line) => {
+                const normalizedLine = this.normalizeLocalText(line);
+                return group.some((keyword) => normalizedLine.includes(keyword));
+            });
+
+            if (matchingLine) {
+                return matchingLine;
+            }
+        }
+
+        return '';
+    }
+
+    static buildLocalWhatsappReply(params: WhatsappReplyParams) {
+        const latestMessage = this.getLatestCustomerMessage(params.messages);
+        const incomingText = String(latestMessage?.text || '').trim();
+        const normalizedText = this.normalizeLocalText(incomingText);
+        const mediaType = latestMessage?.mediaType || '';
+        const menuText = String(params.menuText || '').trim();
+        const trainingLine = this.findTrainingLine(String(params.trainingText || ''), incomingText);
+
+        if (trainingLine) {
+            return trainingLine;
+        }
+
+        if (normalizedText === '1') {
+            return 'Claro. Me envie o codigo da peca ou o nome da peca com modelo, ano e motor do veiculo que eu ja verifico para voce.';
+        }
+
+        if (normalizedText === '2') {
+            return 'Perfeito. Me informe modelo, ano, motor e, se tiver, placa ou chassi. Com esses dados fica mais facil localizar a peca correta.';
+        }
+
+        if (normalizedText === '3' || normalizedText.includes('atendente') || normalizedText.includes('humano')) {
+            return 'Certo, vou chamar um atendente para continuar seu atendimento.';
+        }
+
+        if (['menu', 'opcoes', 'opcao', 'inicio', 'comecar'].some((keyword) => normalizedText.includes(keyword))) {
+            return menuText || 'Escolha uma opcao:\n1 - Cotar uma peca\n2 - Informar modelo/ano do veiculo\n3 - Falar com atendente';
+        }
+
+        if (mediaType === 'audio') {
+            return 'Recebi seu audio. Para agilizar, pode me enviar tambem o codigo da peca ou modelo, ano e motor do veiculo?';
+        }
+
+        if (mediaType === 'image' || mediaType === 'video') {
+            return 'Recebi a imagem. Pode me confirmar qual peca voce precisa e o modelo, ano e motor do veiculo?';
+        }
+
+        if (normalizedText.includes('preco') || normalizedText.includes('valor') || normalizedText.includes('cotar') || normalizedText.includes('orcamento')) {
+            return 'Consigo cotar para voce. Me envie o codigo da peca ou o nome da peca com modelo, ano e motor do veiculo.';
+        }
+
+        if (normalizedText.includes('codigo') || normalizedText.includes('peca') || normalizedText.includes('filtro') || normalizedText.includes('pastilha') || normalizedText.includes('amortecedor')) {
+            return 'Certo. Para confirmar certinho, me envie tambem modelo, ano e motor do veiculo.';
+        }
+
+        if (normalizedText.includes('obrigado') || normalizedText.includes('obrigada') || normalizedText.includes('valeu')) {
+            return 'Eu que agradeco. Se precisar de mais alguma peca, e so me chamar.';
+        }
+
+        if (normalizedText === 'oi' || normalizedText === 'ola' || normalizedText.includes('bom dia') || normalizedText.includes('boa tarde') || normalizedText.includes('boa noite')) {
+            return menuText || 'Ola! Sou o assistente virtual da loja.\nEscolha uma opcao:\n1 - Cotar uma peca\n2 - Informar modelo/ano do veiculo\n3 - Falar com atendente';
+        }
+
+        return 'Certo. Para eu te ajudar melhor, me envie o codigo da peca ou o nome da peca com modelo, ano e motor do veiculo.';
+    }
+
     private static async getClient() {
         // Tentar pegar do banco primeiro
         const config = await prisma.systemConfig.findUnique({ where: { id: 'system_settings' } });
@@ -75,63 +209,7 @@ export class AIService {
     /**
      * Sugere uma resposta para o atendimento WhatsApp sem enviar automaticamente.
      */
-    static async suggestWhatsappReply(params: {
-        clientName?: string;
-        trainingText?: string;
-        menuText?: string;
-        messages: Array<{
-            text?: string;
-            fromMe?: boolean;
-            timestamp?: number;
-            mediaType?: string;
-        }>;
-    }) {
-        try {
-            const anthropic = await this.getClient();
-            const clientName = String(params.clientName || 'cliente').trim() || 'cliente';
-            const trainingText = String(params.trainingText || '').trim();
-            const menuText = String(params.menuText || '').trim();
-            const history = (params.messages || [])
-                .slice(-12)
-                .map((message) => {
-                    const author = message.fromMe ? 'Loja' : clientName;
-                    const text = String(message.text || '').trim();
-                    const media = message.mediaType ? ` [midia: ${message.mediaType}]` : '';
-                    return `${author}: ${text || '[sem texto]'}${media}`;
-                })
-                .join('\n');
-
-            const response = await anthropic.messages.create({
-                model: "claude-3-haiku-20240307",
-                max_tokens: 300,
-                messages: [{
-                    role: "user",
-                    content: `Voce e um assistente de atendimento de uma loja de autopecas.
-Crie UMA resposta curta, natural e profissional para WhatsApp, em portugues do Brasil.
-
-Regras:
-- Nao envie saudacao longa se a conversa ja estiver em andamento.
-- Nao invente preco, estoque, prazo, marca, garantia ou desconto.
-- Se faltar codigo, modelo, ano, motor, lado ou medida da peca, peca objetivamente o dado que falta.
-- Se o cliente mandou audio, imagem ou video e o contexto nao estiver claro, diga que recebeu e vai verificar ou peca uma informacao objetiva.
-- Nao prometa que encontrou a peca se isso nao apareceu no historico.
-- Responda apenas com o texto da mensagem, sem aspas e sem explicacoes.
-
-Treinamento da loja:
-${trainingText || 'Sem treinamento especifico cadastrado.'}
-
-Menu oficial do atendimento:
-${menuText || 'Sem menu cadastrado.'}
-
-Historico:
-${history || 'Sem mensagens anteriores.'}`
-                }],
-            });
-
-            return response.content[0].type === 'text' ? response.content[0].text.trim() : '';
-        } catch (err: any) {
-            console.error('AI WhatsApp Suggestion Error:', err.message);
-            throw err;
-        }
+    static async suggestWhatsappReply(params: WhatsappReplyParams) {
+        return this.buildLocalWhatsappReply(params);
     }
 }

@@ -126,6 +126,20 @@ export class BotService {
         );
     }
 
+    static getFixedMenuOptionReply(text: string) {
+        const normalizedText = normalizeText(text);
+
+        if (normalizedText === '1') {
+            return 'Claro. Me envie o codigo da peca ou o nome da peca com modelo, ano e motor do veiculo que eu ja verifico para voce.';
+        }
+
+        if (normalizedText === '2') {
+            return 'Perfeito. Me informe modelo, ano, motor e, se tiver, placa ou chassi. Com esses dados fica mais facil localizar a peca correta.';
+        }
+
+        return '';
+    }
+
     static async buildReply(input: BotReplyInput): Promise<
         | { action: 'none' }
         | { action: 'handoff'; message: string }
@@ -143,11 +157,19 @@ export class BotService {
 
         const incomingText = String(input.incomingText || '').trim();
         const hasStoreReply = input.messages.some((message) => !!message.fromMe);
+        const fixedMenuOptionReply = this.getFixedMenuOptionReply(incomingText);
 
         if (this.isHandoffRequest(incomingText, config.handoffKeywords)) {
             return {
                 action: 'handoff',
                 message: config.handoffMessage,
+            };
+        }
+
+        if (fixedMenuOptionReply) {
+            return {
+                action: 'reply',
+                message: fixedMenuOptionReply,
             };
         }
 

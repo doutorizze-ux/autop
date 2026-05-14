@@ -37,7 +37,7 @@ router.post('/whatsapp-suggestion', async (req, res) => {
         res.json({ suggestion });
     } catch (err: any) {
         res.status(500).json({
-            message: err?.message || 'Erro ao gerar sugestao da IA',
+            message: AIService.getFriendlyErrorMessage(err),
         });
     }
 });
