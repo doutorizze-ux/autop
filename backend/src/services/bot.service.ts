@@ -13,7 +13,7 @@ const defaultMenuText = [
 
 const defaultHandoffMessage = 'Certo, vou chamar um atendente para continuar seu atendimento.';
 const defaultFallbackText = 'Recebi sua mensagem. Vou verificar e ja te respondo.';
-const defaultHandoffKeywords = '3,atendente,humano,pessoa,falar com atendente,vendedor';
+const defaultHandoffKeywords = '3,atendente,atendendente,atendimento,humano,pessoa,falar com atendente,vendedor';
 
 type BotConfigInput = {
     enabled?: boolean;
@@ -106,7 +106,7 @@ export class BotService {
         const normalizedText = normalizeText(text);
         if (!normalizedText) return false;
 
-        return String(handoffKeywords || defaultHandoffKeywords)
+        return `${handoffKeywords || defaultHandoffKeywords},atendendente,atendimento,falar com alguem`
             .split(',')
             .map((keyword) => normalizeText(keyword))
             .filter(Boolean)

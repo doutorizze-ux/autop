@@ -48,6 +48,113 @@ export class AIService {
         return [...(messages || [])].reverse().find((message) => !message.fromMe) || null;
     }
 
+    private static getLatestStoreMessage(messages: WhatsappReplyParams['messages']) {
+        return [...(messages || [])].reverse().find((message) => message.fromMe) || null;
+    }
+
+    private static getRecentCustomerText(messages: WhatsappReplyParams['messages']) {
+        return [...(messages || [])]
+            .map((message) => String(message.text || '').trim())
+            .filter((text, index) => {
+                const message = messages[index];
+                if (message?.fromMe || !text) return false;
+                const normalized = this.normalizeLocalText(text);
+                return !['oi', 'ola', 'oie', 'opa', 'menu', '1', '2', '3'].includes(normalized) && !normalized.includes('atend');
+            })
+            .slice(-5)
+            .join(' ');
+    }
+
+    private static hasPartSignal(normalizedText: string) {
+        const partKeywords = [
+            'amortecedor',
+            'pastilha',
+            'disco',
+            'filtro',
+            'oleo',
+            'vela',
+            'bateria',
+            'correia',
+            'embreagem',
+            'pivo',
+            'terminal',
+            'bieleta',
+            'bomba',
+            'radiador',
+            'sensor',
+            'coxim',
+            'bucha',
+            'homocinetica',
+            'retentor',
+            'junta',
+            'alternador',
+            'motor partida',
+            'lampada',
+            'parachoque',
+            'retrovisor',
+            'mangueira',
+            'rolamento',
+            'kit',
+            'peca',
+        ];
+
+        return partKeywords.some((keyword) => normalizedText.includes(keyword));
+    }
+
+    private static hasVehicleSignal(normalizedText: string) {
+        const vehicleKeywords = [
+            'vectra',
+            'corsa',
+            'celta',
+            'onix',
+            'prisma',
+            's10',
+            'montana',
+            'gol',
+            'voyage',
+            'saveiro',
+            'fox',
+            'polo',
+            'palio',
+            'uno',
+            'strada',
+            'siena',
+            'toro',
+            'fiesta',
+            'ka',
+            'ecosport',
+            'corolla',
+            'hilux',
+            'civic',
+            'fit',
+            'hb20',
+            'creta',
+            'sandero',
+            'logan',
+            'duster',
+            'clio',
+            '207',
+            '208',
+            '307',
+            'c3',
+            'c4',
+            'classic',
+            'elegance',
+        ];
+
+        return /\b(19|20)\d{2}\b/.test(normalizedText) || vehicleKeywords.some((keyword) => normalizedText.includes(keyword));
+    }
+
+    private static hasCodeSignal(text: string) {
+        const withoutYear = String(text || '').replace(/\b(19|20)\d{2}\b/g, ' ');
+        return /\b(?=[a-z0-9-]{4,}\b)(?=[a-z0-9-]*\d)[a-z0-9-]+\b/i.test(withoutYear);
+    }
+
+    private static summarizeCustomerText(text: string) {
+        const clean = String(text || '').replace(/\s+/g, ' ').trim();
+        return clean.length > 140 ? `${clean.slice(0, 137)}...` : clean;
+    }
+
     private static findTrainingLine(trainingText: string, incomingText: string) {
         const normalizedIncoming = this.normalizeLocalText(incomingText);
         if (!normalizedIncoming) return '';
@@ -85,11 +192,18 @@ export class AIService {
 
     static buildLocalWhatsappReply(params: WhatsappReplyParams) {
         const latestMessage = this.getLatestCustomerMessage(params.messages);
+        const latestStoreMessage = this.getLatestStoreMessage(params.messages);
         const incomingText = String(latestMessage?.text || '').trim();
         const normalizedText = this.normalizeLocalText(incomingText);
+        const recentCustomerText = this.getRecentCustomerText(params.messages);
+        const normalizedRecentCustomerText = this.normalizeLocalText(recentCustomerText);
         const mediaType = latestMessage?.mediaType || '';
         const menuText = String(params.menuText || '').trim();
         const trainingLine = this.findTrainingLine(String(params.trainingText || ''), incomingText);
+        const hasPart = this.hasPartSignal(normalizedRecentCustomerText);
+        const hasVehicle = this.hasVehicleSignal(normalizedRecentCustomerText);
+        const hasCode = this.hasCodeSignal(recentCustomerText);
+        const latestStoreText = this.normalizeLocalText(latestStoreMessage?.text || '');
 
         if (trainingLine) {
             return trainingLine;
@@ -103,7 +217,7 @@ export class AIService {
             return 'Perfeito. Me informe modelo, ano, motor e, se tiver, placa ou chassi. Com esses dados fica mais facil localizar a peca correta.';
         }
 
-        if (normalizedText === '3' || normalizedText.includes('atendente') || normalizedText.includes('humano')) {
+        if (normalizedText === '3' || normalizedText.includes('atend') || normalizedText.includes('humano')) {
             return 'Certo, vou chamar um atendente para continuar seu atendimento.';
         }
 
@@ -123,15 +237,27 @@ export class AIService {
             return 'Consigo cotar para voce. Me envie o codigo da peca ou o nome da peca com modelo, ano e motor do veiculo.';
         }
 
-        if (normalizedText.includes('codigo') || normalizedText.includes('peca') || normalizedText.includes('filtro') || normalizedText.includes('pastilha') || normalizedText.includes('amortecedor')) {
-            return 'Certo. Para confirmar certinho, me envie tambem modelo, ano e motor do veiculo.';
+        if (hasPart && (hasVehicle || hasCode)) {
+            if (latestStoreText.includes('vou verificar') || latestStoreText.includes('ja verifico')) {
+                return 'Perfeito, acrescentei essa informacao ao atendimento. Vou verificar e retorno por aqui.';
+            }
+
+            return `Perfeito, recebi seu pedido: ${this.summarizeCustomerText(recentCustomerText)}. Vou verificar disponibilidade e retorno por aqui.`;
+        }
+
+        if (hasPart) {
+            return 'Certo. Me envie tambem modelo, ano e motor do veiculo para eu conferir a peca correta.';
+        }
+
+        if (hasVehicle || hasCode) {
+            return 'Perfeito, recebi os dados do veiculo/codigo. Me confirme tambem qual peca voce precisa cotar.';
         }
 
         if (normalizedText.includes('obrigado') || normalizedText.includes('obrigada') || normalizedText.includes('valeu')) {
             return 'Eu que agradeco. Se precisar de mais alguma peca, e so me chamar.';
         }
 
-        if (normalizedText === 'oi' || normalizedText === 'ola' || normalizedText.includes('bom dia') || normalizedText.includes('boa tarde') || normalizedText.includes('boa noite')) {
+        if (['oi', 'ola', 'oie', 'opa'].includes(normalizedText) || normalizedText.includes('bom dia') || normalizedText.includes('boa tarde') || normalizedText.includes('boa noite')) {
             return menuText || 'Ola! Sou o assistente virtual da loja.\nEscolha uma opcao:\n1 - Cotar uma peca\n2 - Informar modelo/ano do veiculo\n3 - Falar com atendente';
         }
 
