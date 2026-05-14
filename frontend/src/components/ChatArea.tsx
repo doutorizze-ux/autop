@@ -28,6 +28,21 @@ interface Message {
 
 const normalizeContactKey = (value: string) => value.replace(/@(s\.whatsapp\.net|lid)$/, '');
 
+const normalizeMessageTimestamp = (value: unknown) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : Math.floor(Date.now() / 1000);
+};
+
+const getPayloadMessageKeys = (...values: unknown[]) =>
+  Array.from(
+    new Set(
+      values
+        .filter(Boolean)
+        .map((value) => normalizeContactKey(String(value)))
+        .filter(Boolean)
+    )
+  );
+
 const getClientMessageKeys = (client: Client) => {
   const keys = [client.id, client.whatsappJid, client.phone]
     .filter(Boolean)
@@ -41,21 +56,32 @@ const parseClientHistory = (client: Client): Message[] => {
   try {
     const parsed = JSON.parse(client.history);
     if (Array.isArray(parsed)) {
-      return parsed.filter(
-        (item): item is Message =>
+      return parsed
+        .filter(
+          (item): item is Message =>
           item &&
           typeof item.text === 'string' &&
           typeof item.fromMe === 'boolean' &&
-          typeof item.timestamp === 'number' &&
+          (typeof item.timestamp === 'number' || typeof item.timestamp === 'string') &&
           !item.system &&
           (!!item.text.trim() || !!item.media) &&
           item.text !== '__PHONE_REQUEST_SENT__'
-      );
+        )
+        .map((item) => ({
+          ...item,
+          timestamp: normalizeMessageTimestamp(item.timestamp),
+          media: item.media || null,
+        }));
     }
   } catch (_) {}
 
   return client.history ? [{ text: client.history, fromMe: false, timestamp: Math.floor(Date.now() / 1000) }] : [];
 };
+
+const hasAttendanceMessages = (client: Client) => parseClientHistory(client).length > 0;
+
+const getAttendanceClients = (items: Client[], selectedId?: string | null) =>
+  items.filter((client) => hasAttendanceMessages(client) || (!!selectedId && client.id === selectedId));
 
 const mergeMessages = (current: Message[] = [], incoming: Message[] = []) => {
   const all = [...current, ...incoming];
@@ -71,6 +97,28 @@ const mergeMessages = (current: Message[] = [], incoming: Message[] = []) => {
         ) === index
     )
     .sort((a, b) => a.timestamp - b.timestamp);
+};
+
+const mergeMessageIntoKeys = (current: Record<string, Message[]>, keys: string[], message: Message) => {
+  const next = { ...current };
+  keys.forEach((key) => {
+    next[key] = mergeMessages(next[key], [message]);
+  });
+  return next;
+};
+
+const mergeClientIntoList = (current: Client[], client: Client, addNew = true) => {
+  const existingIndex = current.findIndex(
+    (item) => item.id === client.id || item.phone === client.phone || (!!item.whatsappJid && item.whatsappJid === client.whatsappJid)
+  );
+
+  if (existingIndex >= 0) {
+    const next = [...current];
+    next[existingIndex] = client;
+    return next;
+  }
+
+  return addNew ? [client, ...current] : current;
 };
 
 const isTechnicalLid = (value: string) => {
@@ -154,16 +202,17 @@ export const ChatArea = () => {
       try {
         const res = await axios.get(`${API_URL}/api/clients`);
         let currentClients = res.data as Client[];
-        setClients(currentClients);
+        const selectedId = localStorage.getItem('selected_attendance_client_id');
+        setClients(getAttendanceClients(currentClients, selectedId));
 
-        const hasUnresolvedClients = currentClients.some((client) => formatClientPhone(client).includes('aguardando'));
+        const hasUnresolvedClients = getAttendanceClients(currentClients, selectedId).some((client) => formatClientPhone(client).includes('aguardando'));
         if (hasUnresolvedClients && !hasAttemptedPhoneSyncRef.current) {
           hasAttemptedPhoneSyncRef.current = true;
           try {
             await axios.post(`${API_URL}/api/whatsapp/sync-phones`);
             const refreshed = await axios.get(`${API_URL}/api/clients`);
             currentClients = refreshed.data;
-            setClients(currentClients);
+            setClients(getAttendanceClients(currentClients, selectedId));
           } catch (syncError) {
             console.error('Erro ao sincronizar telefones pendentes:', syncError);
           }
@@ -177,7 +226,6 @@ export const ChatArea = () => {
           return next;
         });
 
-        const selectedId = localStorage.getItem('selected_attendance_client_id');
         if (selectedId) {
           const client = currentClients.find((item) => item.id === selectedId);
           if (client) {
@@ -195,29 +243,26 @@ export const ChatArea = () => {
 
     void fetchClients();
 
-    socket.on('incoming_message', (data: any) => {
-      const contactKey = normalizeContactKey(data.clientId || data.whatsappJid || data.from);
-      setMessages((prev) => ({
-        ...prev,
-        [contactKey]: [
-          ...(prev[contactKey] || []),
-          { text: data.text, fromMe: false, timestamp: data.timestamp, media: data.media || null },
-        ],
-      }));
-    });
+    const handleIncomingMessage = (data: any) => {
+      const message: Message = {
+        text: data.text || '',
+        fromMe: false,
+        timestamp: normalizeMessageTimestamp(data.timestamp),
+        media: data.media || null,
+      };
+      const keys = getPayloadMessageKeys(data.clientId, data.whatsappJid, data.phone, data.from);
 
-    socket.on('client_upserted', (client: Client) => {
-      setClients((prev) => {
-        const existingIndex = prev.findIndex(
-          (item) => item.id === client.id || item.phone === client.phone || (!!item.whatsappJid && item.whatsappJid === client.whatsappJid)
-        );
-        if (existingIndex >= 0) {
-          const next = [...prev];
-          next[existingIndex] = client;
-          return next;
-        }
-        return [client, ...prev];
-      });
+      if (data.client?.id) {
+        setClients((prev) => mergeClientIntoList(prev, data.client, hasAttendanceMessages(data.client)));
+      }
+
+      if (keys.length > 0) {
+        setMessages((prev) => mergeMessageIntoKeys(prev, keys, message));
+      }
+    };
+
+    const handleClientUpserted = (client: Client) => {
+      setClients((prev) => mergeClientIntoList(prev, client, hasAttendanceMessages(client)));
 
       setMessages((prev) => ({
         ...prev,
@@ -231,29 +276,37 @@ export const ChatArea = () => {
         const sameClient = current.id === client.id || currentKeys.some((key) => incomingKeys.includes(key));
         return sameClient ? client : current;
       });
-    });
+    };
 
-    socket.on('client_deleted', (payload: { id: string }) => {
+    const handleClientDeleted = (payload: { id: string }) => {
       setClients((prev) => prev.filter((client) => client.id !== payload.id));
       setSelectedClient((current) => (current?.id === payload.id ? null : current));
-    });
+    };
 
-    socket.on('message_sent', (data: any) => {
-      const contactKey = normalizeContactKey(data.clientId || data.to);
-      setMessages((prev) => ({
-        ...prev,
-        [contactKey]: [
-          ...(prev[contactKey] || []),
-          { text: data.text, fromMe: true, timestamp: data.timestamp, media: data.media || null },
-        ],
-      }));
-    });
+    const handleMessageSent = (data: any) => {
+      const message: Message = {
+        text: data.text || '',
+        fromMe: true,
+        timestamp: normalizeMessageTimestamp(data.timestamp),
+        media: data.media || null,
+      };
+      const keys = getPayloadMessageKeys(data.clientId, data.to);
+
+      if (keys.length > 0) {
+        setMessages((prev) => mergeMessageIntoKeys(prev, keys, message));
+      }
+    };
+
+    socket.on('incoming_message', handleIncomingMessage);
+    socket.on('client_upserted', handleClientUpserted);
+    socket.on('client_deleted', handleClientDeleted);
+    socket.on('message_sent', handleMessageSent);
 
     return () => {
-      socket.off('incoming_message');
-      socket.off('message_sent');
-      socket.off('client_upserted');
-      socket.off('client_deleted');
+      socket.off('incoming_message', handleIncomingMessage);
+      socket.off('message_sent', handleMessageSent);
+      socket.off('client_upserted', handleClientUpserted);
+      socket.off('client_deleted', handleClientDeleted);
     };
   }, []);
 

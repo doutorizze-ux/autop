@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -97,9 +97,11 @@ export const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    socket.on('whatsapp_status', (data: any) => {
+    const handleWhatsappStatus = (data: any) => {
       setWsStatus(data.status);
-    });
+    };
+
+    socket.on('whatsapp_status', handleWhatsappStatus);
 
     fetch(`${API_URL}/api/whatsapp/status`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
@@ -110,7 +112,7 @@ export const Dashboard = () => {
       });
 
     return () => {
-      socket.off('whatsapp_status');
+      socket.off('whatsapp_status', handleWhatsappStatus);
     };
   }, []);
 
@@ -144,6 +146,7 @@ export const Dashboard = () => {
   const visibleNavItems = navItems.filter((item) => !item.adminOnly || user?.role === 'ADMIN');
   const activeItem = visibleNavItems.find((item) => item.id === activeTab) || visibleNavItems[0];
   const dashboardMenuItems = visibleNavItems.filter((item) => item.id !== 'dashboard');
+  const handleWhatsappConnected = useCallback(() => setWsStatus('connected'), []);
 
   return (
     <div className="layout-container">
@@ -267,7 +270,7 @@ export const Dashboard = () => {
                 <h2 className="page-title">Atendimento WhatsApp</h2>
                 <p>Converse, troque de cliente no celular com mais facilidade e mantenha o time rapido no balcao.</p>
               </div>
-              {wsStatus === 'connected' ? <ChatArea /> : <WhatsAppConnect />}
+              {wsStatus === 'connected' ? <ChatArea /> : <WhatsAppConnect onConnected={handleWhatsappConnected} />}
             </div>
           )}
 

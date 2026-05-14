@@ -4,8 +4,14 @@ import { API_URL } from '../services/api';
 import { socket } from '../services/socket';
 import { CheckCircle2, RefreshCcw, WifiOff } from 'lucide-react';
 
-export const WhatsAppConnect = () => {
-    const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'qr'>('connecting');
+type WhatsappStatus = 'connecting' | 'connected' | 'disconnected' | 'qr';
+
+interface WhatsAppConnectProps {
+    onConnected?: () => void;
+}
+
+export const WhatsAppConnect = ({ onConnected }: WhatsAppConnectProps) => {
+    const [status, setStatus] = useState<WhatsappStatus>('connecting');
     const [qrCode, setQrCode] = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState('');
     const autoReconnectStarted = useRef(false);
@@ -18,6 +24,9 @@ export const WhatsAppConnect = () => {
             setStatus(response.data.status);
             setQrCode(response.data.qr || null);
             setErrorMessage(response.data.error || '');
+            if (response.data.status === 'connected') {
+                onConnected?.();
+            }
         } catch (error: any) {
             setStatus('disconnected');
             setQrCode(null);
@@ -33,6 +42,10 @@ export const WhatsAppConnect = () => {
                 setQrCode(response.data.qr || null);
                 setErrorMessage(response.data.error || '');
 
+                if (response.data.status === 'connected') {
+                    onConnected?.();
+                }
+
                 if (response.data.status === 'disconnected' && !autoReconnectStarted.current) {
                     autoReconnectStarted.current = true;
                     await reconnect();
@@ -47,17 +60,22 @@ export const WhatsAppConnect = () => {
         fetchInitialStatus();
         const interval = window.setInterval(fetchInitialStatus, 4000);
 
-        socket.on('whatsapp_status', (data: { status: 'connecting' | 'connected' | 'disconnected' | 'qr'; qr?: string }) => {
+        const handleWhatsappStatus = (data: { status: WhatsappStatus; qr?: string }) => {
             setStatus(data.status);
             setQrCode(data.qr || null);
             setErrorMessage('');
-        });
+            if (data.status === 'connected') {
+                onConnected?.();
+            }
+        };
+
+        socket.on('whatsapp_status', handleWhatsappStatus);
 
         return () => {
             window.clearInterval(interval);
-            socket.off('whatsapp_status');
+            socket.off('whatsapp_status', handleWhatsappStatus);
         };
-    }, []);
+    }, [onConnected]);
 
     const renderContent = () => {
         switch (status) {
