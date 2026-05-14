@@ -77,6 +77,8 @@ export class AIService {
      */
     static async suggestWhatsappReply(params: {
         clientName?: string;
+        trainingText?: string;
+        menuText?: string;
         messages: Array<{
             text?: string;
             fromMe?: boolean;
@@ -87,6 +89,8 @@ export class AIService {
         try {
             const anthropic = await this.getClient();
             const clientName = String(params.clientName || 'cliente').trim() || 'cliente';
+            const trainingText = String(params.trainingText || '').trim();
+            const menuText = String(params.menuText || '').trim();
             const history = (params.messages || [])
                 .slice(-12)
                 .map((message) => {
@@ -112,6 +116,12 @@ Regras:
 - Se o cliente mandou audio, imagem ou video e o contexto nao estiver claro, diga que recebeu e vai verificar ou peca uma informacao objetiva.
 - Nao prometa que encontrou a peca se isso nao apareceu no historico.
 - Responda apenas com o texto da mensagem, sem aspas e sem explicacoes.
+
+Treinamento da loja:
+${trainingText || 'Sem treinamento especifico cadastrado.'}
+
+Menu oficial do atendimento:
+${menuText || 'Sem menu cadastrado.'}
 
 Historico:
 ${history || 'Sem mensagens anteriores.'}`

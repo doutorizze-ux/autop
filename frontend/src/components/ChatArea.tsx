@@ -151,6 +151,11 @@ const getResolvedClientPhone = (client: Client) => {
 
 const formatClientPhone = (client: Client) => getResolvedClientPhone(client) || 'Telefone aguardando sincronização';
 
+const formatClientStatus = (status: string) => {
+  if (status === 'AGUARDANDO_ATENDENTE') return 'ATENDENTE';
+  return status;
+};
+
 const resolveMediaUrl = (url?: string) => {
   if (!url) return '';
   return url.startsWith('http') ? url : `${API_URL}${url}`;
@@ -260,6 +265,25 @@ const renderMessageMedia = (message: Message) => {
   );
 };
 
+const playAlertTone = (urgent = false) => {
+  try {
+    const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    const context = new AudioContextClass();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+
+    oscillator.type = 'sine';
+    oscillator.frequency.value = urgent ? 880 : 620;
+    gain.gain.value = urgent ? 0.12 : 0.07;
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + (urgent ? 0.28 : 0.16));
+  } catch (_) {}
+};
+
 export const ChatArea = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -269,6 +293,7 @@ export const ChatArea = () => {
   const [isMobileLayout, setIsMobileLayout] = useState(() => window.innerWidth <= 768);
   const [showClientListOnMobile, setShowClientListOnMobile] = useState(() => window.innerWidth <= 768);
   const [isSuggestingAi, setIsSuggestingAi] = useState(false);
+  const [handoffAlert, setHandoffAlert] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const hasAttemptedPhoneSyncRef = useRef(false);
 
@@ -349,6 +374,8 @@ export const ChatArea = () => {
       if (keys.length > 0) {
         setMessages((prev) => mergeMessageIntoKeys(prev, keys, message));
       }
+
+      playAlertTone(false);
     };
 
     const handleClientUpserted = (client: Client) => {
@@ -387,16 +414,28 @@ export const ChatArea = () => {
       }
     };
 
+    const handleBotHandoff = (data: any) => {
+      if (data.client?.id) {
+        setClients((prev) => mergeClientIntoList(prev, data.client, true));
+        setSelectedClient((current) => (current?.id === data.client.id ? data.client : current));
+      }
+
+      setHandoffAlert(`${data.client?.name || 'Cliente'} pediu para falar com atendente.`);
+      playAlertTone(true);
+    };
+
     socket.on('incoming_message', handleIncomingMessage);
     socket.on('client_upserted', handleClientUpserted);
     socket.on('client_deleted', handleClientDeleted);
     socket.on('message_sent', handleMessageSent);
+    socket.on('bot_handoff', handleBotHandoff);
 
     return () => {
       socket.off('incoming_message', handleIncomingMessage);
       socket.off('message_sent', handleMessageSent);
       socket.off('client_upserted', handleClientUpserted);
       socket.off('client_deleted', handleClientDeleted);
+      socket.off('bot_handoff', handleBotHandoff);
     };
   }, []);
 
@@ -497,7 +536,17 @@ export const ChatArea = () => {
   const isChatVisible = !isMobileLayout || (!showClientListOnMobile && !!selectedClient);
 
   return (
-    <div className={`chat-layout ${isMobileLayout ? 'chat-layout-mobile' : ''}`}>
+    <>
+      {handoffAlert && (
+        <div className="handoff-alert">
+          <span>{handoffAlert}</span>
+          <button type="button" onClick={() => setHandoffAlert('')}>
+            OK
+          </button>
+        </div>
+      )}
+
+      <div className={`chat-layout ${isMobileLayout ? 'chat-layout-mobile' : ''}`}>
       {isSidebarVisible && (
         <aside className="chat-sidebar">
           <div className="sidebar-search">
@@ -529,7 +578,7 @@ export const ChatArea = () => {
                 <span className="conv-info">
                   <span className="conv-header">
                     <span className="conv-name">{client.name}</span>
-                    <span className="conv-time">{client.status}</span>
+                    <span className="conv-time">{formatClientStatus(client.status)}</span>
                   </span>
                   <span className="conv-last-msg">{formatClientPhone(client)}</span>
                 </span>
@@ -640,6 +689,31 @@ export const ChatArea = () => {
       )}
 
       <style>{`
+        .handoff-alert {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.75rem;
+          margin-bottom: 0.85rem;
+          padding: 0.85rem 1rem;
+          color: #92400e;
+          background: #fffbeb;
+          border: 1px solid #f59e0b;
+          border-radius: 8px;
+          font-weight: 800;
+        }
+
+        .handoff-alert button {
+          min-width: 42px;
+          min-height: 34px;
+          color: #92400e;
+          background: #fff7ed;
+          border: 1px solid rgba(146, 64, 14, 0.24);
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 800;
+        }
+
         .chat-layout {
           display: flex;
           height: calc(100dvh - 240px);
@@ -1224,6 +1298,7 @@ export const ChatArea = () => {
           }
         }
       `}</style>
-    </div>
+      </div>
+    </>
   );
 };

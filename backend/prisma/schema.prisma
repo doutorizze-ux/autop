@@ -16,6 +16,7 @@ model User {
   createdAt DateTime @default(now())
   clients   Client[]
   quotes    Quote[]
+  botConfig BotConfig?
 }
 
 model Client {
@@ -87,4 +88,18 @@ model SystemConfig {
   themeColor   String   @default("#0056b3")
   themeLogo    String?
   updatedAt    DateTime @updatedAt
+}
+
+model BotConfig {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled         Boolean  @default(false)
+  trainingText    String?
+  menuText        String?
+  handoffKeywords String   @default("3,atendente,humano,pessoa,falar com atendente,vendedor")
+  handoffMessage  String?
+  fallbackText    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

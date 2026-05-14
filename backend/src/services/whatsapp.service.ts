@@ -18,6 +18,7 @@ import path from 'path';
 import pino from 'pino';
 import QRCode from 'qrcode';
 import { io } from '../index';
+import { BotService } from './bot.service';
 
 const prisma = new PrismaClient();
 const whatsappIdentityMapPath = path.join(__dirname, '../../data/whatsapp-identity-map.json');
@@ -444,6 +445,15 @@ function readClientHistory(history?: string | null): StoredChatMessage[] {
     } catch (_) {}
 
     return [{ text: history, fromMe: false, timestamp: Math.floor(Date.now() / 1000) }];
+}
+
+function mapHistoryForBot(history?: string | null) {
+    return readClientHistory(history).map((message) => ({
+        text: message.text,
+        fromMe: message.fromMe,
+        timestamp: message.timestamp,
+        mediaType: message.media?.type || '',
+    }));
 }
 
 async function appendClientMessage(clientId: string, message: StoredChatMessage, userId?: string) {
@@ -900,6 +910,8 @@ class WhatsAppSession {
                                 pushName,
                             });
 
+                            void this.handleBotAfterIncomingMessage(client, text);
+
                         }
                     }
                 }
@@ -959,6 +971,47 @@ class WhatsAppSession {
         const contacts = Object.values((this.store as any).contacts || {});
         if (contacts.length > 0) {
             await this.syncContacts(contacts);
+        }
+    }
+
+    private async handleBotAfterIncomingMessage(client: any, text: string) {
+        try {
+            const reply = await BotService.buildReply({
+                userId: this.userId,
+                clientName: client.name,
+                clientStatus: client.status,
+                incomingText: text,
+                messages: mapHistoryForBot(client.history),
+            });
+
+            if (reply.action === 'none') return;
+
+            if (reply.action === 'handoff') {
+                const updatedClient = await prisma.client.update({
+                    where: { id: client.id },
+                    data: { status: 'AGUARDANDO_ATENDENTE' },
+                });
+
+                this.emit('client_upserted', updatedClient);
+                this.emit('bot_handoff', {
+                    clientId: updatedClient.id,
+                    client: updatedClient,
+                    text,
+                    timestamp: Math.floor(Date.now() / 1000),
+                });
+
+                if (reply.message.trim()) {
+                    await this.sendMessage(updatedClient.whatsappJid || updatedClient.phone, reply.message);
+                }
+
+                return;
+            }
+
+            if (reply.message.trim()) {
+                await this.sendMessage(client.whatsappJid || client.phone, reply.message);
+            }
+        } catch (error) {
+            console.error('Erro ao responder com bot WhatsApp:', error);
         }
     }
 

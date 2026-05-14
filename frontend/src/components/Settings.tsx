@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { Save, User, Key, Shield, MessageSquare, AlertCircle, CheckCircle, Users, Plus, Trash2 } from 'lucide-react';
+import { Save, User, Key, Shield, MessageSquare, AlertCircle, CheckCircle, Users, Plus, Trash2, Bot } from 'lucide-react';
 import { API_URL } from '../services/api';
 
 type EmployeeUser = {
@@ -10,6 +10,15 @@ type EmployeeUser = {
     email: string;
     role: string;
     createdAt: string;
+};
+
+type BotConfig = {
+    enabled: boolean;
+    trainingText: string;
+    menuText: string;
+    handoffKeywords: string;
+    handoffMessage: string;
+    fallbackText: string;
 };
 
 export const Settings = () => {
@@ -33,6 +42,14 @@ export const Settings = () => {
         themeColor: '#0056b3',
         themeLogo: ''
     });
+    const [botConfig, setBotConfig] = useState<BotConfig>({
+        enabled: false,
+        trainingText: '',
+        menuText: '',
+        handoffKeywords: '',
+        handoffMessage: '',
+        fallbackText: '',
+    });
     const [appearanceData, setAppearanceData] = useState({
         color: localStorage.getItem('theme_color') || '#0056b3',
         logo: localStorage.getItem('theme_logo') || ''
@@ -47,6 +64,7 @@ export const Settings = () => {
     });
 
     useEffect(() => {
+        fetchBotConfig();
         if (user?.role === 'ADMIN') {
             fetchSystemConfig();
             fetchEmployees();
@@ -104,6 +122,30 @@ export const Settings = () => {
             setMessage({ type: 'success', text: 'Configurações globais salvas!' });
         } catch (err) {
             setMessage({ type: 'error', text: 'Erro ao salvar configurações' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchBotConfig = async () => {
+        try {
+            const response = await axios.get(`${API_URL}/api/bot/config`);
+            setBotConfig(response.data);
+        } catch (err) {
+            console.error('Erro ao buscar configuracao do bot');
+        }
+    };
+
+    const handleBotConfigSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+
+        try {
+            const response = await axios.put(`${API_URL}/api/bot/config`, botConfig);
+            setBotConfig(response.data);
+            setMessage({ type: 'success', text: 'Bot WhatsApp salvo para este usuario!' });
+        } catch (err: any) {
+            setMessage({ type: 'error', text: err.response?.data?.message || 'Erro ao salvar bot WhatsApp' });
         } finally {
             setLoading(false);
         }
@@ -179,7 +221,7 @@ export const Settings = () => {
 
             <div className="settings-layout">
                 <aside className="settings-nav">
-                    <button 
+                    <button
                         className={`settings-nav-item ${activeSection === 'perfil' ? 'active' : ''}`}
                         onClick={() => setActiveSection('perfil')}
                     >
@@ -204,6 +246,13 @@ export const Settings = () => {
                             <span>Integração IA</span>
                         </button>
                     )}
+                    <button
+                        className={`settings-nav-item ${activeSection === 'bot' ? 'active' : ''}`}
+                        onClick={() => setActiveSection('bot')}
+                    >
+                        <Bot size={18} />
+                        <span>Bot WhatsApp</span>
+                    </button>
                     <button 
                         className={`settings-nav-item ${activeSection === 'whatsapp' ? 'active' : ''}`}
                         onClick={() => setActiveSection('whatsapp')}
@@ -412,6 +461,81 @@ export const Settings = () => {
                         </div>
                     )}
 
+                    {activeSection === 'bot' && (
+                        <div className="settings-section">
+                            <div className="section-header">
+                                <h2>Bot WhatsApp deste usuario</h2>
+                                <p>Treine e ligue a resposta automatica apenas para o WhatsApp desta conta. Quando o cliente pedir atendente, o bot para e toca alerta.</p>
+                            </div>
+
+                            <form onSubmit={handleBotConfigSubmit} className="bot-config-form">
+                                <label className="bot-toggle-row">
+                                    <input
+                                        type="checkbox"
+                                        checked={botConfig.enabled}
+                                        onChange={e => setBotConfig({ ...botConfig, enabled: e.target.checked })}
+                                    />
+                                    <span>
+                                        <strong>Responder automaticamente quando este WhatsApp receber mensagem</strong>
+                                        <small>Desligado por padrao. O funcionario pode ligar/desligar quando quiser.</small>
+                                    </span>
+                                </label>
+
+                                <div className="form-group">
+                                    <label>Treinamento da loja para esta IA</label>
+                                    <textarea
+                                        className="form-input bot-textarea"
+                                        value={botConfig.trainingText}
+                                        onChange={e => setBotConfig({ ...botConfig, trainingText: e.target.value })}
+                                        placeholder="Ex: nome da loja, horario, endereco, formas de pagamento, politica de garantia, tom de voz, regras de desconto, quando pedir dados do veiculo..."
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Menu automatico</label>
+                                    <textarea
+                                        className="form-input bot-textarea small"
+                                        value={botConfig.menuText}
+                                        onChange={e => setBotConfig({ ...botConfig, menuText: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Palavras que chamam atendente</label>
+                                    <input
+                                        className="form-input"
+                                        value={botConfig.handoffKeywords}
+                                        onChange={e => setBotConfig({ ...botConfig, handoffKeywords: e.target.value })}
+                                        placeholder="atendente,humano,pessoa,falar com atendente,3"
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Mensagem quando chamar atendente</label>
+                                    <input
+                                        className="form-input"
+                                        value={botConfig.handoffMessage}
+                                        onChange={e => setBotConfig({ ...botConfig, handoffMessage: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Resposta de seguranca se a IA falhar</label>
+                                    <input
+                                        className="form-input"
+                                        value={botConfig.fallbackText}
+                                        onChange={e => setBotConfig({ ...botConfig, fallbackText: e.target.value })}
+                                    />
+                                </div>
+
+                                <button type="submit" className="btn-primary" disabled={loading}>
+                                    <Save size={18} />
+                                    <span>{loading ? 'Salvando...' : 'Salvar Bot WhatsApp'}</span>
+                                </button>
+                            </form>
+                        </div>
+                    )}
+
                     {activeSection === 'aparencia' && (
                         <div className="settings-section">
                             <div className="section-header">
@@ -606,6 +730,44 @@ export const Settings = () => {
                     gap: 1rem;
                     align-items: center;
                     flex-wrap: wrap;
+                }
+                .bot-config-form {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1rem;
+                }
+                .bot-toggle-row {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 0.85rem;
+                    padding: 1rem;
+                    background: var(--bg-color);
+                    border: 1px solid var(--border-color);
+                    border-radius: 8px;
+                    cursor: pointer;
+                }
+                .bot-toggle-row input {
+                    width: 18px;
+                    height: 18px;
+                    margin-top: 0.2rem;
+                    flex: 0 0 auto;
+                }
+                .bot-toggle-row span {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.25rem;
+                }
+                .bot-toggle-row small {
+                    color: var(--text-muted);
+                    line-height: 1.4;
+                }
+                .bot-textarea {
+                    min-height: 150px;
+                    resize: vertical;
+                    line-height: 1.45;
+                }
+                .bot-textarea.small {
+                    min-height: 110px;
                 }
                 .logo-preview {
                     margin-top: 0.75rem;

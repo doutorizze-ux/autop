@@ -15,6 +15,7 @@ import aiRoutes from './routes/ai.routes';
 import configRoutes from './routes/config.routes';
 import localAgentRoutes from './routes/local-agent.routes';
 import catalogRoutes from './routes/catalog.routes';
+import botRoutes from './routes/bot.routes';
 
 
 dotenv.config();
@@ -72,6 +73,7 @@ app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/quotes', quoteRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/bot', botRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/local-agent', localAgentRoutes);
 app.use('/api/catalog', catalogRoutes);
