@@ -41,7 +41,14 @@ type StoredChatMedia = {
     fileName?: string;
 };
 
+type SendMessageOptions = {
+    typing?: boolean;
+    typingDelayMs?: number;
+};
+
 type SocketEventEmitter = (event: string, payload: Record<string, any>) => void;
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function normalizeWhatsappPhone(jid: string) {
     return String(jid || '').replace(/@s\.whatsapp\.net$/, '').replace(/\D/g, '');
@@ -1078,14 +1085,14 @@ class WhatsAppSession {
                 });
 
                 if (reply.message.trim()) {
-                    await this.sendMessage(updatedClient.whatsappJid || updatedClient.phone, reply.message);
+                    await this.sendMessage(updatedClient.whatsappJid || updatedClient.phone, reply.message, { typing: true });
                 }
 
                 return;
             }
 
             if (reply.message.trim()) {
-                await this.sendMessage(client.whatsappJid || client.phone, reply.message);
+                await this.sendMessage(client.whatsappJid || client.phone, reply.message, { typing: true });
             }
         } catch (error) {
             console.error('Erro ao responder com bot WhatsApp:', error);
@@ -1151,7 +1158,37 @@ class WhatsAppSession {
         await this.init();
     }
 
-    async sendMessage(to: string, text: string) {
+    private getTypingDelay(text: string, explicitDelay?: number) {
+        if (explicitDelay && explicitDelay > 0) {
+            return Math.min(Math.max(explicitDelay, 600), 4500);
+        }
+
+        const estimated = 900 + String(text || '').length * 18;
+        return Math.min(Math.max(estimated, 1200), 3800);
+    }
+
+    private async showTyping(jid: string, text: string, delayMs?: number) {
+        if (!this.sock) return;
+
+        try {
+            await this.sock.presenceSubscribe?.(jid);
+            await wait(250);
+            await this.sock.sendPresenceUpdate?.('composing', jid);
+            await wait(this.getTypingDelay(text, delayMs));
+        } catch (error) {
+            console.error('Erro ao enviar status digitando:', error);
+        }
+    }
+
+    private async hideTyping(jid: string) {
+        if (!this.sock) return;
+
+        try {
+            await this.sock.sendPresenceUpdate?.('paused', jid);
+        } catch (_) {}
+    }
+
+    async sendMessage(to: string, text: string, options: SendMessageOptions = {}) {
         if (!this.sock || this.status !== 'connected') {
             throw new Error('WhatsApp não conectado');
         }
@@ -1172,7 +1209,18 @@ class WhatsAppSession {
             jid = confirmed?.jid || requestedJid;
         }
 
-        const sentMessage = await this.sock.sendMessage(jid, { text });
+        if (options.typing) {
+            await this.showTyping(jid, text, options.typingDelayMs);
+        }
+
+        let sentMessage: any;
+        try {
+            sentMessage = await this.sock.sendMessage(jid, { text });
+        } finally {
+            if (options.typing) {
+                await this.hideTyping(jid);
+            }
+        }
         const messageId = sentMessage?.key?.id || '';
 
         if (!messageId) {
