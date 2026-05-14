@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Sparkles,
   Rocket,
+  X,
 } from 'lucide-react';
 import { Clients } from '../components/Clients';
 import { WhatsAppConnect } from '../components/WhatsAppConnect';
@@ -77,6 +78,8 @@ const normalizeText = (value: string) =>
     .replace(/[\u0300-\u036f]/g, '')
     .trim();
 
+const getTeamEmployeeKey = (employee: TeamQuoteEmployee) => employee.userId || employee.email || employee.name;
+
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, caption: 'Menus principais' },
   { id: 'clientes', label: 'Clientes', icon: Users, caption: 'CRM e funil' },
@@ -108,6 +111,7 @@ export const Dashboard = () => {
   const [isTeamQuoteHistoryLoading, setIsTeamQuoteHistoryLoading] = useState(false);
   const [teamQuoteHistoryError, setTeamQuoteHistoryError] = useState('');
   const [teamQuoteSearch, setTeamQuoteSearch] = useState('');
+  const [selectedTeamEmployeeKey, setSelectedTeamEmployeeKey] = useState('');
 
   useEffect(() => {
     const applyTheme = (themeColor?: string, logo?: string) => {
@@ -244,7 +248,29 @@ export const Dashboard = () => {
       .filter((employee) => employee.quotes.length > 0 || normalizeText(`${employee.name} ${employee.email}`).includes(term));
   }, [teamQuoteHistory.employees, teamQuoteSearch]);
 
+  const selectedTeamEmployee = useMemo(() => {
+    if (!selectedTeamEmployeeKey) return null;
+
+    return (
+      filteredTeamQuoteEmployees.find((employee) => getTeamEmployeeKey(employee) === selectedTeamEmployeeKey) ||
+      teamQuoteHistory.employees.find((employee) => getTeamEmployeeKey(employee) === selectedTeamEmployeeKey) ||
+      null
+    );
+  }, [filteredTeamQuoteEmployees, selectedTeamEmployeeKey, teamQuoteHistory.employees]);
+
+  useEffect(() => {
+    if (!selectedTeamEmployeeKey) return;
+    const stillExists = teamQuoteHistory.employees.some(
+      (employee) => getTeamEmployeeKey(employee) === selectedTeamEmployeeKey
+    );
+
+    if (!stillExists) {
+      setSelectedTeamEmployeeKey('');
+    }
+  }, [selectedTeamEmployeeKey, teamQuoteHistory.employees]);
+
   const handleOpenTeamQuote = (quoteId: string) => {
+    setSelectedTeamEmployeeKey('');
     setQuoteToOpen(quoteId);
     setActiveTab('cotacoes');
   };
@@ -394,46 +420,57 @@ export const Dashboard = () => {
                   ) : filteredTeamQuoteEmployees.length === 0 ? (
                     <div className="admin-team-empty">Nenhuma cotacao encontrada para o filtro atual.</div>
                   ) : (
-                    <div className="admin-team-list">
-                      {filteredTeamQuoteEmployees.map((employee) => (
-                        <article className="admin-employee-quotes" key={employee.userId || employee.email || employee.name}>
-                          <div className="admin-employee-header">
-                            <div>
-                              <strong>{employee.name}</strong>
-                              <span>{employee.email || 'Sem e-mail vinculado'}</span>
-                            </div>
-                            <div className="admin-employee-stats">
-                              <span>{employee.role === 'ADMIN' ? 'Admin' : 'Funcionario'}</span>
-                              <span>{employee.quoteCount} cotacoes</span>
-                              <span>Ultima: {formatDateTime(employee.lastQuoteAt)}</span>
-                            </div>
-                          </div>
+                    <div className="admin-team-card-grid">
+                      {filteredTeamQuoteEmployees.map((employee) => {
+                        const employeeKey = getTeamEmployeeKey(employee);
+                        const latestQuote = employee.quotes[0];
 
-                          {employee.quotes.length === 0 ? (
-                            <div className="admin-employee-empty">Nenhuma cotacao salva para este funcionario.</div>
-                          ) : (
-                            <div className="admin-quote-rows">
-                              {employee.quotes.map((quote) => (
-                                <button
-                                  type="button"
-                                  className="admin-quote-row"
-                                  key={quote.id}
-                                  onClick={() => handleOpenTeamQuote(quote.id)}
-                                >
-                                  <span className="admin-quote-date">
-                                    <CalendarClock size={14} /> {formatDateTime(quote.createdAt)}
-                                  </span>
-                                  <span className="admin-quote-title">{quote.title}</span>
-                                  <span className="admin-quote-count">{quote.itemCount} {quote.itemCount === 1 ? 'item' : 'itens'}</span>
-                                  <span className="admin-quote-open">
-                                    <FolderOpen size={15} /> Abrir
-                                  </span>
-                                </button>
-                              ))}
+                        return (
+                          <article className="admin-employee-card" key={employeeKey}>
+                            <div className="admin-employee-card-top">
+                              <span className="admin-employee-avatar">
+                                <Users size={20} />
+                              </span>
+                              <div>
+                                <strong>{employee.name}</strong>
+                                <span>{employee.email || 'Sem e-mail vinculado'}</span>
+                              </div>
                             </div>
-                          )}
-                        </article>
-                      ))}
+
+                            <div className="admin-employee-card-metrics">
+                              <span>
+                                <strong>{employee.quoteCount}</strong>
+                                <small>cotacoes</small>
+                              </span>
+                              <span>
+                                <strong>{formatDateTime(employee.lastQuoteAt)}</strong>
+                                <small>ultima cotacao</small>
+                              </span>
+                            </div>
+
+                            <div className="admin-employee-last-quote">
+                              {latestQuote ? (
+                                <>
+                                  <small>Mais recente</small>
+                                  <strong>{latestQuote.title}</strong>
+                                </>
+                              ) : (
+                                <span>Nenhuma cotacao salva ainda.</span>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              className="admin-employee-open-btn"
+                              onClick={() => setSelectedTeamEmployeeKey(employeeKey)}
+                              disabled={employee.quotes.length === 0}
+                            >
+                              <FolderOpen size={16} />
+                              Ver cotacoes
+                            </button>
+                          </article>
+                        );
+                      })}
                     </div>
                   )}
                 </section>
@@ -482,6 +519,52 @@ export const Dashboard = () => {
           {activeTab === 'roadmap' && <Roadmap />}
           {activeTab === 'config' && <SettingsComponent />}
         </section>
+
+        {selectedTeamEmployee && (
+          <div className="modal-overlay">
+            <div className="modal-content admin-quotes-modal">
+              <div className="admin-quotes-modal-header">
+                <div>
+                  <span className="admin-team-kicker">Cotacoes do funcionario</span>
+                  <h3>{selectedTeamEmployee.name}</h3>
+                  <p>{selectedTeamEmployee.email || 'Sem e-mail vinculado'}</p>
+                </div>
+                <button type="button" onClick={() => setSelectedTeamEmployeeKey('')} title="Fechar">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="admin-quotes-modal-summary">
+                <span>{selectedTeamEmployee.quoteCount} cotacoes no total</span>
+                <span>Ultima: {formatDateTime(selectedTeamEmployee.lastQuoteAt)}</span>
+              </div>
+
+              {selectedTeamEmployee.quotes.length === 0 ? (
+                <div className="admin-team-empty">Nenhuma cotacao salva para este funcionario.</div>
+              ) : (
+                <div className="admin-modal-quote-list">
+                  {selectedTeamEmployee.quotes.map((quote) => (
+                    <button
+                      type="button"
+                      className="admin-modal-quote-row"
+                      key={quote.id}
+                      onClick={() => handleOpenTeamQuote(quote.id)}
+                    >
+                      <span className="admin-quote-date">
+                        <CalendarClock size={14} /> {formatDateTime(quote.createdAt)}
+                      </span>
+                      <span className="admin-quote-title">{quote.title}</span>
+                      <span className="admin-quote-count">{quote.itemCount} {quote.itemCount === 1 ? 'item' : 'itens'}</span>
+                      <span className="admin-quote-open">
+                        <FolderOpen size={15} /> Abrir
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {showSuppliersPasswordModal && (
           <div className="modal-overlay">

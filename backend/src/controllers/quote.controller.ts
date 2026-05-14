@@ -1001,6 +1001,7 @@ export const listTeamQuoteHistory = async (req: Request, res: Response) => {
 
         const [users, quotes] = await Promise.all([
             prisma.user.findMany({
+                where: { role: 'FUNCIONARIO' },
                 orderBy: { name: 'asc' },
                 select: {
                     id: true,
@@ -1010,6 +1011,11 @@ export const listTeamQuoteHistory = async (req: Request, res: Response) => {
                 },
             }),
             prisma.quote.findMany({
+                where: {
+                    user: {
+                        is: { role: 'FUNCIONARIO' },
+                    },
+                },
                 orderBy: { createdAt: 'desc' },
                 include: {
                     user: {
@@ -1040,21 +1046,12 @@ export const listTeamQuoteHistory = async (req: Request, res: Response) => {
 
         quotes.forEach((quote) => {
             const owner = quote.user;
-            const groupKey = owner?.id || 'sem-funcionario';
+            if (!owner || owner.role !== 'FUNCIONARIO') return;
 
-            if (!grouped.has(groupKey)) {
-                grouped.set(groupKey, {
-                    userId: owner?.id || null,
-                    name: owner?.name || 'Sem funcionario vinculado',
-                    email: owner?.email || '',
-                    role: owner?.role || 'SEM_VINCULO',
-                    quoteCount: 0,
-                    lastQuoteAt: null,
-                    quotes: [],
-                });
-            }
-
+            const groupKey = owner.id;
             const group = grouped.get(groupKey);
+            if (!group) return;
+
             group.quotes.push(mapQuoteHistoryEntry(quote));
             group.quoteCount += 1;
             group.lastQuoteAt = group.lastQuoteAt || quote.createdAt;
