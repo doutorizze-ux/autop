@@ -150,8 +150,56 @@ const buildVariantGroupLabel = (group: VariantGroup) => {
     return parts.join(' • ');
 };
 
+const buildVariantSelectionKey = (query: string, provider: string) => `${query}::${provider}`;
+
 const buildOfferSelectionKey = (query: string, provider: string, variantKey?: string) =>
     `${query}::${provider}::${variantKey || 'all'}`;
+
+const buildVariantGroups = (results: QuoteResult[], query: string) => {
+    const groupMap = new Map<string, VariantGroup>();
+    const normalizedQueryCode = normalizeCodeValue(query);
+
+    results.forEach((entry) => {
+        const key = buildVariantGroupKey(entry);
+        if (!key) return;
+
+        const existing = groupMap.get(key);
+        const entryPrice = parsePriceValue(entry.price);
+        const entryCode = normalizeCodeValue(entry.code);
+
+        if (!existing) {
+            groupMap.set(key, {
+                key,
+                title: String(entry.product || 'Peça sem descrição'),
+                application: entry.application ? String(entry.application) : '',
+                code: entry.code ? String(entry.code) : '',
+                brands: entry.brand ? [String(entry.brand)] : [],
+                offersCount: 1,
+                bestPrice: entryPrice,
+                exactMatch: !!entryCode && entryCode === normalizedQueryCode,
+            });
+            return;
+        }
+
+        existing.offersCount += 1;
+        existing.bestPrice = Math.min(existing.bestPrice, entryPrice);
+        if (!existing.code && entry.code) existing.code = String(entry.code);
+        if (!existing.application && entry.application) existing.application = String(entry.application);
+        if (!existing.title && entry.product) existing.title = String(entry.product);
+        if (entry.brand && !existing.brands.includes(String(entry.brand))) {
+            existing.brands.push(String(entry.brand));
+        }
+        if (!!entryCode && entryCode === normalizedQueryCode) {
+            existing.exactMatch = true;
+        }
+    });
+
+    return Array.from(groupMap.values()).sort((a, b) => {
+        if (a.exactMatch !== b.exactMatch) return a.exactMatch ? -1 : 1;
+        if (a.bestPrice !== b.bestPrice) return a.bestPrice - b.bestPrice;
+        return a.title.localeCompare(b.title, 'pt-BR');
+    });
+};
 
 const sortSupplierResults = (results: QuoteResult[], query: string) => {
     const normalizedQueryCode = normalizeCodeValue(query);
@@ -224,7 +272,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
     const [quoteJobStatus, setQuoteJobStatus] = useState('');
     const [quoteJobError, setQuoteJobError] = useState('');
     const [selectedOfferByQuerySupplier, setSelectedOfferByQuerySupplier] = useState<Record<string, string>>({});
-    const [selectedVariantByQuery, setSelectedVariantByQuery] = useState<Record<string, string>>({});
+    const [selectedVariantByQuerySupplier, setSelectedVariantByQuerySupplier] = useState<Record<string, string>>({});
     const [activeResultView, setActiveResultView] = useState<'summary' | string>('summary');
 
     const scrollToResults = () => {
@@ -253,7 +301,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
         setQuoteMatrix(data.matrix || {});
         setSuppliers(data.suppliers || []);
         setSelectedOfferByQuerySupplier({});
-        setSelectedVariantByQuery({});
+        setSelectedVariantByQuerySupplier({});
 
         if (data.jobId) {
             setActiveJobId(data.jobId);
@@ -504,7 +552,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
             setQuoteMatrix(response.data.matrix || {});
             setSuppliers(response.data.suppliers || []);
             setSelectedOfferByQuerySupplier({});
-            setSelectedVariantByQuery({});
+            setSelectedVariantByQuerySupplier({});
             setCurrentQuoteId(response.data.quoteId || quoteId);
             setCurrentCreatedAt(response.data.createdAt);
             setIsSearching(false);
@@ -531,71 +579,40 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
         }
     }, [activeResultView, suppliers]);
 
-    const variantGroupsByQuery = useMemo(() => {
-        const groupsByQuery: Record<string, VariantGroup[]> = {};
+    const variantGroupsByQuerySupplier = useMemo(() => {
+        const groupsByQuerySupplier: Record<string, VariantGroup[]> = {};
 
         partList.forEach((item) => {
-            const sourceResults = (quoteMatrix[item.query] || []).filter((entry) => !entry.error && !entry.whatsappStatus);
-            const groupMap = new Map<string, VariantGroup>();
+            const sourceResults = quoteMatrix[item.query] || [];
+            const providerNames = Array.from(new Set([...suppliers, ...sourceResults.map((entry) => entry.provider).filter(Boolean)]));
 
-            sourceResults.forEach((entry) => {
-                const key = buildVariantGroupKey(entry);
-                if (!key) return;
-
-                const existing = groupMap.get(key);
-                const entryPrice = parsePriceValue(entry.price);
-                const entryCode = normalizeCodeValue(entry.code);
-                const normalizedQueryCode = normalizeCodeValue(item.query);
-
-                if (!existing) {
-                    groupMap.set(key, {
-                        key,
-                        title: String(entry.product || 'Peça sem descrição'),
-                        application: entry.application ? String(entry.application) : '',
-                        code: entry.code ? String(entry.code) : '',
-                        brands: entry.brand ? [String(entry.brand)] : [],
-                        offersCount: 1,
-                        bestPrice: entryPrice,
-                        exactMatch: !!entryCode && entryCode === normalizedQueryCode,
-                    });
-                    return;
-                }
-
-                existing.offersCount += 1;
-                existing.bestPrice = Math.min(existing.bestPrice, entryPrice);
-                if (!existing.code && entry.code) existing.code = String(entry.code);
-                if (!existing.application && entry.application) existing.application = String(entry.application);
-                if (!existing.title && entry.product) existing.title = String(entry.product);
-                if (entry.brand && !existing.brands.includes(String(entry.brand))) {
-                    existing.brands.push(String(entry.brand));
-                }
-                if (!!entryCode && entryCode === normalizedQueryCode) {
-                    existing.exactMatch = true;
-                }
-            });
-
-            groupsByQuery[item.query] = Array.from(groupMap.values()).sort((a, b) => {
-                if (a.exactMatch !== b.exactMatch) return a.exactMatch ? -1 : 1;
-                if (a.bestPrice !== b.bestPrice) return a.bestPrice - b.bestPrice;
-                return a.title.localeCompare(b.title, 'pt-BR');
+            providerNames.forEach((provider) => {
+                const providerResults = sourceResults.filter((entry) => entry.provider === provider && !entry.error && !entry.whatsappStatus);
+                groupsByQuerySupplier[buildVariantSelectionKey(item.query, provider)] = buildVariantGroups(providerResults, item.query);
             });
         });
 
-        return groupsByQuery;
-    }, [partList, quoteMatrix]);
+        return groupsByQuerySupplier;
+    }, [partList, quoteMatrix, suppliers]);
 
-    const resolvedVariantSelectionByQuery = useMemo(() => {
+    const resolvedVariantSelectionByQuerySupplier = useMemo(() => {
         const resolved: Record<string, string> = {};
 
         partList.forEach((item) => {
-            const variants = variantGroupsByQuery[item.query] || [];
-            const preferred = selectedVariantByQuery[item.query];
-            const exists = variants.some((group) => group.key === preferred);
-            resolved[item.query] = exists ? preferred : variants[0]?.key || '';
+            const sourceResults = quoteMatrix[item.query] || [];
+            const providerNames = Array.from(new Set([...suppliers, ...sourceResults.map((entry) => entry.provider).filter(Boolean)]));
+
+            providerNames.forEach((provider) => {
+                const variantSelectionKey = buildVariantSelectionKey(item.query, provider);
+                const variants = variantGroupsByQuerySupplier[variantSelectionKey] || [];
+                const preferred = selectedVariantByQuerySupplier[variantSelectionKey];
+                const exists = variants.some((group) => group.key === preferred);
+                resolved[variantSelectionKey] = exists ? preferred : variants[0]?.key || '';
+            });
         });
 
         return resolved;
-    }, [partList, selectedVariantByQuery, variantGroupsByQuery]);
+    }, [partList, quoteMatrix, selectedVariantByQuerySupplier, suppliers, variantGroupsByQuerySupplier]);
 
     const selectedOffersByQuerySupplier = useMemo(() => {
         const selections: Record<string, Record<string, QuoteResult | null>> = {};
@@ -604,9 +621,9 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
             const sourceResults = quoteMatrix[item.query] || [];
             const providerNames = Array.from(new Set([...suppliers, ...sourceResults.map((entry) => entry.provider).filter(Boolean)]));
             const querySelections: Record<string, QuoteResult | null> = {};
-            const selectedVariantKey = resolvedVariantSelectionByQuery[item.query];
 
             providerNames.forEach((provider) => {
+                const selectedVariantKey = resolvedVariantSelectionByQuerySupplier[buildVariantSelectionKey(item.query, provider)];
                 const providerResults = getProviderResultsForVariant(
                     sourceResults,
                     provider,
@@ -631,7 +648,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
         });
 
         return selections;
-    }, [partList, quoteMatrix, resolvedVariantSelectionByQuery, selectedOfferByQuerySupplier, suppliers]);
+    }, [partList, quoteMatrix, resolvedVariantSelectionByQuerySupplier, selectedOfferByQuerySupplier, suppliers]);
 
     return (
         <div className="quotes-container">
@@ -784,9 +801,6 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                         {partList.map((item) => {
                             const rawResults = quoteMatrix[item.query] || [];
                             const normalizedQueryCode = normalizeCodeValue(item.query);
-                            const variantGroups = variantGroupsByQuery[item.query] || [];
-                            const selectedVariantKey = resolvedVariantSelectionByQuery[item.query];
-                            const selectedVariant = variantGroups.find((group) => group.key === selectedVariantKey) || null;
                             const viewProviders =
                                 activeResultView === 'summary'
                                     ? suppliers
@@ -795,6 +809,10 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                         : [];
                             const providerCards = viewProviders
                                 .map((provider) => {
+                                    const variantSelectionKey = buildVariantSelectionKey(item.query, provider);
+                                    const variantGroups = variantGroupsByQuerySupplier[variantSelectionKey] || [];
+                                    const selectedVariantKey = resolvedVariantSelectionByQuerySupplier[variantSelectionKey] || '';
+                                    const selectedVariant = variantGroups.find((group) => group.key === selectedVariantKey) || null;
                                     const providerResults = getProviderResultsForVariant(
                                         rawResults,
                                         provider,
@@ -816,6 +834,10 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                         providerResults,
                                         selectedResult,
                                         hasExactMatch,
+                                        variantSelectionKey,
+                                        variantGroups,
+                                        selectedVariantKey,
+                                        selectedVariant,
                                     };
                                 })
                                 .filter((card) => activeResultView === 'summary' ? !!card.selectedResult : true);
@@ -859,39 +881,6 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                             ? 'Mostrando primeiro as ofertas reais do código exato pesquisado.'
                                             : 'Código exato não apareceu. Abaixo estão os similares reais retornados pelos fornecedores.'}
                                     </div>
-
-                                    {variantGroups.length > 1 && (
-                                        <div className="query-variant-selector">
-                                            <label htmlFor={`variant-${item.query}`}>Peça escolhida para comparar neste código</label>
-                                            <select
-                                                id={`variant-${item.query}`}
-                                                value={selectedVariantKey}
-                                                onChange={(event) =>
-                                                    setSelectedVariantByQuery((current) => ({
-                                                        ...current,
-                                                        [item.query]: event.target.value,
-                                                    }))
-                                                }
-                                            >
-                                                {variantGroups.map((group) => (
-                                                    <option key={group.key} value={group.key}>
-                                                        {buildVariantGroupLabel(group)}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            {selectedVariant && (
-                                                <div className="query-variant-summary">
-                                                    <strong>{selectedVariant.title}</strong>
-                                                    {selectedVariant.application && <span>{selectedVariant.application}</span>}
-                                                    <small>
-                                                        {selectedVariant.brands.length > 0
-                                                            ? `Fabricantes: ${selectedVariant.brands.join(', ')}`
-                                                            : 'Fabricante não informado'}
-                                                    </small>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
 
                                     <div className="supplier-results-grid compact-results-grid">
                                         {providerCards.length > 0 ? (
@@ -956,6 +945,38 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                                             )}
                                                         </div>
 
+                                                        {card.variantGroups.length > 1 && !supplierResult.whatsappStatus && (
+                                                            <div className="supplier-offer-selector">
+                                                                <label>Peça escolhida para comparar neste fornecedor</label>
+                                                                <select
+                                                                    value={card.selectedVariantKey}
+                                                                    onChange={(event) =>
+                                                                        setSelectedVariantByQuerySupplier((current) => ({
+                                                                            ...current,
+                                                                            [card.variantSelectionKey]: event.target.value,
+                                                                        }))
+                                                                    }
+                                                                >
+                                                                    {card.variantGroups.map((group) => (
+                                                                        <option key={group.key} value={group.key}>
+                                                                            {buildVariantGroupLabel(group)}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                                {card.selectedVariant && (
+                                                                    <div className="query-variant-summary supplier-variant-summary">
+                                                                        <strong>{card.selectedVariant.title}</strong>
+                                                                        {card.selectedVariant.application && <span>{card.selectedVariant.application}</span>}
+                                                                        <small>
+                                                                            {card.selectedVariant.brands.length > 0
+                                                                                ? `Fabricantes: ${card.selectedVariant.brands.join(', ')}`
+                                                                                : 'Fabricante não informado'}
+                                                                        </small>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+
                                                         {card.providerResults.length > 1 && (
                                                             <div className="supplier-offer-selector">
                                                                 <label>Escolha fabricante / similar neste fornecedor</label>
@@ -964,7 +985,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                                                     onChange={(event) =>
                                                                         setSelectedOfferByQuerySupplier((current) => ({
                                                                             ...current,
-                                                                            [buildOfferSelectionKey(item.query, card.provider, selectedVariantKey)]: event.target.value,
+                                                                            [buildOfferSelectionKey(item.query, card.provider, card.selectedVariantKey)]: event.target.value,
                                                                         }))
                                                                     }
                                                                 >
