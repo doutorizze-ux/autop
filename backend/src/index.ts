@@ -59,7 +59,11 @@ io.on('connection', (socket) => {
 app.use(cors());
 app.use(express.json({ limit: '12mb' }));
 app.use('/media/whatsapp', express.static(path.join(__dirname, '../data/whatsapp-media'), {
-    setHeaders: (res) => {
+    setHeaders: (res, filePath) => {
+        const extension = path.extname(filePath).toLowerCase();
+        if (extension === '.mp3') res.setHeader('Content-Type', 'audio/mpeg');
+        if (extension === '.ogg') res.setHeader('Content-Type', 'audio/ogg');
+        if (extension === '.m4a') res.setHeader('Content-Type', 'audio/mp4');
         res.setHeader('Cache-Control', 'public, max-age=86400');
         res.setHeader('Accept-Ranges', 'bytes');
         res.setHeader('Content-Disposition', 'inline');

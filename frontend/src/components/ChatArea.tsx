@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import { ArrowLeft, Bot, ExternalLink, FileText, Image as ImageIcon, Loader2, Mic, Paperclip, Search, Send, User, Users2, Video } from 'lucide-react';
+import { ArrowLeft, Bot, Download, ExternalLink, FileText, Image as ImageIcon, Loader2, Mic, Paperclip, Search, Send, User, Users2, Video } from 'lucide-react';
 import { API_URL } from '../services/api';
 import { socket } from '../services/socket';
 
@@ -161,9 +161,27 @@ const resolveMediaUrl = (url?: string) => {
   return url.startsWith('http') ? url : `${API_URL}${url}`;
 };
 
+const isPlaceholderMediaText = (text?: string) => {
+  const normalized = String(text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+  return (
+    normalized.includes('audio recebido') ||
+    String(text || '').toLowerCase().includes('udio recebido') ||
+    normalized === '[imagem recebida]' ||
+    normalized === '[video recebido]' ||
+    normalized === '[audio recebido]' ||
+    normalized === '[documento recebido]' ||
+    normalized === '[figurinha recebida]'
+  );
+};
+
 const shouldShowMessageText = (message: Message) => {
   if (!message.text?.trim()) return false;
-  if (!message.media) return true;
+  if (isPlaceholderMediaText(message.text)) return false;
   const mediaLabels = new Set([
     '[Imagem recebida]',
     '[Vídeo recebido]',
@@ -242,12 +260,15 @@ const renderMessageMedia = (message: Message) => {
           <span className="message-media-icon">{renderMediaIcon(media)}</span>
           <strong>{mediaLabel}</strong>
         </div>
-        <audio className="message-audio" controls preload="metadata">
-          <source src={mediaUrl} type={media.mimetype || undefined} />
-        </audio>
-        <a className="message-open-link" href={mediaUrl} target="_blank" rel="noreferrer">
-          <ExternalLink size={14} /> {getOpenMediaLabel(media)}
-        </a>
+        <audio className="message-audio" controls preload="metadata" src={mediaUrl} />
+        <div className="message-media-actions">
+          <a className="message-open-link" href={mediaUrl} target="_blank" rel="noreferrer">
+            <ExternalLink size={14} /> {getOpenMediaLabel(media)}
+          </a>
+          <a className="message-open-link" href={mediaUrl} download={media.fileName || 'audio-whatsapp.mp3'}>
+            <Download size={14} /> Baixar audio
+          </a>
+        </div>
       </div>
     );
   }
@@ -261,6 +282,27 @@ const renderMessageMedia = (message: Message) => {
       <a className="message-document" href={mediaUrl} target="_blank" rel="noreferrer">
         <ExternalLink size={14} /> {media.fileName || 'Abrir documento'}
       </a>
+    </div>
+  );
+};
+
+const renderMissingMediaNotice = (message: Message) => {
+  if (message.media || !isPlaceholderMediaText(message.text)) return null;
+  const normalized = String(message.text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const isAudio = normalized.includes('audio') || String(message.text || '').toLowerCase().includes('udio');
+
+  return (
+    <div className="message-media-card missing-media-card">
+      <div className="message-media-header">
+        <span className="message-media-icon">{isAudio ? <Mic size={17} /> : <FileText size={17} />}</span>
+        <strong>{isAudio ? 'Audio recebido' : 'Midia recebida'}</strong>
+      </div>
+      <span className="missing-media-note">
+        Este arquivo chegou sem anexo salvo. Peca para o cliente reenviar para tocar aqui.
+      </span>
     </div>
   );
 };
@@ -624,6 +666,7 @@ export const ChatArea = () => {
               <div key={`${message.timestamp}-${index}`} className={`message-wrapper ${message.fromMe ? 'sent' : 'received'}`}>
                 <div className={`message-bubble ${message.media ? `has-media media-${message.media.type}` : ''}`}>
                   {renderMessageMedia(message)}
+                  {renderMissingMediaNotice(message)}
                   {shouldShowMessageText(message) ? <p>{message.text}</p> : null}
                   <span className="msg-time">
                     {new Date(message.timestamp * 1000).toLocaleTimeString([], {
@@ -1120,6 +1163,28 @@ export const ChatArea = () => {
           min-width: 270px;
           max-width: 340px;
           height: 42px;
+        }
+
+        .message-media-actions {
+          display: flex;
+          align-items: center;
+          gap: 0.45rem;
+          flex-wrap: wrap;
+        }
+
+        .missing-media-card {
+          max-width: 320px;
+        }
+
+        .missing-media-note {
+          display: block;
+          padding: 0.55rem 0.7rem;
+          color: #92400e;
+          background: #fffbeb;
+          border: 1px solid rgba(245, 158, 11, 0.28);
+          border-radius: 10px;
+          font-size: 0.82rem;
+          line-height: 1.35;
         }
 
         .message-open-link,

@@ -13,10 +13,12 @@ import { downloadHistory } from '@whiskeysockets/baileys/lib/Utils/history';
 import { Boom } from '@hapi/boom';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
 import pino from 'pino';
 import QRCode from 'qrcode';
+import ffmpegPath from 'ffmpeg-static';
 import { io } from '../index';
 import { BotService } from './bot.service';
 
@@ -392,6 +394,65 @@ function getMediaExtension(mimetype?: string, fileName?: string) {
     return 'bin';
 }
 
+function cleanMimeType(mimetype?: string) {
+    return String(mimetype || '').toLowerCase().split(';')[0].trim();
+}
+
+function getStoredMediaMime(mediaKind: StoredChatMedia['type'], mimetype?: string, extension?: string) {
+    const cleanMime = cleanMimeType(mimetype);
+
+    if (mediaKind === 'audio') {
+        if (extension === 'mp3') return 'audio/mpeg';
+        if (extension === 'm4a') return 'audio/mp4';
+        if (extension === 'ogg') return 'audio/ogg';
+        return cleanMime || 'audio/mpeg';
+    }
+
+    return cleanMime || mimetype;
+}
+
+async function convertAudioToMp3(inputPath: string, outputPath: string) {
+    const ffmpegBinary = ffmpegPath as string | null;
+    if (!ffmpegBinary) return false;
+
+    return new Promise<boolean>((resolve) => {
+        const child: ChildProcessWithoutNullStreams = spawn(
+            ffmpegBinary,
+            [
+                '-y',
+                '-i',
+                inputPath,
+                '-vn',
+                '-acodec',
+                'libmp3lame',
+                '-ar',
+                '44100',
+                '-ac',
+                '1',
+                '-b:a',
+                '96k',
+                outputPath,
+            ],
+            { windowsHide: true }
+        );
+
+        let errorOutput = '';
+        child.stderr.on('data', (chunk: Buffer) => {
+            errorOutput += String(chunk || '');
+        });
+        child.on('error', (error: Error) => {
+            console.error('Erro ao converter audio do WhatsApp:', error);
+            resolve(false);
+        });
+        child.on('close', (code: number | null) => {
+            if (code !== 0) {
+                console.error('FFmpeg nao converteu audio do WhatsApp:', errorOutput.slice(-800));
+            }
+            resolve(code === 0);
+        });
+    });
+}
+
 async function saveWhatsappMedia(message: any): Promise<StoredChatMedia | null> {
     const content: any = extractMessageContent(message || {});
     const type = getContentType(content);
@@ -415,14 +476,32 @@ async function saveWhatsappMedia(message: any): Promise<StoredChatMedia | null> 
 
         const originalFileName = body.fileName || body.title || '';
         const extension = getMediaExtension(body.mimetype, originalFileName);
-        const storedFileName = `${Date.now()}-${randomUUID()}.${extension}`;
-        await fs.writeFile(path.join(mediaDir, storedFileName), Buffer.concat(chunks));
+        const storedBaseName = `${Date.now()}-${randomUUID()}`;
+        const storedFileName = `${storedBaseName}.${extension}`;
+        const storedPath = path.join(mediaDir, storedFileName);
+        await fs.writeFile(storedPath, Buffer.concat(chunks));
+
+        let publicFileName = storedFileName;
+        let publicExtension = extension;
+        let publicMimeType = getStoredMediaMime(mediaKind, body.mimetype, extension);
+
+        if (mediaKind === 'audio' && extension !== 'mp3') {
+            const mp3FileName = `${storedBaseName}.mp3`;
+            const mp3Path = path.join(mediaDir, mp3FileName);
+            const converted = await convertAudioToMp3(storedPath, mp3Path);
+
+            if (converted) {
+                publicFileName = mp3FileName;
+                publicExtension = 'mp3';
+                publicMimeType = 'audio/mpeg';
+            }
+        }
 
         return {
             type: mediaKind,
-            url: `/media/whatsapp/${storedFileName}`,
-            mimetype: body.mimetype,
-            fileName: originalFileName || undefined,
+            url: `/media/whatsapp/${publicFileName}`,
+            mimetype: publicMimeType,
+            fileName: originalFileName || (mediaKind === 'audio' ? `audio-whatsapp.${publicExtension}` : undefined),
         };
     } catch (error) {
         console.error('Erro ao salvar mídia do WhatsApp:', error);
