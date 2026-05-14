@@ -32,6 +32,9 @@ type QuoteResult = {
     brand?: string;
     application?: string;
     variantKey?: string;
+    whatsappStatus?: 'sent' | 'failed';
+    whatsappPhone?: string;
+    whatsappError?: string;
 };
 
 type QuoteMatrix = Record<string, QuoteResult[]>;
@@ -101,6 +104,13 @@ const parsePriceValue = (value?: string | number) => {
     return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
 };
 
+const formatResultPrice = (result?: QuoteResult | null) => {
+    if (!result) return '---';
+    if (result.whatsappStatus === 'sent') return 'Aguardando resposta';
+    if (result.whatsappStatus === 'failed') return 'Falha no envio';
+    return `R$ ${result.price}`;
+};
+
 const getMatchType = (result: QuoteResult, normalizedQueryCode: string, hasExactMatch: boolean) => {
     const normalizedResultCode = normalizeCodeValue(result.code);
     if (normalizedResultCode && normalizedResultCode === normalizedQueryCode) {
@@ -137,6 +147,9 @@ const buildVariantGroupLabel = (group: VariantGroup) => {
     return parts.join(' • ');
 };
 
+const buildOfferSelectionKey = (query: string, provider: string, variantKey?: string) =>
+    `${query}::${provider}::${variantKey || 'all'}`;
+
 const sortSupplierResults = (results: QuoteResult[], query: string) => {
     const normalizedQueryCode = normalizeCodeValue(query);
     const hasExactMatch = results.some((entry) => normalizeCodeValue(entry.code) === normalizedQueryCode);
@@ -164,6 +177,22 @@ const sortSupplierResults = (results: QuoteResult[], query: string) => {
         return String(a.code || '').localeCompare(String(b.code || ''), 'pt-BR');
     });
 };
+
+const getProviderResultsForVariant = (
+    results: QuoteResult[],
+    provider: string,
+    query: string,
+    selectedVariantKey?: string
+) =>
+    sortSupplierResults(
+        results.filter(
+            (entry) =>
+                entry.provider === provider &&
+                !entry.error &&
+                (!!entry.whatsappStatus || !selectedVariantKey || buildVariantGroupKey(entry) === selectedVariantKey)
+        ),
+        query
+    );
 
 const downloadBlob = (blob: BlobPart, filename: string) => {
     const url = window.URL.createObjectURL(new Blob([blob]));
@@ -503,7 +532,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
         const groupsByQuery: Record<string, VariantGroup[]> = {};
 
         partList.forEach((item) => {
-            const sourceResults = (quoteMatrix[item.query] || []).filter((entry) => !entry.error);
+            const sourceResults = (quoteMatrix[item.query] || []).filter((entry) => !entry.error && !entry.whatsappStatus);
             const groupMap = new Map<string, VariantGroup>();
 
             sourceResults.forEach((entry) => {
@@ -575,14 +604,11 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
             const selectedVariantKey = resolvedVariantSelectionByQuery[item.query];
 
             providerNames.forEach((provider) => {
-                const providerResults = sortSupplierResults(
-                    sourceResults.filter(
-                        (entry) =>
-                            entry.provider === provider &&
-                            !entry.error &&
-                            (!selectedVariantKey || buildVariantGroupKey(entry) === selectedVariantKey)
-                    ),
-                    item.query
+                const providerResults = getProviderResultsForVariant(
+                    sourceResults,
+                    provider,
+                    item.query,
+                    selectedVariantKey
                 );
 
                 if (providerResults.length === 0) {
@@ -590,7 +616,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                     return;
                 }
 
-                const selectionKey = `${item.query}::${provider}`;
+                const selectionKey = buildOfferSelectionKey(item.query, provider, selectedVariantKey);
                 const selectedIdentity = selectedOfferByQuerySupplier[selectionKey];
                 const selectedResult =
                     providerResults.find((entry) => buildResultIdentity(entry) === selectedIdentity) || providerResults[0];
@@ -766,11 +792,13 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                         : [];
                             const providerCards = viewProviders
                                 .map((provider) => {
-                                    const providerResults = sortSupplierResults(
-                                        rawResults.filter((entry) => entry.provider === provider && !entry.error),
-                                        item.query
+                                    const providerResults = getProviderResultsForVariant(
+                                        rawResults,
+                                        provider,
+                                        item.query,
+                                        selectedVariantKey
                                     );
-                                    const selectionKey = `${item.query}::${provider}`;
+                                    const selectionKey = buildOfferSelectionKey(item.query, provider, selectedVariantKey);
                                     const selectedIdentity = selectedOfferByQuerySupplier[selectionKey];
                                     const selectedResult =
                                         providerResults.find((entry) => buildResultIdentity(entry) === selectedIdentity) ||
@@ -792,11 +820,15 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                             const visibleSelectedResults = providerCards
                                 .map((card) => card.selectedResult)
                                 .filter((entry): entry is QuoteResult => !!entry);
+                            const comparableSelectedResults = visibleSelectedResults.filter((entry) => !entry.whatsappStatus);
+                            const bestComparableResults = comparableSelectedResults.length > 0
+                                ? comparableSelectedResults
+                                : visibleSelectedResults;
                             const hasExactMatch = visibleSelectedResults.some(
-                                (entry) => normalizeCodeValue(entry.code) === normalizedQueryCode
+                                (entry) => !entry.whatsappStatus && normalizeCodeValue(entry.code) === normalizedQueryCode
                             );
                             const bestResult =
-                                [...visibleSelectedResults].sort((a, b) => {
+                                [...bestComparableResults].sort((a, b) => {
                                     const aExact = normalizeCodeValue(a.code) === normalizedQueryCode;
                                     const bExact = normalizeCodeValue(b.code) === normalizedQueryCode;
                                     if (aExact !== bExact) return aExact ? -1 : 1;
@@ -809,7 +841,11 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                         <div className="part-cell-main">{item.query}</div>
                                         {bestResult && (
                                             <div className="best-offer-badge">
-                                                {hasExactMatch ? 'Melhor oferta exata atual' : 'Melhor similar atual'}: {bestResult.provider} • R$ {bestResult.price}
+                                                {bestResult.whatsappStatus
+                                                    ? 'Solicitação WhatsApp'
+                                                    : hasExactMatch
+                                                        ? 'Melhor oferta exata atual'
+                                                        : 'Melhor similar atual'}: {bestResult.provider} • {formatResultPrice(bestResult)}
                                             </div>
                                         )}
                                     </div>
@@ -881,12 +917,16 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                                     supplierResult.code === bestResult.code &&
                                                     supplierResult.product === bestResult.product;
                                                 const matchType = getMatchType(supplierResult, normalizedQueryCode, card.hasExactMatch);
-                                                const matchLabel =
-                                                    matchType === 'exact'
-                                                        ? 'Código exato'
-                                                        : matchType === 'similar'
-                                                            ? 'Similar real'
-                                                            : 'Código não informado';
+                                                const matchLabel = supplierResult.whatsappStatus === 'sent'
+                                                    ? 'WhatsApp enviado'
+                                                    : supplierResult.whatsappStatus === 'failed'
+                                                        ? 'Falha no WhatsApp'
+                                                        : matchType === 'exact'
+                                                            ? 'Código exato'
+                                                            : matchType === 'similar'
+                                                                ? 'Similar real'
+                                                                : 'Código não informado';
+                                                const matchClass = supplierResult.whatsappStatus || matchType;
 
                                                 return (
                                                     <div
@@ -895,7 +935,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                                     >
                                                         <div className="supplier-card-topline">
                                                             <strong>{card.provider}</strong>
-                                                            <span className="supplier-card-price">R$ {supplierResult.price}</span>
+                                                            <span className="supplier-card-price">{formatResultPrice(supplierResult)}</span>
                                                         </div>
 
                                                         <div className="supplier-card-tags">
@@ -905,7 +945,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                                                 </div>
                                                             )}
                                                             {!supplierResult.error && (
-                                                                <div className={`supplier-card-match ${matchType}`}>
+                                                                <div className={`supplier-card-match ${matchClass}`}>
                                                                     {matchLabel}
                                                                 </div>
                                                             )}
@@ -919,7 +959,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                                                     onChange={(event) =>
                                                                         setSelectedOfferByQuerySupplier((current) => ({
                                                                             ...current,
-                                                                            [`${item.query}::${card.provider}`]: event.target.value,
+                                                                            [buildOfferSelectionKey(item.query, card.provider, selectedVariantKey)]: event.target.value,
                                                                         }))
                                                                     }
                                                                 >
@@ -946,20 +986,42 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                                             <div className="supplier-result-title">
                                                                 {supplierResult.product || 'Peça sem descrição clara'}
                                                             </div>
-                                                            <div className="supplier-meta-grid">
-                                                                <div className="supplier-result-meta">
-                                                                    <strong>Fabricante:</strong> {supplierResult.brand || 'Não informado'}
+                                                            {supplierResult.whatsappStatus ? (
+                                                                <div className="supplier-meta-grid">
+                                                                    <div className="supplier-result-meta">
+                                                                        <strong>Canal:</strong> WhatsApp
+                                                                    </div>
+                                                                    <div className="supplier-result-meta">
+                                                                        <strong>Telefone:</strong> {supplierResult.whatsappPhone || 'Não informado'}
+                                                                    </div>
+                                                                    <div className="supplier-result-meta">
+                                                                        <strong>Status:</strong> {supplierResult.whatsappStatus === 'sent' ? 'Mensagem enviada' : 'Falha no envio'}
+                                                                    </div>
+                                                                    <div className="supplier-result-meta">
+                                                                        <strong>Retorno:</strong> {supplierResult.stockText || 'Aguardando resposta'}
+                                                                    </div>
                                                                 </div>
-                                                                <div className="supplier-result-meta">
-                                                                    <strong>Código:</strong> {supplierResult.code || 'Não informado'}
+                                                            ) : (
+                                                                <div className="supplier-meta-grid">
+                                                                    <div className="supplier-result-meta">
+                                                                        <strong>Fabricante:</strong> {supplierResult.brand || 'Não informado'}
+                                                                    </div>
+                                                                    <div className="supplier-result-meta">
+                                                                        <strong>Código:</strong> {supplierResult.code || 'Não informado'}
+                                                                    </div>
+                                                                    <div className="supplier-result-meta">
+                                                                        <strong>Estoque:</strong> {supplierResult.stockText || supplierResult.stock || 0}
+                                                                    </div>
+                                                                    <div className="supplier-result-meta">
+                                                                        <strong>Tipo:</strong> {matchLabel}
+                                                                    </div>
                                                                 </div>
-                                                                <div className="supplier-result-meta">
-                                                                    <strong>Estoque:</strong> {supplierResult.stockText || supplierResult.stock || 0}
+                                                            )}
+                                                            {supplierResult.whatsappError && (
+                                                                <div className="supplier-view-error">
+                                                                    {supplierResult.whatsappError}
                                                                 </div>
-                                                                <div className="supplier-result-meta">
-                                                                    <strong>Tipo:</strong> {matchLabel}
-                                                                </div>
-                                                            </div>
+                                                            )}
                                                             {supplierResult.application && (
                                                                 <div className="supplier-result-meta supplier-application">
                                                                     <strong>Obs técnica:</strong> {supplierResult.application}
@@ -1417,6 +1479,16 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                     background: rgba(107, 114, 128, 0.12);
                     color: #4b5563;
                     border: 1px solid rgba(107, 114, 128, 0.16);
+                }
+                .supplier-card-match.sent {
+                    background: rgba(34, 197, 94, 0.12);
+                    color: #15803d;
+                    border: 1px solid rgba(34, 197, 94, 0.18);
+                }
+                .supplier-card-match.failed {
+                    background: rgba(239, 68, 68, 0.12);
+                    color: #b91c1c;
+                    border: 1px solid rgba(239, 68, 68, 0.18);
                 }
                 .supplier-view-error {
                     color: #dc2626;

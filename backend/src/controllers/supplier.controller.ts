@@ -4,6 +4,37 @@ import { ScraperService } from '../services/scraper.service';
 
 const prisma = new PrismaClient();
 
+const parseBoolean = (value: unknown, defaultValue = false) => {
+    if (value === undefined || value === null || value === '') return defaultValue;
+    return value === true || value === 'true';
+};
+
+const sanitizeSupplierPayload = (data: any) => {
+    const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...payload } = data || {};
+    const websiteSearchEnabled = parseBoolean(payload.websiteSearchEnabled, true);
+    const whatsappEnabled = parseBoolean(payload.whatsappEnabled, false);
+    const whatsappPhone = String(payload.whatsappPhone || '').trim();
+    const url = String(payload.url || '').trim();
+
+    if (websiteSearchEnabled && !url) {
+        throw new Error('Informe a URL principal ou desative a busca por site/agente local.');
+    }
+
+    if (whatsappEnabled && !whatsappPhone) {
+        throw new Error('Informe o WhatsApp do fornecedor.');
+    }
+
+    return {
+        ...payload,
+        url,
+        websiteSearchEnabled,
+        whatsappEnabled,
+        whatsappPhone: whatsappPhone || null,
+        whatsappMessageTemplate: String(payload.whatsappMessageTemplate || '').trim() || null,
+        needsLogin: parseBoolean(payload.needsLogin, false),
+    };
+};
+
 export const getSuppliers = async (req: Request, res: Response): Promise<void> => {
     try {
         const suppliers = await prisma.supplier.findMany({
@@ -17,20 +48,17 @@ export const getSuppliers = async (req: Request, res: Response): Promise<void> =
 
 export const createSupplier = async (req: Request, res: Response): Promise<void> => {
     try {
-        const data = req.body;
+        const data = sanitizeSupplierPayload(req.body);
         
         // Em um cenário real, poderíamos criptografar a senha do fornecedor aqui
         const supplier = await prisma.supplier.create({
-            data: {
-                ...data,
-                needsLogin: data.needsLogin === 'true' || data.needsLogin === true
-            }
+            data
         });
         
         res.status(201).json(supplier);
     } catch (err) {
         console.error('Create Supplier Error:', err);
-        res.status(500).json({ message: 'Erro ao criar fornecedor' });
+        res.status(500).json({ message: err instanceof Error ? err.message : 'Erro ao criar fornecedor' });
     }
 };
 
@@ -41,19 +69,17 @@ export const updateSupplier = async (req: Request, res: Response): Promise<void>
         
         // Remove ID from data if present to avoid prisma error
         const { id: _, ...updateData } = data;
+        const sanitizedData = sanitizeSupplierPayload(updateData);
 
         const supplier = await prisma.supplier.update({
             where: { id },
-            data: {
-                ...updateData,
-                needsLogin: updateData.needsLogin === 'true' || updateData.needsLogin === true
-            }
+            data: sanitizedData
         });
         
         res.json(supplier);
     } catch (err) {
         console.error('Update Supplier Error:', err);
-        res.status(500).json({ message: 'Erro ao atualizar fornecedor' });
+        res.status(500).json({ message: err instanceof Error ? err.message : 'Erro ao atualizar fornecedor' });
     }
 };
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Globe, Lock, Trash2, ExternalLink, Play, Monitor } from 'lucide-react';
+import { Plus, Globe, Lock, Trash2, ExternalLink, Play, Monitor, MessageCircle } from 'lucide-react';
 import { API_URL } from '../services/api';
 
 interface Supplier {
@@ -8,6 +8,10 @@ interface Supplier {
   name: string;
   url: string;
   type?: string;
+  websiteSearchEnabled?: boolean;
+  whatsappEnabled?: boolean;
+  whatsappPhone?: string | null;
+  whatsappMessageTemplate?: string | null;
   needsLogin: boolean;
   loginUrl?: string;
   loginUserSelector?: string;
@@ -43,6 +47,45 @@ interface SupplierTestResult {
   };
 }
 
+const defaultSupplierForm = {
+    name: '',
+    url: '',
+    type: 'Atacado',
+    websiteSearchEnabled: true,
+    whatsappEnabled: false,
+    whatsappPhone: '',
+    whatsappMessageTemplate: '',
+    needsLogin: false,
+    loginUrl: '',
+    loginUserSelector: '',
+    loginPassSelector: '',
+    loginSubmitSelector: '',
+    loginCredential: '',
+    password: '',
+    loginExtraSelector: '',
+    loginExtraValue: '',
+    sessionData: '',
+    searchUrl: '',
+    searchBarSelector: '',
+    searchBtnSelector: '',
+    itemContainerSelector: '',
+    productNameSelector: '',
+    priceSelector: '',
+    availableSelector: '',
+};
+
+const getSupplierFormData = (supplier?: Partial<Supplier>) => ({
+    ...defaultSupplierForm,
+    ...supplier,
+    url: supplier?.url || '',
+    websiteSearchEnabled: supplier?.websiteSearchEnabled !== false,
+    whatsappEnabled: supplier?.whatsappEnabled === true,
+    whatsappPhone: supplier?.whatsappPhone || '',
+    whatsappMessageTemplate: supplier?.whatsappMessageTemplate || '',
+    password: supplier?.password || '',
+    sessionData: supplier?.sessionData || '',
+});
+
 export const Suppliers = () => {
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [showModal, setShowModal] = useState(false);
@@ -55,30 +98,9 @@ export const Suppliers = () => {
     const [assistText, setAssistText] = useState('');
     const [isAssistLoading, setIsAssistLoading] = useState(false);
     const [assistAction, setAssistAction] = useState<'idle' | 'saving' | 'closing' | 'typing' | 'pressing'>('idle');
-    const [formData, setFormData] = useState({
-        name: '',
-        url: '',
-        type: 'Atacado',
-        needsLogin: false,
-        loginUrl: '',
-        loginUserSelector: '',
-        loginPassSelector: '',
-        loginSubmitSelector: '',
-        loginCredential: '',
-        password: '',
-        loginExtraSelector: '',
-        loginExtraValue: '',
-        sessionData: '',
-        searchUrl: '',
-        searchBarSelector: '',
-        searchBtnSelector: '',
-        itemContainerSelector: '',
-        productNameSelector: '',
-        priceSelector: '',
-        availableSelector: ''
-    });
+    const [formData, setFormData] = useState(defaultSupplierForm);
 
-    const [activeSection, setActiveSection] = useState<'basic' | 'login' | 'mapping'>('basic');
+    const [activeSection, setActiveSection] = useState<'basic' | 'whatsapp' | 'login' | 'mapping'>('basic');
     const apiBase = API_URL;
 
     useEffect(() => {
@@ -106,6 +128,21 @@ export const Suppliers = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!formData.websiteSearchEnabled && !formData.whatsappEnabled) {
+            alert('Ative a busca por site/agente local ou o envio por WhatsApp para este fornecedor.');
+            return;
+        }
+
+        if (formData.websiteSearchEnabled && !formData.url.trim()) {
+            alert('Informe a URL principal ou desative a busca por site/agente local.');
+            return;
+        }
+
+        if (formData.whatsappEnabled && !formData.whatsappPhone.trim()) {
+            alert('Informe o WhatsApp do fornecedor.');
+            return;
+        }
+
         try {
             const isEdit = (formData as any).id;
             if (isEdit) {
@@ -114,17 +151,8 @@ export const Suppliers = () => {
                 await axios.post(`${apiBase}/api/suppliers`, formData);
             }
             setShowModal(false);
-            setFormData({
-                name: '', url: '', type: 'Atacado',
-                needsLogin: false, loginUrl: '', loginUserSelector: '',
-                loginPassSelector: '', loginSubmitSelector: '',
-                loginCredential: '', password: '',
-                loginExtraSelector: '', loginExtraValue: '',
-                sessionData: '',
-                searchUrl: '', searchBarSelector: '', searchBtnSelector: '',
-                itemContainerSelector: '', productNameSelector: '', priceSelector: '',
-                availableSelector: ''
-            });
+            setFormData(defaultSupplierForm);
+            setActiveSection('basic');
             fetchSuppliers();
         } catch (err: any) {
             alert('Erro ao salvar: ' + (err.response?.data?.message || err.message));
@@ -268,7 +296,7 @@ export const Suppliers = () => {
         <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <h1 className="page-title">Fornecedores</h1>
-                <button className="btn-primary" onClick={() => setShowModal(true)} style={{ width: 'auto', padding: '0.6rem 1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <button className="btn-primary" onClick={() => { setFormData(defaultSupplierForm); setActiveSection('basic'); setShowModal(true); }} style={{ width: 'auto', padding: '0.6rem 1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <Plus size={18} />
                     <span>Novo Fornecedor</span>
                 </button>
@@ -283,26 +311,37 @@ export const Suppliers = () => {
                                 <span className="type-badge">{s.type}</span>
                             </div>
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <button className="edit-btn" onClick={() => { setFormData({...s, password: s.password || ''} as any); setShowModal(true); }} style={{ background: 'none', border: 'none', color: 'var(--primary-color)', cursor: 'pointer', opacity: 0.6 }}><ExternalLink size={16} /></button>
+                                <button className="edit-btn" onClick={() => { setFormData(getSupplierFormData(s) as any); setActiveSection('basic'); setShowModal(true); }} style={{ background: 'none', border: 'none', color: 'var(--primary-color)', cursor: 'pointer', opacity: 0.6 }}><ExternalLink size={16} /></button>
                                 <button className="delete-btn" onClick={() => handleDelete(s.id)}><Trash2 size={16} /></button>
                             </div>
                         </div>
                         <div className="supplier-body">
-                            <p><Globe size={14} /> {s.url}</p>
-                            <p><Lock size={14} /> Login: {s.needsLogin ? 'Ativado' : 'Desativado'}</p>
-                            {s.sessionData && <p><Lock size={14} /> Sessão manual: Configurada</p>}
+                            {s.websiteSearchEnabled !== false ? (
+                                <>
+                                    <p><Globe size={14} /> {s.url}</p>
+                                    <p><Lock size={14} /> Login: {s.needsLogin ? 'Ativado' : 'Desativado'}</p>
+                                    {s.sessionData && <p><Lock size={14} /> Sessão manual: Configurada</p>}
+                                </>
+                            ) : (
+                                <p><Globe size={14} /> Busca por site/agente local desativada</p>
+                            )}
+                            {s.whatsappEnabled && (
+                                <p><MessageCircle size={14} /> WhatsApp: {s.whatsappPhone || 'Não informado'}</p>
+                            )}
                         </div>
                         <div className="supplier-footer">
                             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                                <button
-                                    type="button"
-                                    className="test-link"
-                                    onClick={() => openTestModal(s)}
-                                >
-                                    <Play size={14} />
-                                    <span>Testar Busca</span>
-                                </button>
-                                {s.needsLogin && (
+                                {s.websiteSearchEnabled !== false && (
+                                    <button
+                                        type="button"
+                                        className="test-link"
+                                        onClick={() => openTestModal(s)}
+                                    >
+                                        <Play size={14} />
+                                        <span>Testar Busca</span>
+                                    </button>
+                                )}
+                                {s.websiteSearchEnabled !== false && s.needsLogin && (
                                     <button
                                         type="button"
                                         className="test-link"
@@ -312,10 +351,12 @@ export const Suppliers = () => {
                                         <span>Login Assistido</span>
                                     </button>
                                 )}
-                                <a href={s.url} target="_blank" rel="noreferrer" className="visit-link">
-                                    <span>Visitar Site</span>
-                                    <ExternalLink size={14} />
-                                </a>
+                                {s.url && (
+                                    <a href={s.url} target="_blank" rel="noreferrer" className="visit-link">
+                                        <span>Visitar Site</span>
+                                        <ExternalLink size={14} />
+                                    </a>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -329,6 +370,7 @@ export const Suppliers = () => {
                         
                         <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
                             <button onClick={() => setActiveSection('basic')} style={{ padding: '0.5rem 1rem', background: 'none', border: 'none', color: activeSection === 'basic' ? 'var(--primary-color)' : 'var(--text-muted)', borderBottom: activeSection === 'basic' ? '2px solid var(--primary-color)' : 'none', cursor: 'pointer' }}>Geral</button>
+                            <button onClick={() => setActiveSection('whatsapp')} style={{ padding: '0.5rem 1rem', background: 'none', border: 'none', color: activeSection === 'whatsapp' ? 'var(--primary-color)' : 'var(--text-muted)', borderBottom: activeSection === 'whatsapp' ? '2px solid var(--primary-color)' : 'none', cursor: 'pointer' }}>WhatsApp</button>
                             <button onClick={() => setActiveSection('login')} style={{ padding: '0.5rem 1rem', background: 'none', border: 'none', color: activeSection === 'login' ? 'var(--primary-color)' : 'var(--text-muted)', borderBottom: activeSection === 'login' ? '2px solid var(--primary-color)' : 'none', cursor: 'pointer' }}>Login</button>
                             <button onClick={() => setActiveSection('mapping')} style={{ padding: '0.5rem 1rem', background: 'none', border: 'none', color: activeSection === 'mapping' ? 'var(--primary-color)' : 'var(--text-muted)', borderBottom: activeSection === 'mapping' ? '2px solid var(--primary-color)' : 'none', cursor: 'pointer' }}>Mapeamento de Busca</button>
                         </div>
@@ -340,9 +382,13 @@ export const Suppliers = () => {
                                         <label>Nome do Fornecedor</label>
                                         <input type="text" className="form-input" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
                                     </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <input type="checkbox" checked={formData.websiteSearchEnabled} onChange={e => setFormData({...formData, websiteSearchEnabled: e.target.checked})} />
+                                        <label>Buscar no site/agente local</label>
+                                    </div>
                                     <div className="form-group">
                                         <label>URL Principal</label>
-                                        <input type="url" className="form-input" value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} required />
+                                        <input type="url" className="form-input" value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} required={formData.websiteSearchEnabled} placeholder={formData.websiteSearchEnabled ? 'https://...' : 'Opcional quando a busca por site estiver desligada'} />
                                     </div>
                                     <div className="form-group">
                                         <label>Categoria</label>
@@ -351,6 +397,42 @@ export const Suppliers = () => {
                                             <option>Varejo</option>
                                             <option>Distribuidora</option>
                                         </select>
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeSection === 'whatsapp' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <input type="checkbox" checked={formData.whatsappEnabled} onChange={e => setFormData({...formData, whatsappEnabled: e.target.checked})} />
+                                        <label>Enviar cotações para este fornecedor pelo WhatsApp</label>
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label>WhatsApp do fornecedor</label>
+                                        <input
+                                            type="tel"
+                                            className="form-input"
+                                            value={formData.whatsappPhone}
+                                            onChange={e => setFormData({...formData, whatsappPhone: e.target.value})}
+                                            placeholder="Ex: 11999999999"
+                                            required={formData.whatsappEnabled}
+                                        />
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label>Mensagem enviada na cotação</label>
+                                        <textarea
+                                            className="form-input"
+                                            value={formData.whatsappMessageTemplate}
+                                            onChange={e => setFormData({...formData, whatsappMessageTemplate: e.target.value})}
+                                            placeholder={'Olá, tudo bem?\\nPode cotar este item?\\nCódigo/peça: {{codigo}}\\nDescrição: {{descricao}}'}
+                                            rows={6}
+                                            style={{ resize: 'vertical', minHeight: '140px' }}
+                                        />
+                                        <small style={{ color: 'var(--text-muted)' }}>
+                                            Use <code>{'{{codigo}}'}</code>, <code>{'{{descricao}}'}</code> e <code>{'{{fornecedor}}'}</code> para preencher automaticamente cada item pesquisado.
+                                        </small>
                                     </div>
                                 </div>
                             )}

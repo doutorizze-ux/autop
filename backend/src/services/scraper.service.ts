@@ -393,6 +393,17 @@ export class ScraperService {
             throw new Error('Fornecedor não encontrado.');
         }
 
+        if ((supplier as any).websiteSearchEnabled === false) {
+            return {
+                provider: supplier.name,
+                product: productName,
+                price: '---',
+                available: false,
+                stockText: 'Busca por site/agente local desativada para este fornecedor.',
+                link: supplier.url,
+            };
+        }
+
         const result = await executeSupplierSearchWithGuards(supplier, productName);
         const normalized = normalizeSearchResultPayload(result, supplier, productName);
         return Array.isArray(normalized) ? normalized[0] || null : normalized;
@@ -405,7 +416,7 @@ export class ScraperService {
         onProgress?: (payload: { supplier: string; productName: string; result: any }) => void,
         shouldCancel?: () => boolean
     ) {
-        const suppliers = await prisma.supplier.findMany();
+        const suppliers = (await prisma.supplier.findMany()).filter((supplier: any) => supplier.websiteSearchEnabled !== false);
         const concurrency = Math.max(1, Number.parseInt(process.env.SCRAPER_CONCURRENCY || '3', 10) || 3);
         const resultsByProduct: Record<string, any[]> = {};
 

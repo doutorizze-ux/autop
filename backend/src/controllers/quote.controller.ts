@@ -5,6 +5,7 @@ import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
 import { randomUUID } from 'crypto';
 import { AuthRequest } from '../middlewares/auth.middleware';
+import { whatsappService } from '../services/whatsapp.service';
 
 const prisma = new PrismaClient();
 
@@ -87,6 +88,141 @@ function buildResultIdentity(result: any) {
         normalize(result?.brand),
         normalize(result?.code),
     ].join('::');
+}
+
+function mergeQuoteMatrices(...matrices: QuoteMatrix[]) {
+    const merged: QuoteMatrix = {};
+
+    matrices.forEach((matrix) => {
+        Object.entries(matrix || {}).forEach(([query, results]) => {
+            if (!merged[query]) {
+                merged[query] = [];
+            }
+
+            (results || []).forEach((result) => {
+                const identity = buildResultIdentity(result);
+                const existingIndex = merged[query].findIndex((entry: any) => buildResultIdentity(entry) === identity);
+                if (existingIndex >= 0) {
+                    merged[query][existingIndex] = result;
+                } else {
+                    merged[query].push(result);
+                }
+            });
+        });
+    });
+
+    return merged;
+}
+
+function recordQuoteProgress(job: QuoteJob, payload: { supplier: string; productName: string; result: any }) {
+    if (!job.matrix[payload.productName]) {
+        job.matrix[payload.productName] = [];
+    }
+
+    const identity = buildResultIdentity(payload.result);
+    const existingIndex = job.matrix[payload.productName].findIndex((entry: any) => buildResultIdentity(entry) === identity);
+    if (existingIndex >= 0) {
+        job.matrix[payload.productName][existingIndex] = payload.result;
+    } else {
+        job.matrix[payload.productName].push(payload.result);
+    }
+
+    if (!job.suppliers.includes(payload.supplier)) {
+        job.suppliers.push(payload.supplier);
+    }
+
+    job.updatedAt = new Date().toISOString();
+}
+
+const defaultWhatsappQuoteTemplate = [
+    'Olá, tudo bem?',
+    'Pode cotar este item para mim?',
+    '',
+    'Código/peça: {{codigo}}',
+    'Descrição: {{descricao}}',
+    '',
+    'Por favor, envie preço, fabricante/marca e disponibilidade.',
+].join('\n');
+
+function buildSupplierWhatsappMessage(supplier: any, item: QuoteItem) {
+    const template = String(supplier.whatsappMessageTemplate || '').trim() || defaultWhatsappQuoteTemplate;
+    const replacements: Record<string, string> = {
+        codigo: item.query,
+        query: item.query,
+        peca: item.query,
+        descricao: item.description || '-',
+        fornecedor: supplier.name || '',
+    };
+
+    return template.replace(/\{\{\s*(codigo|query|peca|descricao|fornecedor)\s*\}\}/gi, (_, key) => {
+        return replacements[String(key).toLowerCase()] || '';
+    });
+}
+
+function buildWhatsappLink(phone?: string | null) {
+    const digits = String(phone || '').replace(/\D/g, '');
+    if (!digits) return '';
+    const withCountry = digits.length === 10 || digits.length === 11 ? `55${digits}` : digits;
+    return `https://wa.me/${withCountry}`;
+}
+
+async function sendWhatsappSupplierQuoteRequests(job: QuoteJob) {
+    const suppliers = await prisma.supplier.findMany({
+        where: {
+            whatsappEnabled: true,
+            whatsappPhone: { not: null },
+        },
+        orderBy: { name: 'asc' },
+    });
+    const matrix: QuoteMatrix = {};
+
+    for (const item of job.items) {
+        if (job.cancelled) break;
+
+        for (const supplier of suppliers) {
+            if (job.cancelled) break;
+
+            const message = buildSupplierWhatsappMessage(supplier, item);
+            const baseResult: any = {
+                provider: supplier.name,
+                product: `Solicitação enviada pelo WhatsApp: ${item.query}`,
+                code: item.query,
+                brand: 'WhatsApp',
+                price: 'Aguardando resposta',
+                available: false,
+                stockText: 'Aguardando retorno',
+                link: buildWhatsappLink(supplier.whatsappPhone),
+                whatsappStatus: 'sent',
+                whatsappPhone: supplier.whatsappPhone,
+            };
+
+            let result: any = baseResult;
+
+            try {
+                await whatsappService.sendMessage(job.userId, supplier.whatsappPhone || '', message);
+            } catch (error) {
+                result = {
+                    ...baseResult,
+                    price: '---',
+                    stockText: 'Falha no envio',
+                    whatsappStatus: 'failed',
+                    whatsappError: error instanceof Error ? error.message : 'Não foi possível enviar pelo WhatsApp.',
+                };
+            }
+
+            if (!matrix[item.query]) {
+                matrix[item.query] = [];
+            }
+            matrix[item.query].push(result);
+            recordQuoteProgress(job, {
+                supplier: supplier.name,
+                productName: item.query,
+                result,
+            });
+        }
+    }
+
+    return matrix;
 }
 
 function serializeQuoteJob(job: QuoteJob) {
@@ -722,31 +858,16 @@ export const searchQuote = async (req: Request, res: Response) => {
 async function runQuoteJob(job: QuoteJob) {
     try {
         const productNames = job.items.map((item) => item.query);
-        const matrix = await ScraperService.searchMultipleProducts(
-            productNames,
-            `user:${job.userId}`,
-            { jobId: job.id },
-            ({ supplier, productName, result }) => {
-                if (!job.matrix[productName]) {
-                    job.matrix[productName] = [];
-                }
-
-                const identity = buildResultIdentity(result);
-                const existingIndex = job.matrix[productName].findIndex((entry: any) => buildResultIdentity(entry) === identity);
-                if (existingIndex >= 0) {
-                    job.matrix[productName][existingIndex] = result;
-                } else {
-                    job.matrix[productName].push(result);
-                }
-
-                if (!job.suppliers.includes(supplier)) {
-                    job.suppliers.push(supplier);
-                }
-
-                job.updatedAt = new Date().toISOString();
-            },
-            () => job.cancelled
-        );
+        const [websiteMatrix, whatsappMatrix] = await Promise.all([
+            ScraperService.searchMultipleProducts(
+                productNames,
+                `user:${job.userId}`,
+                { jobId: job.id },
+                (payload) => recordQuoteProgress(job, payload),
+                () => job.cancelled
+            ),
+            sendWhatsappSupplierQuoteRequests(job),
+        ]);
 
         if (job.cancelled) {
             job.status = 'cancelled';
@@ -755,6 +876,7 @@ async function runQuoteJob(job: QuoteJob) {
             return;
         }
 
+        const matrix = mergeQuoteMatrices(websiteMatrix, whatsappMatrix, job.matrix);
         const suppliers = extractSuppliersFromMatrix(matrix);
 
         const payload: StoredQuotePayload = {

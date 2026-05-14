@@ -39,6 +39,10 @@ model Supplier {
   name                  String
   url                   String
   type                  String?  // Ex: "Atacado", "Varejo"
+  websiteSearchEnabled  Boolean  @default(true)
+  whatsappEnabled       Boolean  @default(false)
+  whatsappPhone         String?
+  whatsappMessageTemplate String?
 
   // Configuracoes de Login
   needsLogin            Boolean  @default(false)
