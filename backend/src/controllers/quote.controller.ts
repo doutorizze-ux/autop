@@ -65,12 +65,45 @@ function getRequestUserId(req: Request) {
     return String((req as AuthRequest).user?.userId || '').trim();
 }
 
+function isAdminRequest(req: Request) {
+    return (req as AuthRequest).user?.role === 'ADMIN';
+}
+
 function getOwnedQuoteWhere(req: Request, id?: string) {
     const userId = getRequestUserId(req);
     return {
         ...(id ? { id } : {}),
         userId,
     };
+}
+
+function getReadableQuoteWhere(req: Request, id: string) {
+    if (isAdminRequest(req)) {
+        return { id };
+    }
+
+    return getOwnedQuoteWhere(req, id);
+}
+
+function mapQuoteHistoryEntry(quote: any) {
+    const parsed = parseStoredQuote(quote);
+
+    return {
+        id: quote.id,
+        createdAt: quote.createdAt,
+        itemCount: parsed.items.length,
+        items: parsed.items,
+        title: parsed.items.map((item) => item.label).join(' | '),
+    };
+}
+
+function requireAdmin(req: Request, res: Response) {
+    if (!isAdminRequest(req)) {
+        res.status(403).json({ message: 'Acesso negado' });
+        return false;
+    }
+
+    return true;
 }
 
 function buildResultIdentity(result: any) {
@@ -953,16 +986,7 @@ export const listQuoteHistory = async (req: Request, res: Response) => {
             orderBy: { createdAt: 'desc' },
         });
 
-        const history = quotes.map((quote) => {
-            const parsed = parseStoredQuote(quote);
-            return {
-                id: quote.id,
-                createdAt: quote.createdAt,
-                itemCount: parsed.items.length,
-                items: parsed.items,
-                title: parsed.items.map((item) => item.label).join(' | '),
-            };
-        });
+        const history = quotes.map(mapQuoteHistoryEntry);
 
         res.json(history);
     } catch (err) {
@@ -971,10 +995,92 @@ export const listQuoteHistory = async (req: Request, res: Response) => {
     }
 };
 
+export const listTeamQuoteHistory = async (req: Request, res: Response) => {
+    try {
+        if (!requireAdmin(req, res)) return;
+
+        const [users, quotes] = await Promise.all([
+            prisma.user.findMany({
+                orderBy: { name: 'asc' },
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    role: true,
+                },
+            }),
+            prisma.quote.findMany({
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    user: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                            role: true,
+                        },
+                    },
+                },
+            }),
+        ]);
+
+        const grouped = new Map<string, any>();
+
+        users.forEach((user) => {
+            grouped.set(user.id, {
+                userId: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                quoteCount: 0,
+                lastQuoteAt: null,
+                quotes: [],
+            });
+        });
+
+        quotes.forEach((quote) => {
+            const owner = quote.user;
+            const groupKey = owner?.id || 'sem-funcionario';
+
+            if (!grouped.has(groupKey)) {
+                grouped.set(groupKey, {
+                    userId: owner?.id || null,
+                    name: owner?.name || 'Sem funcionario vinculado',
+                    email: owner?.email || '',
+                    role: owner?.role || 'SEM_VINCULO',
+                    quoteCount: 0,
+                    lastQuoteAt: null,
+                    quotes: [],
+                });
+            }
+
+            const group = grouped.get(groupKey);
+            group.quotes.push(mapQuoteHistoryEntry(quote));
+            group.quoteCount += 1;
+            group.lastQuoteAt = group.lastQuoteAt || quote.createdAt;
+        });
+
+        const employees = Array.from(grouped.values())
+            .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'))
+            .map((employee) => ({
+                ...employee,
+                lastQuoteAt: employee.lastQuoteAt,
+            }));
+
+        res.json({
+            totalQuotes: quotes.length,
+            employees,
+        });
+    } catch (err) {
+        console.error('List Team Quote History Error:', err);
+        res.status(500).json({ message: 'Erro ao listar cotacoes dos funcionarios' });
+    }
+};
+
 export const getQuoteHistoryById = async (req: Request, res: Response) => {
     try {
         const quote = await prisma.quote.findFirst({
-            where: getOwnedQuoteWhere(req, req.params.id),
+            where: getReadableQuoteWhere(req, req.params.id),
         });
 
         if (!quote) {
@@ -1041,7 +1147,7 @@ export const exportExcel = async (req: Request, res: Response) => {
 export const exportSavedQuotePDF = async (req: Request, res: Response) => {
     try {
         const quote = await prisma.quote.findFirst({
-            where: getOwnedQuoteWhere(req, req.params.id),
+            where: getReadableQuoteWhere(req, req.params.id),
         });
 
         if (!quote) {
@@ -1076,7 +1182,7 @@ export const exportMultipleSavedQuotesPDF = async (req: Request, res: Response) 
         const quotes = await prisma.quote.findMany({
             where: {
                 id: { in: ids },
-                userId: getRequestUserId(req),
+                ...(isAdminRequest(req) ? {} : { userId: getRequestUserId(req) }),
             },
         });
 
@@ -1113,7 +1219,7 @@ export const exportMultipleSavedQuotesPDF = async (req: Request, res: Response) 
 export const exportSavedQuoteExcel = async (req: Request, res: Response) => {
     try {
         const quote = await prisma.quote.findFirst({
-            where: getOwnedQuoteWhere(req, req.params.id),
+            where: getReadableQuoteWhere(req, req.params.id),
         });
 
         if (!quote) {

@@ -7,6 +7,7 @@ import {
     exportPDF,
     exportExcel,
     listQuoteHistory,
+    listTeamQuoteHistory,
     getQuoteHistoryById,
     deleteQuoteHistory,
     exportSavedQuotePDF,
@@ -23,6 +24,7 @@ router.get('/jobs/:jobId', getQuoteJob);
 router.post('/jobs/:jobId/cancel', cancelQuoteJob);
 router.post('/export/pdf', exportPDF);
 router.post('/export/excel', exportExcel);
+router.get('/admin/team-history', listTeamQuoteHistory);
 router.get('/history', listQuoteHistory);
 router.get('/history/:id', getQuoteHistoryById);
 router.delete('/history/:id', deleteQuoteHistory);

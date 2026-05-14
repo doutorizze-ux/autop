@@ -1,7 +1,8 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import {
+  CalendarClock,
   LayoutDashboard,
   Users,
   MessageSquare,
@@ -10,7 +11,11 @@ import {
   LogOut,
   Search,
   FileSearch,
+  FileText,
+  FolderOpen,
   History,
+  Loader2,
+  RefreshCw,
   ChevronRight,
   Sparkles,
   Rocket,
@@ -30,6 +35,47 @@ import { socket } from '../services/socket';
 const suppliersAccessPassword = '080782';
 const suppliersAccessStorageKey = 'suppliers_access_granted';
 const getQuotePrefillStorageKey = (userId?: string) => `quote_prefill_item:${userId || 'sem-usuario'}`;
+
+type TeamQuoteItem = {
+  query: string;
+  description?: string;
+  label?: string;
+};
+
+type TeamQuoteEntry = {
+  id: string;
+  createdAt: string;
+  itemCount: number;
+  items: TeamQuoteItem[];
+  title: string;
+};
+
+type TeamQuoteEmployee = {
+  userId: string | null;
+  name: string;
+  email: string;
+  role: string;
+  quoteCount: number;
+  lastQuoteAt: string | null;
+  quotes: TeamQuoteEntry[];
+};
+
+type TeamQuoteHistoryResponse = {
+  totalQuotes: number;
+  employees: TeamQuoteEmployee[];
+};
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) return '---';
+  return new Date(value).toLocaleString('pt-BR');
+};
+
+const normalizeText = (value: string) =>
+  String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, caption: 'Menus principais' },
@@ -55,6 +101,13 @@ export const Dashboard = () => {
     () => sessionStorage.getItem(suppliersAccessStorageKey) === 'true'
   );
   const [quoteToOpen, setQuoteToOpen] = useState('');
+  const [teamQuoteHistory, setTeamQuoteHistory] = useState<TeamQuoteHistoryResponse>({
+    totalQuotes: 0,
+    employees: [],
+  });
+  const [isTeamQuoteHistoryLoading, setIsTeamQuoteHistoryLoading] = useState(false);
+  const [teamQuoteHistoryError, setTeamQuoteHistoryError] = useState('');
+  const [teamQuoteSearch, setTeamQuoteSearch] = useState('');
 
   useEffect(() => {
     const applyTheme = (themeColor?: string, logo?: string) => {
@@ -116,6 +169,28 @@ export const Dashboard = () => {
     };
   }, []);
 
+  const loadTeamQuoteHistory = useCallback(async () => {
+    if (user?.role !== 'ADMIN') return;
+
+    setIsTeamQuoteHistoryLoading(true);
+    setTeamQuoteHistoryError('');
+
+    try {
+      const response = await axios.get<TeamQuoteHistoryResponse>(`${API_URL}/api/quotes/admin/team-history`);
+      setTeamQuoteHistory(response.data);
+    } catch (error) {
+      console.error('Load Team Quote History Error:', error);
+      setTeamQuoteHistoryError('Nao foi possivel carregar as cotacoes dos funcionarios.');
+    } finally {
+      setIsTeamQuoteHistoryLoading(false);
+    }
+  }, [user?.role]);
+
+  useEffect(() => {
+    if (activeTab !== 'dashboard' || user?.role !== 'ADMIN') return;
+    void loadTeamQuoteHistory();
+  }, [activeTab, loadTeamQuoteHistory, user?.role]);
+
   const handleChangeTab = (tabId: string) => {
     if (tabId === 'fornecedores' && !suppliersUnlocked) {
       setSuppliersPassword('');
@@ -147,6 +222,32 @@ export const Dashboard = () => {
   const activeItem = visibleNavItems.find((item) => item.id === activeTab) || visibleNavItems[0];
   const dashboardMenuItems = visibleNavItems.filter((item) => item.id !== 'dashboard');
   const handleWhatsappConnected = useCallback(() => setWsStatus('connected'), []);
+  const filteredTeamQuoteEmployees = useMemo(() => {
+    const term = normalizeText(teamQuoteSearch);
+    if (!term) return teamQuoteHistory.employees;
+
+    return teamQuoteHistory.employees
+      .map((employee) => {
+        const employeeMatches = normalizeText(`${employee.name} ${employee.email} ${employee.role}`).includes(term);
+        const quotes = employee.quotes.filter((quote) => {
+          const searchable = [
+            quote.title,
+            quote.createdAt,
+            ...quote.items.flatMap((item) => [item.query, item.description || '', item.label || '']),
+          ].join(' ');
+
+          return employeeMatches || normalizeText(searchable).includes(term);
+        });
+
+        return employeeMatches ? employee : { ...employee, quotes };
+      })
+      .filter((employee) => employee.quotes.length > 0 || normalizeText(`${employee.name} ${employee.email}`).includes(term));
+  }, [teamQuoteHistory.employees, teamQuoteSearch]);
+
+  const handleOpenTeamQuote = (quoteId: string) => {
+    setQuoteToOpen(quoteId);
+    setActiveTab('cotacoes');
+  };
 
   return (
     <div className="layout-container">
@@ -252,6 +353,91 @@ export const Dashboard = () => {
                   );
                 })}
               </div>
+
+              {user?.role === 'ADMIN' && (
+                <section className="admin-team-quotes">
+                  <div className="admin-team-quotes-header">
+                    <div>
+                      <span className="admin-team-kicker">Controle do time</span>
+                      <h3>Cotacoes por funcionario</h3>
+                    </div>
+                    <div className="admin-team-summary">
+                      <span>
+                        <FileText size={15} /> {teamQuoteHistory.totalQuotes} cotacoes
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void loadTeamQuoteHistory()}
+                        disabled={isTeamQuoteHistoryLoading}
+                      >
+                        {isTeamQuoteHistoryLoading ? <Loader2 className="spin" size={15} /> : <RefreshCw size={15} />}
+                        Atualizar
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="admin-team-toolbar">
+                    <Search size={18} />
+                    <input
+                      value={teamQuoteSearch}
+                      onChange={(event) => setTeamQuoteSearch(event.target.value)}
+                      placeholder="Buscar funcionario, codigo ou descricao"
+                    />
+                  </div>
+
+                  {teamQuoteHistoryError && <div className="admin-team-error">{teamQuoteHistoryError}</div>}
+
+                  {isTeamQuoteHistoryLoading && teamQuoteHistory.employees.length === 0 ? (
+                    <div className="admin-team-empty">
+                      <Loader2 className="spin" size={18} /> Carregando cotacoes...
+                    </div>
+                  ) : filteredTeamQuoteEmployees.length === 0 ? (
+                    <div className="admin-team-empty">Nenhuma cotacao encontrada para o filtro atual.</div>
+                  ) : (
+                    <div className="admin-team-list">
+                      {filteredTeamQuoteEmployees.map((employee) => (
+                        <article className="admin-employee-quotes" key={employee.userId || employee.email || employee.name}>
+                          <div className="admin-employee-header">
+                            <div>
+                              <strong>{employee.name}</strong>
+                              <span>{employee.email || 'Sem e-mail vinculado'}</span>
+                            </div>
+                            <div className="admin-employee-stats">
+                              <span>{employee.role === 'ADMIN' ? 'Admin' : 'Funcionario'}</span>
+                              <span>{employee.quoteCount} cotacoes</span>
+                              <span>Ultima: {formatDateTime(employee.lastQuoteAt)}</span>
+                            </div>
+                          </div>
+
+                          {employee.quotes.length === 0 ? (
+                            <div className="admin-employee-empty">Nenhuma cotacao salva para este funcionario.</div>
+                          ) : (
+                            <div className="admin-quote-rows">
+                              {employee.quotes.map((quote) => (
+                                <button
+                                  type="button"
+                                  className="admin-quote-row"
+                                  key={quote.id}
+                                  onClick={() => handleOpenTeamQuote(quote.id)}
+                                >
+                                  <span className="admin-quote-date">
+                                    <CalendarClock size={14} /> {formatDateTime(quote.createdAt)}
+                                  </span>
+                                  <span className="admin-quote-title">{quote.title}</span>
+                                  <span className="admin-quote-count">{quote.itemCount} {quote.itemCount === 1 ? 'item' : 'itens'}</span>
+                                  <span className="admin-quote-open">
+                                    <FolderOpen size={15} /> Abrir
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
             </div>
           )}
 
