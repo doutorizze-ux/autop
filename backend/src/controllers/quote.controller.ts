@@ -190,16 +190,23 @@ async function sendWhatsappSupplierQuoteRequests(job: QuoteJob) {
                 brand: 'WhatsApp',
                 price: 'Aguardando resposta',
                 available: false,
-                stockText: 'Aguardando retorno',
+                stockText: 'Envio pendente',
                 link: buildWhatsappLink(supplier.whatsappPhone),
-                whatsappStatus: 'sent',
+                whatsappStatus: 'pending',
                 whatsappPhone: supplier.whatsappPhone,
             };
 
             let result: any = baseResult;
 
             try {
-                await whatsappService.sendMessage(job.userId, supplier.whatsappPhone || '', message);
+                const sent = await whatsappService.sendMessage(job.userId, supplier.whatsappPhone || '', message);
+                result = {
+                    ...baseResult,
+                    stockText: 'Enviado ao servidor do WhatsApp',
+                    whatsappStatus: 'queued',
+                    whatsappMessageId: sent?.messageId || '',
+                    whatsappJid: sent?.to || '',
+                };
             } catch (error) {
                 result = {
                     ...baseResult,

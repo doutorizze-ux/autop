@@ -32,9 +32,11 @@ type QuoteResult = {
     brand?: string;
     application?: string;
     variantKey?: string;
-    whatsappStatus?: 'sent' | 'failed';
+    whatsappStatus?: 'pending' | 'queued' | 'failed';
     whatsappPhone?: string;
     whatsappError?: string;
+    whatsappMessageId?: string;
+    whatsappJid?: string;
 };
 
 type QuoteMatrix = Record<string, QuoteResult[]>;
@@ -106,7 +108,8 @@ const parsePriceValue = (value?: string | number) => {
 
 const formatResultPrice = (result?: QuoteResult | null) => {
     if (!result) return '---';
-    if (result.whatsappStatus === 'sent') return 'Aguardando resposta';
+    if (result.whatsappStatus === 'queued') return 'Aguardando resposta';
+    if (result.whatsappStatus === 'pending') return 'Enviando WhatsApp';
     if (result.whatsappStatus === 'failed') return 'Falha no envio';
     return `R$ ${result.price}`;
 };
@@ -917,8 +920,10 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                                     supplierResult.code === bestResult.code &&
                                                     supplierResult.product === bestResult.product;
                                                 const matchType = getMatchType(supplierResult, normalizedQueryCode, card.hasExactMatch);
-                                                const matchLabel = supplierResult.whatsappStatus === 'sent'
-                                                    ? 'WhatsApp enviado'
+                                                const matchLabel = supplierResult.whatsappStatus === 'queued'
+                                                    ? 'Envio confirmado'
+                                                    : supplierResult.whatsappStatus === 'pending'
+                                                        ? 'Enviando WhatsApp'
                                                     : supplierResult.whatsappStatus === 'failed'
                                                         ? 'Falha no WhatsApp'
                                                         : matchType === 'exact'
@@ -995,11 +1000,16 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                                                         <strong>Telefone:</strong> {supplierResult.whatsappPhone || 'Não informado'}
                                                                     </div>
                                                                     <div className="supplier-result-meta">
-                                                                        <strong>Status:</strong> {supplierResult.whatsappStatus === 'sent' ? 'Mensagem enviada' : 'Falha no envio'}
+                                                                        <strong>Status:</strong> {supplierResult.whatsappStatus === 'queued' ? 'Enviado ao servidor do WhatsApp' : supplierResult.whatsappStatus === 'pending' ? 'Enviando' : 'Falha no envio'}
                                                                     </div>
                                                                     <div className="supplier-result-meta">
                                                                         <strong>Retorno:</strong> {supplierResult.stockText || 'Aguardando resposta'}
                                                                     </div>
+                                                                    {supplierResult.whatsappMessageId && (
+                                                                        <div className="supplier-result-meta">
+                                                                            <strong>ID:</strong> {supplierResult.whatsappMessageId}
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             ) : (
                                                                 <div className="supplier-meta-grid">
@@ -1480,10 +1490,15 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                     color: #4b5563;
                     border: 1px solid rgba(107, 114, 128, 0.16);
                 }
-                .supplier-card-match.sent {
+                .supplier-card-match.queued {
                     background: rgba(34, 197, 94, 0.12);
                     color: #15803d;
                     border: 1px solid rgba(34, 197, 94, 0.18);
+                }
+                .supplier-card-match.pending {
+                    background: rgba(59, 130, 246, 0.12);
+                    color: #1d4ed8;
+                    border: 1px solid rgba(59, 130, 246, 0.18);
                 }
                 .supplier-card-match.failed {
                     background: rgba(239, 68, 68, 0.12);

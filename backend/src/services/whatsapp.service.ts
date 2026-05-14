@@ -1007,13 +1007,28 @@ class WhatsAppSession {
             throw new Error('WhatsApp não conectado');
         }
 
-        const jid = buildWhatsappJid(to);
-        const exists = await this.sock.onWhatsApp(jid).catch(() => []);
-        if (jid.endsWith('@s.whatsapp.net') && Array.isArray(exists) && exists.length > 0 && exists[0]?.exists === false) {
+        const requestedJid = buildWhatsappJid(to);
+        let jid = requestedJid;
+        const exists = requestedJid.endsWith('@s.whatsapp.net')
+            ? await this.sock.onWhatsApp(requestedJid).catch((error: unknown) => {
+                throw new Error(`Nao foi possivel confirmar este telefone no WhatsApp. ${error instanceof Error ? error.message : ''}`.trim());
+            })
+            : [];
+        if (requestedJid.endsWith('@s.whatsapp.net') && Array.isArray(exists) && !exists.some((item: any) => item?.exists)) {
             throw new Error('Este telefone não possui WhatsApp ou não foi encontrado.');
         }
 
-        await this.sock.sendMessage(jid, { text });
+        if (requestedJid.endsWith('@s.whatsapp.net') && Array.isArray(exists)) {
+            const confirmed = exists.find((item: any) => item?.exists);
+            jid = confirmed?.jid || requestedJid;
+        }
+
+        const sentMessage = await this.sock.sendMessage(jid, { text });
+        const messageId = sentMessage?.key?.id || '';
+
+        if (!messageId) {
+            throw new Error('WhatsApp aceitou a tentativa, mas nao retornou confirmacao da mensagem.');
+        }
 
         const digits = normalizeWhatsappPhone(jid);
         const sentTimestamp = Math.floor(Date.now() / 1000);
@@ -1042,7 +1057,15 @@ class WhatsAppSession {
             clientId: client?.id,
             text,
             timestamp: sentTimestamp,
+            messageId,
         });
+
+        return {
+            to: jid,
+            requestedTo: requestedJid,
+            messageId,
+            timestamp: sentTimestamp,
+        };
     }
 }
 
