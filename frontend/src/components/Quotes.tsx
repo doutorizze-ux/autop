@@ -37,6 +37,7 @@ type QuoteResult = {
     whatsappError?: string;
     whatsappMessageId?: string;
     whatsappJid?: string;
+    exportSelectedSimilar?: boolean;
 };
 
 type QuoteMatrix = Record<string, QuoteResult[]>;
@@ -154,6 +155,9 @@ const buildVariantSelectionKey = (query: string, provider: string) => `${query}:
 
 const buildOfferSelectionKey = (query: string, provider: string, variantKey?: string) =>
     `${query}::${provider}::${variantKey || 'all'}`;
+
+const buildSimilarExportKey = (query: string, provider: string, result?: QuoteResult | null) =>
+    `${query}::${provider}::${result ? buildResultIdentity(result) : 'sem-resultado'}`;
 
 const buildVariantGroups = (results: QuoteResult[], query: string) => {
     const groupMap = new Map<string, VariantGroup>();
@@ -273,6 +277,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
     const [quoteJobError, setQuoteJobError] = useState('');
     const [selectedOfferByQuerySupplier, setSelectedOfferByQuerySupplier] = useState<Record<string, string>>({});
     const [selectedVariantByQuerySupplier, setSelectedVariantByQuerySupplier] = useState<Record<string, string>>({});
+    const [includedSimilarInPdf, setIncludedSimilarInPdf] = useState<Record<string, boolean>>({});
     const [activeResultView, setActiveResultView] = useState<'summary' | string>('summary');
 
     const scrollToResults = () => {
@@ -302,6 +307,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
         setSuppliers(data.suppliers || []);
         setSelectedOfferByQuerySupplier({});
         setSelectedVariantByQuerySupplier({});
+        setIncludedSimilarInPdf({});
 
         if (data.jobId) {
             setActiveJobId(data.jobId);
@@ -471,6 +477,9 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
         setIsSearching(true);
         setQuoteMatrix({});
         setSuppliers([]);
+        setSelectedOfferByQuerySupplier({});
+        setSelectedVariantByQuerySupplier({});
+        setIncludedSimilarInPdf({});
         setCurrentQuoteId('');
         setCurrentCreatedAt('');
         setQuoteJobStatus('running');
@@ -524,7 +533,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                 })),
                 suppliers,
                 matrix: quoteMatrix,
-                selectedOffers: selectedOffersByQuerySupplier,
+                selectedOffers: type === 'pdf' ? pdfSelectedOffersByQuerySupplier : selectedOffersByQuerySupplier,
             }, {
                 responseType: 'blob',
             });
@@ -553,6 +562,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
             setSuppliers(response.data.suppliers || []);
             setSelectedOfferByQuerySupplier({});
             setSelectedVariantByQuerySupplier({});
+            setIncludedSimilarInPdf({});
             setCurrentQuoteId(response.data.quoteId || quoteId);
             setCurrentCreatedAt(response.data.createdAt);
             setIsSearching(false);
@@ -649,6 +659,37 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
 
         return selections;
     }, [partList, quoteMatrix, resolvedVariantSelectionByQuerySupplier, selectedOfferByQuerySupplier, suppliers]);
+
+    const pdfSelectedOffersByQuerySupplier = useMemo(() => {
+        const selections: Record<string, Record<string, QuoteResult | null>> = {};
+
+        partList.forEach((item) => {
+            const normalizedQueryCode = normalizeCodeValue(item.query);
+            const querySelections: Record<string, QuoteResult | null> = {};
+
+            suppliers.forEach((provider) => {
+                const selectedResult = selectedOffersByQuerySupplier[item.query]?.[provider] || null;
+                if (!selectedResult || selectedResult.error || selectedResult.whatsappStatus) {
+                    querySelections[provider] = null;
+                    return;
+                }
+
+                const isExact = !!normalizeCodeValue(selectedResult.code) && normalizeCodeValue(selectedResult.code) === normalizedQueryCode;
+                const includeSimilar = includedSimilarInPdf[buildSimilarExportKey(item.query, provider, selectedResult)];
+
+                querySelections[provider] = isExact || includeSimilar
+                    ? {
+                          ...selectedResult,
+                          exportSelectedSimilar: !isExact && !!includeSimilar,
+                      }
+                    : null;
+            });
+
+            selections[item.query] = querySelections;
+        });
+
+        return selections;
+    }, [includedSimilarInPdf, partList, selectedOffersByQuerySupplier, suppliers]);
 
     return (
         <div className="quotes-container">
@@ -921,6 +962,15 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                                                 ? 'Similar real'
                                                                 : 'Código não informado';
                                                 const matchClass = supplierResult.whatsappStatus || matchType;
+                                                const isExactForPdf =
+                                                    !supplierResult.whatsappStatus &&
+                                                    !!normalizeCodeValue(supplierResult.code) &&
+                                                    normalizeCodeValue(supplierResult.code) === normalizedQueryCode;
+                                                const canIncludeSimilarInPdf =
+                                                    !supplierResult.error &&
+                                                    !supplierResult.whatsappStatus &&
+                                                    !isExactForPdf;
+                                                const similarExportKey = buildSimilarExportKey(item.query, card.provider, supplierResult);
 
                                                 return (
                                                     <div
@@ -944,6 +994,22 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                                                 </div>
                                                             )}
                                                         </div>
+
+                                                        {canIncludeSimilarInPdf && (
+                                                            <label className="supplier-pdf-toggle">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={!!includedSimilarInPdf[similarExportKey]}
+                                                                    onChange={(event) =>
+                                                                        setIncludedSimilarInPdf((current) => ({
+                                                                            ...current,
+                                                                            [similarExportKey]: event.target.checked,
+                                                                        }))
+                                                                    }
+                                                                />
+                                                                <span>Incluir este similar no PDF</span>
+                                                            </label>
+                                                        )}
 
                                                         {card.variantGroups.length > 1 && !supplierResult.whatsappStatus && (
                                                             <div className="supplier-offer-selector">
@@ -1471,6 +1537,25 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                     gap: 0.45rem;
                     flex-wrap: wrap;
                     margin-bottom: 0.45rem;
+                }
+                .supplier-pdf-toggle {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.45rem;
+                    width: fit-content;
+                    color: #92400e;
+                    background: #fffbeb;
+                    border: 1px solid rgba(245, 158, 11, 0.32);
+                    border-radius: 8px;
+                    padding: 0.45rem 0.6rem;
+                    font-size: 0.78rem;
+                    font-weight: 800;
+                    cursor: pointer;
+                }
+                .supplier-pdf-toggle input {
+                    width: 16px;
+                    height: 16px;
+                    margin: 0;
                 }
                 .supplier-card-badge {
                     display: inline-flex;

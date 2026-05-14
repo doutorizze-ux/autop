@@ -338,37 +338,50 @@ function extractSuppliersFromMatrix(matrix: QuoteMatrix) {
     ) as string[];
 }
 
+function normalizeExportCode(value: unknown) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .trim();
+}
+
+function parseExportPrice(value: unknown) {
+    if (value === undefined || value === null || value === '') return Number.POSITIVE_INFINITY;
+    if (typeof value === 'number') return value;
+
+    const normalized = String(value)
+        .replace(/\s/g, '')
+        .replace(/\./g, '')
+        .replace(',', '.')
+        .replace(/[^\d.-]/g, '');
+
+    const parsed = Number.parseFloat(normalized);
+    return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
+}
+
+function isExactResultForQuery(result: any, query: string) {
+    const normalizedQuery = normalizeExportCode(query);
+    const normalizedCode = normalizeExportCode(result?.code);
+    return !!normalizedQuery && !!normalizedCode && normalizedCode === normalizedQuery;
+}
+
+function shouldRenderResultInPdf(result: any, query: string) {
+    if (!result || result.error || result.whatsappStatus) return false;
+    if (!Number.isFinite(parseExportPrice(result.price))) return false;
+    return isExactResultForQuery(result, query) || result.exportSelectedSimilar === true;
+}
+
 function pickBestResultForExport(results: any[], query: string) {
-    const normalizeCode = (value: unknown) =>
-        String(value || '')
-            .toLowerCase()
-            .replace(/[^a-z0-9]/g, '')
-            .trim();
-
-    const parsePrice = (value: unknown) => {
-        if (value === undefined || value === null || value === '') return Number.POSITIVE_INFINITY;
-        if (typeof value === 'number') return value;
-
-        const normalized = String(value)
-            .replace(/\s/g, '')
-            .replace(/\./g, '')
-            .replace(',', '.')
-            .replace(/[^\d.-]/g, '');
-
-        const parsed = Number.parseFloat(normalized);
-        return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
-    };
-
-    const normalizedQuery = normalizeCode(query);
+    const normalizedQuery = normalizeExportCode(query);
     const validResults = results.filter((entry) => entry && !entry.error);
-    const hasExact = validResults.some((entry) => normalizeCode(entry.code) === normalizedQuery);
+    const hasExact = validResults.some((entry) => normalizeExportCode(entry.code) === normalizedQuery);
 
     return [...validResults].sort((a, b) => {
-        const aExact = normalizeCode(a.code) === normalizedQuery;
-        const bExact = normalizeCode(b.code) === normalizedQuery;
+        const aExact = normalizeExportCode(a.code) === normalizedQuery;
+        const bExact = normalizeExportCode(b.code) === normalizedQuery;
         if (aExact !== bExact) return aExact ? -1 : 1;
         if (hasExact && aExact !== bExact) return aExact ? -1 : 1;
-        return parsePrice(a.price) - parsePrice(b.price);
+        return parseExportPrice(a.price) - parseExportPrice(b.price);
     })[0] || null;
 }
 
@@ -631,17 +644,6 @@ function renderPDFSections(res: Response, sections: QuotePdfSection[], filenameP
         doc.addPage({ layout: 'landscape', margin: 36, size: 'A4' });
     };
 
-    const parsePdfPrice = (value: unknown) => {
-        if (typeof value === 'number') return value;
-        const normalized = String(value || '')
-            .replace(/\s/g, '')
-            .replace(/\./g, '')
-            .replace(',', '.')
-            .replace(/[^\d.-]/g, '');
-        const parsed = Number.parseFloat(normalized);
-        return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
-    };
-
     const drawTableHeader = () => {
         const y = doc.y;
         doc.font('Helvetica-Bold').fontSize(8).fillColor('#111827');
@@ -657,8 +659,9 @@ function renderPDFSections(res: Response, sections: QuotePdfSection[], filenameP
     };
 
     const drawSupplierRow = (supplier: string, result: any, bestPrice: number) => {
-        const price = result && !result.error ? parsePdfPrice(result.price) : Number.POSITIVE_INFINITY;
-        const isBest = price === bestPrice && bestPrice !== Number.POSITIVE_INFINITY;
+        const price = result && !result.error ? parseExportPrice(result.price) : Number.POSITIVE_INFINITY;
+        const hasPrintableResult = !!result && !result.error && Number.isFinite(price);
+        const isBest = hasPrintableResult && price === bestPrice && bestPrice !== Number.POSITIVE_INFINITY;
         const rowHeight = 44;
         ensureSpace(rowHeight + 8);
 
@@ -679,7 +682,7 @@ function renderPDFSections(res: Response, sections: QuotePdfSection[], filenameP
         doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#111827')
             .text(supplier, xSupplier + 6, y + 6, { width: columns.supplier - 8, height: 28, ellipsis: true });
 
-        if (result && !result.error) {
+        if (hasPrintableResult) {
             doc.font(isBest ? 'Helvetica-Bold' : 'Helvetica').fontSize(9).fillColor(isBest ? '#065F46' : '#111827')
                 .text(`R$ ${price.toFixed(2)}`, xPrice + 6, y + 6, { width: columns.price - 8, align: 'right' });
             doc.font('Helvetica').fontSize(7.5).fillColor('#374151')
@@ -739,14 +742,19 @@ function renderPDFSections(res: Response, sections: QuotePdfSection[], filenameP
             doc.moveDown(0.4);
             drawTableHeader();
 
-            const selectedResults = section.suppliers.map((supplier: string) => section.selectedOffers[item.query]?.[supplier] || null);
+            const selectedResults = section.suppliers.map((supplier: string) => {
+                const result = section.selectedOffers[item.query]?.[supplier] || null;
+                return shouldRenderResultInPdf(result, item.query) ? result : null;
+            });
             const validPrices = selectedResults
                 .filter((result) => result && !result.error)
-                .map((result) => parsePdfPrice(result.price));
+                .map((result) => parseExportPrice(result.price))
+                .filter((price) => Number.isFinite(price));
             const bestPrice = validPrices.length ? Math.min(...validPrices) : Number.POSITIVE_INFINITY;
 
             section.suppliers.forEach((supplier: string) => {
-                drawSupplierRow(supplier, section.selectedOffers[item.query]?.[supplier] || null, bestPrice);
+                const result = section.selectedOffers[item.query]?.[supplier] || null;
+                drawSupplierRow(supplier, shouldRenderResultInPdf(result, item.query) ? result : null, bestPrice);
             });
         });
     });
