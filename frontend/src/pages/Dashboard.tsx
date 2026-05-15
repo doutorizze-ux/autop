@@ -32,6 +32,7 @@ import { Roadmap } from '../components/Roadmap';
 import { CatalogSearch } from '../components/CatalogSearch';
 import { API_URL } from '../services/api';
 import { socket } from '../services/socket';
+import { formatDateTime } from '../utils/date';
 
 const suppliersAccessPassword = '080782';
 const suppliersAccessStorageKey = 'suppliers_access_granted';
@@ -64,11 +65,6 @@ type TeamQuoteEmployee = {
 type TeamQuoteHistoryResponse = {
   totalQuotes: number;
   employees: TeamQuoteEmployee[];
-};
-
-const formatDateTime = (value?: string | null) => {
-  if (!value) return '---';
-  return new Date(value).toLocaleString('pt-BR');
 };
 
 const normalizeText = (value: string) =>

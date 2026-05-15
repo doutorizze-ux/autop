@@ -8,6 +8,7 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 import { whatsappService } from '../services/whatsapp.service';
 
 const prisma = new PrismaClient();
+const APP_TIME_ZONE = 'America/Sao_Paulo';
 
 type QuoteItem = {
     query: string;
@@ -61,6 +62,31 @@ type QuoteJob = {
 
 const quoteJobs = new Map<string, QuoteJob>();
 
+function serializeDateTime(value?: Date | string | null) {
+    if (!value) return null;
+
+    const parsedDate = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(parsedDate.getTime())) return null;
+
+    return parsedDate.toISOString();
+}
+
+function formatDateTime(value?: Date | string | null) {
+    const parsedDate = value ? (value instanceof Date ? value : new Date(value)) : new Date();
+    const safeDate = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
+
+    return new Intl.DateTimeFormat('pt-BR', {
+        timeZone: APP_TIME_ZONE,
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23',
+    }).format(safeDate);
+}
+
 function getRequestUserId(req: Request) {
     return String((req as AuthRequest).user?.userId || '').trim();
 }
@@ -90,7 +116,7 @@ function mapQuoteHistoryEntry(quote: any) {
 
     return {
         id: quote.id,
-        createdAt: quote.createdAt,
+        createdAt: serializeDateTime(quote.createdAt),
         itemCount: parsed.items.length,
         items: parsed.items,
         title: parsed.items.map((item) => item.label).join(' | '),
@@ -531,7 +557,7 @@ function renderPDFSectionsLegacy(res: Response, sections: QuotePdfSection[], fil
             doc.moveDown(0.5);
         }
 
-        doc.fontSize(10).font('Helvetica').fillColor('black').text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, {
+        doc.fontSize(10).font('Helvetica').fillColor('black').text(`Gerado em: ${formatDateTime()}`, {
             align: 'right',
         });
         doc.moveDown();
@@ -706,7 +732,7 @@ function renderPDFSections(res: Response, sections: QuotePdfSection[], filenameP
 
     doc.fontSize(18).font('Helvetica-Bold').fillColor('#111827').text('Planilha de Confronto de Precos', { align: 'center' });
     doc.moveDown(0.2);
-    doc.fontSize(8).font('Helvetica').fillColor('#4B5563').text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, {
+    doc.fontSize(8).font('Helvetica').fillColor('#4B5563').text(`Gerado em: ${formatDateTime()}`, {
         align: 'right',
     });
     doc.moveDown(0.8);
@@ -1069,7 +1095,7 @@ export const listTeamQuoteHistory = async (req: Request, res: Response) => {
             .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'))
             .map((employee) => ({
                 ...employee,
-                lastQuoteAt: employee.lastQuoteAt,
+                lastQuoteAt: serializeDateTime(employee.lastQuoteAt),
             }));
 
         res.json({
@@ -1096,7 +1122,7 @@ export const getQuoteHistoryById = async (req: Request, res: Response) => {
 
         res.json({
             id: quote.id,
-            createdAt: quote.createdAt,
+            createdAt: serializeDateTime(quote.createdAt),
             items: parsed.items,
             suppliers: parsed.suppliers,
             matrix: parsed.matrix,
@@ -1204,7 +1230,7 @@ export const exportMultipleSavedQuotesPDF = async (req: Request, res: Response) 
             const parsed = parseStoredQuote(quote);
             return {
                 title: `Orcamento ${index + 1}`,
-                subtitle: `${new Date(quote.createdAt).toLocaleString('pt-BR')} | ${parsed.items.length} item(ns)`,
+                subtitle: `${formatDateTime(quote.createdAt)} | ${parsed.items.length} item(ns)`,
                 items: parsed.items,
                 suppliers: parsed.suppliers,
                 matrix: parsed.matrix,

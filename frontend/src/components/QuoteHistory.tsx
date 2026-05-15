@@ -11,6 +11,7 @@ import {
     Trash2,
 } from 'lucide-react';
 import { API_URL } from '../services/api';
+import { formatDateTime } from '../utils/date';
 
 type QuoteHistoryItem = {
     query: string;
@@ -31,11 +32,6 @@ type QuoteHistoryProps = {
 };
 
 const apiBase = API_URL;
-
-const formatDateTime = (value?: string) => {
-    if (!value) return '---';
-    return new Date(value).toLocaleString('pt-BR');
-};
 
 const normalizeText = (value: string) =>
     String(value || '')

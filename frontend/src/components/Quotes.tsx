@@ -13,6 +13,7 @@ import {
     RefreshCw,
     Clock3,
 } from 'lucide-react';
+import { formatDateTime } from '../utils/date';
 
 type QuoteItemInput = {
     query: string;
@@ -72,11 +73,6 @@ const getQuotePrefillStorageKey = (userId?: string) => `quote_prefill_item:${use
 
 type QuotesProps = {
     openHistoryId?: string;
-};
-
-const formatDateTime = (value?: string) => {
-    if (!value) return '---';
-    return new Date(value).toLocaleString('pt-BR');
 };
 
 const normalizeVariantKey = (value?: string) =>
