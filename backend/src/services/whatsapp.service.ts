@@ -54,6 +54,20 @@ function normalizeWhatsappPhone(jid: string) {
     return String(jid || '').replace(/@s\.whatsapp\.net$/, '').replace(/\D/g, '');
 }
 
+function getWhatsappPhoneMatchKeys(value?: string | null) {
+    const digits = normalizeWhatsappPhone(String(value || ''));
+    if (!digits) return [];
+
+    const keys = new Set<string>([digits]);
+    if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+        keys.add(digits.slice(2));
+    } else if (digits.length === 10 || digits.length === 11) {
+        keys.add(`55${digits}`);
+    }
+
+    return Array.from(keys);
+}
+
 function normalizeWhatsappJid(jid: string) {
     const raw = String(jid || '').trim();
     if (!raw) return '';
@@ -565,6 +579,24 @@ async function appendClientMessage(clientId: string, message: StoredChatMessage,
     });
 }
 
+async function isSupplierWhatsappContact(...values: Array<string | null | undefined>) {
+    const contactKeys = new Set(values.flatMap((value) => getWhatsappPhoneMatchKeys(value)));
+    if (contactKeys.size === 0) return false;
+
+    const suppliers = await prisma.supplier.findMany({
+        where: {
+            whatsappPhone: { not: null },
+        },
+        select: {
+            whatsappPhone: true,
+        },
+    });
+
+    return suppliers.some((supplier) =>
+        getWhatsappPhoneMatchKeys(supplier.whatsappPhone).some((key) => contactKeys.has(key))
+    );
+}
+
 function mergeChatHistories(...histories: Array<string | null | undefined>) {
     const messages = histories.flatMap((history) => readClientHistory(history));
     const deduped = messages
@@ -1060,6 +1092,9 @@ class WhatsAppSession {
 
     private async handleBotAfterIncomingMessage(client: any, text: string) {
         try {
+            const isSupplierContact = await isSupplierWhatsappContact(client.phone, client.whatsappJid);
+            if (isSupplierContact) return;
+
             const reply = await BotService.buildReply({
                 userId: this.userId,
                 clientName: client.name,
