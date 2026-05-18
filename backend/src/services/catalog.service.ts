@@ -63,6 +63,33 @@ function extractYearTokens(tokens: string[]) {
         .filter((year): year is number => !!year && year >= 1950 && year <= 2099);
 }
 
+function dedupeContainedTokens(tokens: string[]) {
+    const cleanedTokens: string[] = [];
+
+    tokens.forEach((token) => {
+        if (cleanedTokens.includes(token)) return;
+
+        const isTokenTypingNoise = cleanedTokens.some(
+            (existing) => existing.length >= 4 && token !== existing && token.includes(existing) && token.length - existing.length <= 3
+        );
+
+        if (isTokenTypingNoise) return;
+
+        const noisyExistingIndex = cleanedTokens.findIndex(
+            (existing) => token.length >= 4 && token !== existing && existing.includes(token) && existing.length - token.length <= 3
+        );
+
+        if (noisyExistingIndex >= 0) {
+            cleanedTokens[noisyExistingIndex] = token;
+            return;
+        }
+
+        cleanedTokens.push(token);
+    });
+
+    return cleanedTokens;
+}
+
 function buildRecordText(item: CatalogRecord) {
     return normalizeText(
         item.searchText ||
@@ -238,7 +265,7 @@ export class CatalogService {
             .split(/\s+/)
             .filter((token) => token.length >= 2 && !queryStopWords.has(token));
         const years = extractYearTokens(tokens);
-        const significantTokens = tokens.filter((token) => !years.includes(normalizeYearToken(token) || 0));
+        const significantTokens = dedupeContainedTokens(tokens.filter((token) => !years.includes(normalizeYearToken(token) || 0)));
         const looksLikeCodeSearch = /\d/.test(normalizedCodeQuery) && normalizedCodeQuery.length >= 4;
 
         const allItems = payloads.flatMap((payload) => payload.items || []);
