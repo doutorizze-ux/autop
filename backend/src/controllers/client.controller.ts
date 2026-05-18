@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middlewares/auth.middleware';
+import { normalizeWhatsappChannelKey } from '../services/whatsapp-channel.service';
 
 const prisma = new PrismaClient();
 
@@ -12,7 +13,12 @@ function getOwnedClientWhere(req: Request, id?: string) {
     return {
         ...(id ? { id } : {}),
         userId: getRequestUserId(req),
+        whatsappChannelKey: getRequestWhatsappChannelKey(req),
     };
+}
+
+function getRequestWhatsappChannelKey(req: Request) {
+    return normalizeWhatsappChannelKey((req.query?.channel || req.body?.whatsappChannelKey || req.body?.channel) as string);
 }
 
 function isUnresolvedPhone(value: string) {
@@ -85,7 +91,7 @@ export const createClient = async (req: Request, res: Response): Promise<void> =
         }
 
         const client = await prisma.client.create({
-            data: { name, phone, userId },
+            data: { name, phone, userId, whatsappChannelKey: getRequestWhatsappChannelKey(req) },
         });
         res.status(201).json(normalizeClientForResponse(client));
     } catch (err: any) {

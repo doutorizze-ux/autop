@@ -18,6 +18,7 @@ import { formatDateTime } from '../utils/date';
 type QuoteItemInput = {
     query: string;
     description?: string;
+    category?: string;
     label?: string;
 };
 
@@ -70,6 +71,14 @@ type QuoteSearchResponse = {
 const apiBase = API_URL;
 const getActiveQuoteJobStorageKey = (userId?: string) => `active_quote_job_id:${userId || 'sem-usuario'}`;
 const getQuotePrefillStorageKey = (userId?: string) => `quote_prefill_item:${userId || 'sem-usuario'}`;
+const quoteCategories = [
+    { key: 'pecas-automotivas', label: 'Pecas automotivas' },
+    { key: 'pecas-eletricas', label: 'Pecas eletricas' },
+    { key: 'concessionarias', label: 'Concessionarias' },
+    { key: 'pneu', label: 'Pneu' },
+];
+const getQuoteCategoryLabel = (key?: string) =>
+    quoteCategories.find((category) => category.key === key)?.label || quoteCategories[0].label;
 
 type QuotesProps = {
     openHistoryId?: string;
@@ -263,6 +272,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
     const [partList, setPartList] = useState<QuoteItemInput[]>([]);
     const [newPart, setNewPart] = useState('');
     const [newDescription, setNewDescription] = useState('');
+    const [quoteCategory, setQuoteCategory] = useState(quoteCategories[0].key);
     const [quoteMatrix, setQuoteMatrix] = useState<QuoteMatrix>({});
     const [suppliers, setSuppliers] = useState<string[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -296,6 +306,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
             data.items.map((item) => ({
                 query: item.query,
                 description: item.description,
+                category: item.category,
                 label: item.label,
             }))
         );
@@ -407,6 +418,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                 const payload = JSON.parse(raw) as QuoteItemInput;
                 const query = String(payload.query || '').trim();
                 const description = String(payload.description || '').trim();
+                const category = String(payload.category || quoteCategory).trim();
 
                 if (!query) return;
 
@@ -419,6 +431,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                         {
                             query,
                             description: description || undefined,
+                            category: category || undefined,
                         },
                     ];
                 });
@@ -432,7 +445,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
         applyPrefill();
         window.addEventListener('quote-prefill-ready', applyPrefill);
         return () => window.removeEventListener('quote-prefill-ready', applyPrefill);
-    }, [quotePrefillStorageKey]);
+    }, [quoteCategory, quotePrefillStorageKey]);
 
     const handleAddPart = (event?: React.FormEvent) => {
         if (event) event.preventDefault();
@@ -456,6 +469,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
             {
                 query,
                 description: description || undefined,
+                category: quoteCategory,
             },
         ]);
 
@@ -486,6 +500,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                 items: partList.map((item) => ({
                     query: item.query,
                     description: item.description,
+                    category: item.category,
                 }))
             });
 
@@ -698,6 +713,19 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                 </div>
             </div>
 
+            <div className="quote-category-selector" aria-label="Tipo de cotacao">
+                {quoteCategories.map((category) => (
+                    <button
+                        key={category.key}
+                        type="button"
+                        className={quoteCategory === category.key ? 'active' : ''}
+                        onClick={() => setQuoteCategory(category.key)}
+                    >
+                        {category.label}
+                    </button>
+                ))}
+            </div>
+
             <div className="search-box">
                 <form onSubmit={handleAddPart} className="add-part-form">
                     <div className="input-group input-group-main">
@@ -748,6 +776,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                 <span key={`${item.query}-${index}`} className="part-tag">
                                     <span className="part-tag-content">
                                         <strong>{item.query}</strong>
+                                        <small>{getQuoteCategoryLabel(item.category)}</small>
                                         {item.description && <small>{item.description}</small>}
                                     </span>
                                     <button type="button" onClick={() => handleRemovePart(index)}>
@@ -1156,6 +1185,26 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                 .quotes-container { display: flex; flex-direction: column; gap: 2rem; }
                 .quotes-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
                 .page-subtitle { color: var(--text-muted); margin-top: 0.5rem; }
+                .quote-category-selector {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 0.6rem;
+                }
+                .quote-category-selector button {
+                    min-height: 40px;
+                    padding: 0 0.95rem;
+                    color: var(--text-main);
+                    background: var(--panel-bg);
+                    border: 1px solid var(--border-color);
+                    border-radius: 999px;
+                    cursor: pointer;
+                    font-weight: 800;
+                }
+                .quote-category-selector button.active {
+                    color: #fff;
+                    background: var(--primary-color);
+                    border-color: var(--primary-color);
+                }
                 .search-box, .results-panel, .history-panel {
                     background: var(--panel-bg);
                     border: 1px solid var(--border-color);

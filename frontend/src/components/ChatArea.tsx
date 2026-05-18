@@ -8,6 +8,7 @@ interface Client {
   id: string;
   name: string;
   phone: string;
+  whatsappChannelKey?: string | null;
   whatsappJid?: string | null;
   status: string;
   history?: string | null;
@@ -25,6 +26,13 @@ interface Message {
     fileName?: string;
   } | null;
 }
+
+interface ChatAreaProps {
+  channelKey?: string;
+  channelLabel?: string;
+}
+
+const defaultWhatsappChannelKey = 'atendimento-1';
 
 const normalizeContactKey = (value: string) => value.replace(/@(s\.whatsapp\.net|lid)$/, '');
 
@@ -49,6 +57,11 @@ const getClientMessageKeys = (client: Client) => {
     .map((value) => normalizeContactKey(String(value)));
   return Array.from(new Set(keys));
 };
+
+const getPayloadChannelKey = (payload: any) =>
+  String(payload?.channelKey || payload?.client?.whatsappChannelKey || defaultWhatsappChannelKey);
+
+const isPayloadFromChannel = (payload: any, channelKey: string) => getPayloadChannelKey(payload) === channelKey;
 
 const parseClientHistory = (client: Client): Message[] => {
   if (!client.history) return [];
@@ -326,7 +339,7 @@ const playAlertTone = (urgent = false) => {
   } catch (_) {}
 };
 
-export const ChatArea = () => {
+export const ChatArea = ({ channelKey = defaultWhatsappChannelKey, channelLabel = 'Atendimento 1' }: ChatAreaProps) => {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
@@ -338,6 +351,8 @@ export const ChatArea = () => {
   const [handoffAlert, setHandoffAlert] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const hasAttemptedPhoneSyncRef = useRef(false);
+  const selectedClientStorageKey =
+    channelKey === defaultWhatsappChannelKey ? 'selected_attendance_client_id' : `selected_attendance_client_id:${channelKey}`;
 
   useEffect(() => {
     const handleResize = () => {
@@ -355,19 +370,25 @@ export const ChatArea = () => {
   }, [selectedClient]);
 
   useEffect(() => {
+    hasAttemptedPhoneSyncRef.current = false;
+    setClients([]);
+    setSelectedClient(null);
+    setMessages({});
+    setSearchTerm('');
+
     const fetchClients = async () => {
       try {
-        const res = await axios.get(`${API_URL}/api/clients`);
+        const res = await axios.get(`${API_URL}/api/clients`, { params: { channel: channelKey } });
         let currentClients = res.data as Client[];
-        const selectedId = localStorage.getItem('selected_attendance_client_id');
+        const selectedId = localStorage.getItem(selectedClientStorageKey);
         setClients(getAttendanceClients(currentClients, selectedId));
 
         const hasUnresolvedClients = getAttendanceClients(currentClients, selectedId).some((client) => formatClientPhone(client).includes('aguardando'));
         if (hasUnresolvedClients && !hasAttemptedPhoneSyncRef.current) {
           hasAttemptedPhoneSyncRef.current = true;
           try {
-            await axios.post(`${API_URL}/api/whatsapp/sync-phones`);
-            const refreshed = await axios.get(`${API_URL}/api/clients`);
+            await axios.post(`${API_URL}/api/whatsapp/sync-phones`, { channel: channelKey });
+            const refreshed = await axios.get(`${API_URL}/api/clients`, { params: { channel: channelKey } });
             currentClients = refreshed.data;
             setClients(getAttendanceClients(currentClients, selectedId));
           } catch (syncError) {
@@ -391,7 +412,7 @@ export const ChatArea = () => {
               setShowClientListOnMobile(false);
             }
           }
-          localStorage.removeItem('selected_attendance_client_id');
+          localStorage.removeItem(selectedClientStorageKey);
         }
       } catch (err) {
         console.error('Erro ao buscar clientes:', err);
@@ -401,6 +422,8 @@ export const ChatArea = () => {
     void fetchClients();
 
     const handleIncomingMessage = (data: any) => {
+      if (!isPayloadFromChannel(data, channelKey)) return;
+
       const message: Message = {
         text: data.text || '',
         fromMe: false,
@@ -421,6 +444,8 @@ export const ChatArea = () => {
     };
 
     const handleClientUpserted = (client: Client) => {
+      if ((client.whatsappChannelKey || defaultWhatsappChannelKey) !== channelKey) return;
+
       setClients((prev) => mergeClientIntoList(prev, client, hasAttendanceMessages(client)));
 
       setMessages((prev) => ({
@@ -437,12 +462,16 @@ export const ChatArea = () => {
       });
     };
 
-    const handleClientDeleted = (payload: { id: string }) => {
+    const handleClientDeleted = (payload: { id: string; channelKey?: string }) => {
+      if (!isPayloadFromChannel(payload, channelKey)) return;
+
       setClients((prev) => prev.filter((client) => client.id !== payload.id));
       setSelectedClient((current) => (current?.id === payload.id ? null : current));
     };
 
     const handleMessageSent = (data: any) => {
+      if (!isPayloadFromChannel(data, channelKey)) return;
+
       const message: Message = {
         text: data.text || '',
         fromMe: true,
@@ -457,6 +486,8 @@ export const ChatArea = () => {
     };
 
     const handleBotHandoff = (data: any) => {
+      if (!isPayloadFromChannel(data, channelKey)) return;
+
       if (data.client?.id) {
         setClients((prev) => mergeClientIntoList(prev, data.client, true));
         setSelectedClient((current) => (current?.id === data.client.id ? data.client : current));
@@ -479,7 +510,7 @@ export const ChatArea = () => {
       socket.off('client_deleted', handleClientDeleted);
       socket.off('bot_handoff', handleBotHandoff);
     };
-  }, []);
+  }, [channelKey, selectedClientStorageKey]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -496,6 +527,7 @@ export const ChatArea = () => {
       await axios.post(`${API_URL}/api/whatsapp/send`, {
         to: selectedClient.whatsappJid || selectedClient.phone,
         text,
+        channel: channelKey,
       });
     } catch (err: any) {
       alert(err.response?.data?.message || err.message || 'Erro ao enviar mensagem');
@@ -547,6 +579,7 @@ export const ChatArea = () => {
     try {
       const response = await axios.patch(`${API_URL}/api/clients/${selectedClient.id}`, {
         phone: digits,
+        whatsappChannelKey: channelKey,
       });
       const updatedClient = response.data as Client;
       setClients((prev) => prev.map((client) => (client.id === updatedClient.id ? updatedClient : client)));
@@ -643,7 +676,7 @@ export const ChatArea = () => {
 
               <div className="chat-user-info">
                 <span className="chat-user-name">{selectedClient.name}</span>
-                <span className="chat-user-status">WhatsApp: {formatClientPhone(selectedClient)}</span>
+                <span className="chat-user-status">{channelLabel}: {formatClientPhone(selectedClient)}</span>
               </div>
             </div>
 
@@ -712,7 +745,7 @@ export const ChatArea = () => {
           <div className="empty-chat">
             <User size={64} />
             <h3>Selecione um cliente para conversar</h3>
-            <p>WhatsApp conectado e pronto para atendimento.</p>
+            <p>{channelLabel} conectado e pronto para atendimento.</p>
           </div>
         </section>
       )}

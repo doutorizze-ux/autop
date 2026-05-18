@@ -20,6 +20,7 @@ import pino from 'pino';
 import QRCode from 'qrcode';
 import { io } from '../index';
 import { BotService } from './bot.service';
+import { defaultWhatsappChannelKey, getWhatsappChannel, normalizeWhatsappChannelKey } from './whatsapp-channel.service';
 
 const prisma = new PrismaClient();
 const whatsappIdentityMapPath = path.join(__dirname, '../../data/whatsapp-identity-map.json');
@@ -183,9 +184,9 @@ async function resolveRealJidFromIdentityMap(jid?: string) {
     return whatsappIdentityCache.get(normalizedJid) || '';
 }
 
-async function applyIdentityMappingsToUnresolvedClients(userId: string) {
+async function applyIdentityMappingsToUnresolvedClients(userId: string, channelKey = defaultWhatsappChannelKey) {
     const unresolvedClients = (await prisma.client.findMany({
-        where: { userId },
+        where: { userId, whatsappChannelKey: channelKey },
         orderBy: { updatedAt: 'desc' },
     })).filter((client) => isUnresolvedPhone(client.phone));
 
@@ -211,11 +212,11 @@ async function applyIdentityMappingsToUnresolvedClients(userId: string) {
     return { updated, inspected: unresolvedClients.length };
 }
 
-async function emitResolvedClientsFromIdentityMappings(userId: string, emit: SocketEventEmitter) {
-    const result = await applyIdentityMappingsToUnresolvedClients(userId);
+async function emitResolvedClientsFromIdentityMappings(userId: string, channelKey: string, emit: SocketEventEmitter) {
+    const result = await applyIdentityMappingsToUnresolvedClients(userId, channelKey);
     if (result.updated > 0) {
         const refreshedClients = await prisma.client.findMany({
-            where: { userId },
+            where: { userId, whatsappChannelKey: channelKey },
             orderBy: { updatedAt: 'desc' },
         });
         refreshedClients
@@ -616,6 +617,7 @@ function mergeChatHistories(...histories: Array<string | null | undefined>) {
 
 async function enrichExistingClientPhoneFromWhatsappIdentity(params: {
     userId: string;
+    channelKey: string;
     emit: SocketEventEmitter;
     realJid?: string;
     name?: string;
@@ -627,7 +629,7 @@ async function enrichExistingClientPhoneFromWhatsappIdentity(params: {
     if (!realPhone || !contactName) return null;
 
     const clients = await prisma.client.findMany({
-        where: { userId: params.userId },
+        where: { userId: params.userId, whatsappChannelKey: params.channelKey },
         orderBy: { updatedAt: 'desc' },
     });
     const existingWithPhone = clients.find((client) => client.phone === realPhone);
@@ -649,7 +651,7 @@ async function enrichExistingClientPhoneFromWhatsappIdentity(params: {
             },
         });
         await prisma.client.delete({ where: { id: unresolvedClient.id } }).catch(() => null);
-        params.emit('client_deleted', { id: unresolvedClient.id });
+        params.emit('client_deleted', { id: unresolvedClient.id, channelKey: params.channelKey });
         return mergedClient;
     }
 
@@ -667,6 +669,7 @@ async function enrichExistingClientPhoneFromWhatsappIdentity(params: {
 
 async function upsertClientFromWhatsapp(params: {
     userId: string;
+    channelKey: string;
     jid: string;
     realJid?: string;
     name?: string;
@@ -687,13 +690,14 @@ async function upsertClientFromWhatsapp(params: {
         .filter((item, index, list) => list.indexOf(item) === index);
 
     let existing = realPhone
-        ? await prisma.client.findFirst({ where: { userId: params.userId, phone: realPhone } })
+        ? await prisma.client.findFirst({ where: { userId: params.userId, whatsappChannelKey: params.channelKey, phone: realPhone } })
         : null;
 
     if (!existing) {
         existing = await prisma.client.findFirst({
             where: {
                 userId: params.userId,
+                whatsappChannelKey: params.channelKey,
                 OR: [
                     { whatsappJid: technicalJid },
                     ...(realJid ? [{ whatsappJid: realJid }] : []),
@@ -706,7 +710,7 @@ async function upsertClientFromWhatsapp(params: {
     if (!existing && !realPhone && isUnresolvedPhone(phone) && params.name) {
         const contactName = normalizeContactName(params.name);
         const clients = await prisma.client.findMany({
-            where: { userId: params.userId },
+            where: { userId: params.userId, whatsappChannelKey: params.channelKey },
             orderBy: { updatedAt: 'desc' },
         });
         existing = clients.find((client) =>
@@ -719,6 +723,7 @@ async function upsertClientFromWhatsapp(params: {
         await prisma.client.deleteMany({
             where: {
                 userId: params.userId,
+                whatsappChannelKey: params.channelKey,
                 NOT: { id: existing.id },
                 OR: [
                     { phone: technicalPhone },
@@ -749,11 +754,12 @@ async function upsertClientFromWhatsapp(params: {
         data: {
             ...updateData,
             userId: params.userId,
+            whatsappChannelKey: params.channelKey,
         },
     });
 }
 
-async function syncHistoryPhoneMappings(historySync: any, userId: string, emit: SocketEventEmitter) {
+async function syncHistoryPhoneMappings(historySync: any, userId: string, channelKey: string, emit: SocketEventEmitter) {
     const mappings = Array.isArray(historySync?.phoneNumberToLidMappings)
         ? historySync.phoneNumberToLidMappings
         : [];
@@ -780,7 +786,7 @@ async function syncHistoryPhoneMappings(historySync: any, userId: string, emit: 
     }
 
     if (remembered > 0) {
-        await emitResolvedClientsFromIdentityMappings(userId, emit);
+        await emitResolvedClientsFromIdentityMappings(userId, channelKey, emit);
     }
 }
 
@@ -795,18 +801,26 @@ class WhatsAppSession {
     private readonly store = makeInMemoryStore({});
     private readonly sessionRoot: string;
     private readonly activeSessionMarker: string;
+    private readonly channelKey: string;
 
-    constructor(private readonly userId: string) {
+    constructor(private readonly userId: string, channelKey = defaultWhatsappChannelKey) {
+        this.channelKey = normalizeWhatsappChannelKey(channelKey);
         const safeUserId = userId.replace(/[^a-zA-Z0-9_-]/g, '_');
-        this.sessionRoot = path.join(__dirname, '../../data/whatsapp-sessions', safeUserId);
+        const userSessionRoot = path.join(__dirname, '../../data/whatsapp-sessions', safeUserId);
+        this.sessionRoot = this.channelKey === defaultWhatsappChannelKey
+            ? userSessionRoot
+            : path.join(userSessionRoot, this.channelKey);
         this.activeSessionMarker = path.join(this.sessionRoot, 'active-session.txt');
     }
 
     get snapshot() {
+        const channel = getWhatsappChannel(this.channelKey);
         return {
             status: this.status,
             qr: this.qr,
             error: this.lastError,
+            channelKey: this.channelKey,
+            channel,
         };
     }
 
@@ -814,6 +828,7 @@ class WhatsAppSession {
         io.to(`user:${this.userId}`).emit(event, {
             ...payload,
             userId: this.userId,
+            channelKey: this.channelKey,
         });
     }
 
@@ -898,7 +913,7 @@ class WhatsAppSession {
             this.sock.ev.on('chats.phoneNumberShare', async ({ lid, jid }: { lid: string; jid: string }) => {
                 try {
                     await rememberWhatsappIdentity(lid, jid);
-                    await emitResolvedClientsFromIdentityMappings(this.userId, this.emit.bind(this));
+                    await emitResolvedClientsFromIdentityMappings(this.userId, this.channelKey, this.emit.bind(this));
                 } catch (error) {
                     console.error('Erro ao sincronizar telefone real do WhatsApp:', error);
                 }
@@ -928,7 +943,7 @@ class WhatsAppSession {
                         await this.syncContacts(contacts);
                     }
 
-                    await emitResolvedClientsFromIdentityMappings(this.userId, this.emit.bind(this));
+                    await emitResolvedClientsFromIdentityMappings(this.userId, this.channelKey, this.emit.bind(this));
                 } catch (error) {
                     console.error('Erro ao processar historico do WhatsApp:', error);
                 }
@@ -942,7 +957,7 @@ class WhatsAppSession {
                     if (historySyncNotification) {
                         try {
                             const historySync = await downloadHistory(historySyncNotification, {});
-                            await syncHistoryPhoneMappings(historySync, this.userId, this.emit.bind(this));
+                            await syncHistoryPhoneMappings(historySync, this.userId, this.channelKey, this.emit.bind(this));
                         } catch (error) {
                             console.error('Erro ao processar mapeamentos do historico do WhatsApp:', error);
                         }
@@ -962,6 +977,7 @@ class WhatsAppSession {
                         );
                         const enrichedClient = await enrichExistingClientPhoneFromWhatsappIdentity({
                             userId: this.userId,
+                            channelKey: this.channelKey,
                             emit: this.emit.bind(this),
                             realJid: statusRealJid,
                             name: msg.pushName,
@@ -999,6 +1015,7 @@ class WhatsAppSession {
                     if (sender) {
                         let client = await upsertClientFromWhatsapp({
                             userId: this.userId,
+                            channelKey: this.channelKey,
                             jid: sender,
                             realJid: resolvedRealJid,
                             name: pushName,
@@ -1018,6 +1035,7 @@ class WhatsAppSession {
                                 from: sender,
                                 clientId: client.id,
                                 client,
+                                channelKey: this.channelKey,
                                 phone: client.phone,
                                 whatsappJid: client.whatsappJid,
                                 text,
@@ -1058,6 +1076,7 @@ class WhatsAppSession {
                 if (realJid && contactName) {
                     const enrichedClient = await enrichExistingClientPhoneFromWhatsappIdentity({
                         userId: this.userId,
+                        channelKey: this.channelKey,
                         emit: this.emit.bind(this),
                         realJid,
                         name: contactName,
@@ -1079,7 +1098,7 @@ class WhatsAppSession {
         }
 
         if (rememberedMappings > 0) {
-            await emitResolvedClientsFromIdentityMappings(this.userId, this.emit.bind(this));
+            await emitResolvedClientsFromIdentityMappings(this.userId, this.channelKey, this.emit.bind(this));
         }
     }
 
@@ -1092,6 +1111,8 @@ class WhatsAppSession {
 
     private async handleBotAfterIncomingMessage(client: any, text: string) {
         try {
+            if (getWhatsappChannel(this.channelKey).kind !== 'attendance') return;
+
             const isSupplierContact = await isSupplierWhatsappContact(client.phone, client.whatsappJid);
             if (isSupplierContact) return;
 
@@ -1115,6 +1136,7 @@ class WhatsAppSession {
                 this.emit('bot_handoff', {
                     clientId: updatedClient.id,
                     client: updatedClient,
+                    channelKey: this.channelKey,
                     text,
                     timestamp: Math.floor(Date.now() / 1000),
                 });
@@ -1140,7 +1162,7 @@ class WhatsAppSession {
         }
 
         await this.syncKnownContacts();
-        return applyIdentityMappingsToUnresolvedClients(this.userId);
+        return applyIdentityMappingsToUnresolvedClients(this.userId, this.channelKey);
     }
 
     private closeSocket() {
@@ -1267,6 +1289,7 @@ class WhatsAppSession {
         let client = await prisma.client.findFirst({
             where: {
                 userId: this.userId,
+                whatsappChannelKey: this.channelKey,
                 OR: [
                     { whatsappJid: jid },
                     { phone: digits },
@@ -1290,6 +1313,7 @@ class WhatsAppSession {
             text,
             timestamp: sentTimestamp,
             messageId,
+            channelKey: this.channelKey,
         });
 
         return {
@@ -1304,48 +1328,57 @@ class WhatsAppSession {
 class WhatsAppService {
     private sessions = new Map<string, WhatsAppSession>();
 
-    private getSession(userId: string) {
+    private getSessionKey(userId: string, channelKey = defaultWhatsappChannelKey) {
+        return `${userId}::${normalizeWhatsappChannelKey(channelKey)}`;
+    }
+
+    private getSession(userId: string, channelKey = defaultWhatsappChannelKey) {
         const normalizedUserId = String(userId || '').trim();
         if (!normalizedUserId) {
             throw new Error('Usuario nao autenticado.');
         }
 
-        let session = this.sessions.get(normalizedUserId);
+        const normalizedChannelKey = normalizeWhatsappChannelKey(channelKey);
+        const sessionKey = this.getSessionKey(normalizedUserId, normalizedChannelKey);
+        let session = this.sessions.get(sessionKey);
         if (!session) {
-            session = new WhatsAppSession(normalizedUserId);
-            this.sessions.set(normalizedUserId, session);
+            session = new WhatsAppSession(normalizedUserId, normalizedChannelKey);
+            this.sessions.set(sessionKey, session);
         }
 
         return session;
     }
 
-    getStatus(userId: string) {
+    getStatus(userId: string, channelKey = defaultWhatsappChannelKey) {
         const normalizedUserId = String(userId || '').trim();
-        const session = normalizedUserId ? this.sessions.get(normalizedUserId) : null;
+        const normalizedChannelKey = normalizeWhatsappChannelKey(channelKey);
+        const session = normalizedUserId ? this.sessions.get(this.getSessionKey(normalizedUserId, normalizedChannelKey)) : null;
 
         return session?.snapshot || {
             status: 'disconnected' as const,
             qr: null,
             error: null,
+            channelKey: normalizedChannelKey,
+            channel: getWhatsappChannel(normalizedChannelKey),
         };
     }
 
-    async init(userId: string) {
-        await this.getSession(userId).init();
-        return this.getStatus(userId);
+    async init(userId: string, channelKey = defaultWhatsappChannelKey) {
+        await this.getSession(userId, channelKey).init();
+        return this.getStatus(userId, channelKey);
     }
 
-    async reconnect(userId: string, forceNewSession = false) {
-        await this.getSession(userId).reconnect(forceNewSession);
-        return this.getStatus(userId);
+    async reconnect(userId: string, channelKey = defaultWhatsappChannelKey, forceNewSession = false) {
+        await this.getSession(userId, channelKey).reconnect(forceNewSession);
+        return this.getStatus(userId, channelKey);
     }
 
-    async sendMessage(userId: string, to: string, text: string) {
-        return this.getSession(userId).sendMessage(to, text);
+    async sendMessage(userId: string, to: string, text: string, channelKey = defaultWhatsappChannelKey) {
+        return this.getSession(userId, channelKey).sendMessage(to, text);
     }
 
-    async syncUnresolvedClientPhones(userId: string) {
-        return this.getSession(userId).syncUnresolvedClientPhones();
+    async syncUnresolvedClientPhones(userId: string, channelKey = defaultWhatsappChannelKey) {
+        return this.getSession(userId, channelKey).syncUnresolvedClientPhones();
     }
 }
 

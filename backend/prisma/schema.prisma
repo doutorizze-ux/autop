@@ -24,6 +24,7 @@ model Client {
   name      String
   phone     String
   whatsappJid String?
+  whatsappChannelKey String @default("atendimento-1")
   status    String   @default("NOVO") // NOVO, EM_ATENDIMENTO, FINALIZADO
   history   String?  // Can be JSON string or simple text for now
   userId    String?
@@ -31,8 +32,9 @@ model Client {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([userId, phone])
+  @@unique([userId, whatsappChannelKey, phone])
   @@index([userId])
+  @@index([userId, whatsappChannelKey])
 }
 
 model Supplier {

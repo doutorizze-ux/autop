@@ -67,6 +67,37 @@ type TeamQuoteHistoryResponse = {
   employees: TeamQuoteEmployee[];
 };
 
+type WhatsappChannel = {
+  key: string;
+  label: string;
+  kind: 'attendance' | 'quote';
+  description: string;
+};
+
+const defaultWhatsappChannelKey = 'atendimento-1';
+const defaultWhatsappChannels: WhatsappChannel[] = [
+  {
+    key: defaultWhatsappChannelKey,
+    label: 'Atendimento 1',
+    kind: 'attendance',
+    description: 'WhatsApp principal de atendimento aos clientes.',
+  },
+  {
+    key: 'atendimento-2',
+    label: 'Atendimento 2',
+    kind: 'attendance',
+    description: 'Segundo WhatsApp de atendimento aos clientes.',
+  },
+  {
+    key: 'cotacao',
+    label: 'Cotacao',
+    kind: 'quote',
+    description: 'WhatsApp reservado para cotacoes com fornecedores.',
+  },
+];
+
+const quoteWhatsappCategories = ['Pecas automotivas', 'Pecas eletricas', 'Concessionarias', 'Pneu'];
+
 const normalizeText = (value: string) =>
   String(value || '')
     .toLowerCase()
@@ -91,7 +122,11 @@ const navItems = [
 export const Dashboard = () => {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [wsStatus, setWsStatus] = useState<string>('connecting');
+  const [whatsappChannels, setWhatsappChannels] = useState<WhatsappChannel[]>(defaultWhatsappChannels);
+  const [activeWhatsappChannelKey, setActiveWhatsappChannelKey] = useState(defaultWhatsappChannelKey);
+  const [wsStatusByChannel, setWsStatusByChannel] = useState<Record<string, string>>({
+    [defaultWhatsappChannelKey]: 'connecting',
+  });
   const [themeLogo, setThemeLogo] = useState(() => localStorage.getItem('theme_logo') || '');
   const [showSuppliersPasswordModal, setShowSuppliersPasswordModal] = useState(false);
   const [suppliersPassword, setSuppliersPassword] = useState('');
@@ -151,18 +186,47 @@ export const Dashboard = () => {
 
   useEffect(() => {
     const handleWhatsappStatus = (data: any) => {
-      setWsStatus(data.status);
+      setWsStatusByChannel((current) => ({
+        ...current,
+        [data.channelKey || defaultWhatsappChannelKey]: data.status,
+      }));
     };
 
     socket.on('whatsapp_status', handleWhatsappStatus);
 
-    fetch(`${API_URL}/api/whatsapp/status`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        setWsStatus(data.status);
-      });
+    const loadWhatsappChannels = async () => {
+      try {
+        const channelsResponse = await axios.get<{ channels: WhatsappChannel[] }>(`${API_URL}/api/whatsapp/channels`);
+        const channels = channelsResponse.data.channels?.length ? channelsResponse.data.channels : defaultWhatsappChannels;
+        setWhatsappChannels(channels);
+
+        const statuses = await Promise.all(
+          channels.map(async (channel) => {
+            try {
+              const response = await axios.get(`${API_URL}/api/whatsapp/status`, {
+                params: { channel: channel.key, autoStart: 'false' },
+              });
+              return [channel.key, response.data.status || 'disconnected'] as const;
+            } catch {
+              return [channel.key, 'disconnected'] as const;
+            }
+          })
+        );
+
+        setWsStatusByChannel((current) => ({
+          ...current,
+          ...Object.fromEntries(statuses),
+        }));
+      } catch {
+        const response = await axios.get(`${API_URL}/api/whatsapp/status`);
+        setWsStatusByChannel((current) => ({
+          ...current,
+          [defaultWhatsappChannelKey]: response.data.status || 'disconnected',
+        }));
+      }
+    };
+
+    void loadWhatsappChannels();
 
     return () => {
       socket.off('whatsapp_status', handleWhatsappStatus);
@@ -221,7 +285,13 @@ export const Dashboard = () => {
   const visibleNavItems = navItems.filter((item) => !item.adminOnly || user?.role === 'ADMIN');
   const activeItem = visibleNavItems.find((item) => item.id === activeTab) || visibleNavItems[0];
   const dashboardMenuItems = visibleNavItems.filter((item) => item.id !== 'dashboard');
-  const handleWhatsappConnected = useCallback(() => setWsStatus('connected'), []);
+  const activeWhatsappChannel =
+    whatsappChannels.find((channel) => channel.key === activeWhatsappChannelKey) || whatsappChannels[0] || defaultWhatsappChannels[0];
+  const primaryWhatsappStatus = wsStatusByChannel[defaultWhatsappChannelKey] || 'connecting';
+  const activeWhatsappStatus = wsStatusByChannel[activeWhatsappChannel.key] || 'connecting';
+  const handleWhatsappConnected = useCallback((channelKey = defaultWhatsappChannelKey) => {
+    setWsStatusByChannel((current) => ({ ...current, [channelKey]: 'connected' }));
+  }, []);
   const filteredTeamQuoteEmployees = useMemo(() => {
     const term = normalizeText(teamQuoteSearch);
     if (!term) return teamQuoteHistory.employees;
@@ -347,8 +417,8 @@ export const Dashboard = () => {
                   <h2 className="page-title">Dashboard</h2>
                   <p>Escolha o modulo para continuar a operacao.</p>
                 </div>
-                <span className={`dashboard-status ${wsStatus === 'connected' ? 'connected' : ''}`}>
-                  WhatsApp {wsStatus === 'connected' ? 'conectado' : 'aguardando conexao'}
+                <span className={`dashboard-status ${primaryWhatsappStatus === 'connected' ? 'connected' : ''}`}>
+                  WhatsApp {primaryWhatsappStatus === 'connected' ? 'conectado' : 'aguardando conexao'}
                 </span>
               </div>
 
@@ -487,9 +557,65 @@ export const Dashboard = () => {
             <div className="dashboard-section">
               <div className="section-heading">
                 <h2 className="page-title">Atendimento WhatsApp</h2>
-                <p>Converse, troque de cliente no celular com mais facilidade e mantenha o time rapido no balcao.</p>
+                <p>Escolha o numero de atendimento ou o WhatsApp usado para cotacoes com fornecedores.</p>
               </div>
-              {wsStatus === 'connected' ? <ChatArea /> : <WhatsAppConnect onConnected={handleWhatsappConnected} />}
+
+              <div className="whatsapp-channel-tabs">
+                {whatsappChannels.map((channel) => {
+                  const status = wsStatusByChannel[channel.key] || 'connecting';
+                  const isConnected = status === 'connected';
+                  const isActive = activeWhatsappChannel.key === channel.key;
+
+                  return (
+                    <button
+                      key={channel.key}
+                      type="button"
+                      className={`whatsapp-channel-tab ${isActive ? 'active' : ''}`}
+                      onClick={() => setActiveWhatsappChannelKey(channel.key)}
+                    >
+                      <span className="whatsapp-channel-icon">
+                        <MessageSquare size={18} />
+                      </span>
+                      <span className="whatsapp-channel-copy">
+                        <strong>{channel.label}</strong>
+                        <small>{channel.description}</small>
+                      </span>
+                      <span className={`whatsapp-channel-status ${isConnected ? 'connected' : ''}`}>
+                        {isConnected ? 'Conectado' : status === 'qr' ? 'QR Code' : 'Conectar'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {activeWhatsappChannel.kind === 'quote' && (
+                <div className="quote-whatsapp-panel">
+                  <div>
+                    <h3>Painel de cotacao</h3>
+                    <p>Este numero fica separado do atendimento e sera usado para enviar pedidos aos fornecedores sem site.</p>
+                  </div>
+                  <div className="quote-whatsapp-categories">
+                    {quoteWhatsappCategories.map((category) => (
+                      <span key={category}>{category}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeWhatsappChannel.kind === 'attendance' && activeWhatsappStatus === 'connected' ? (
+                <ChatArea
+                  key={activeWhatsappChannel.key}
+                  channelKey={activeWhatsappChannel.key}
+                  channelLabel={activeWhatsappChannel.label}
+                />
+              ) : (
+                <WhatsAppConnect
+                  key={activeWhatsappChannel.key}
+                  channelKey={activeWhatsappChannel.key}
+                  channelLabel={activeWhatsappChannel.label}
+                  onConnected={() => handleWhatsappConnected(activeWhatsappChannel.key)}
+                />
+              )}
             </div>
           )}
 

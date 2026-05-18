@@ -6,6 +6,7 @@ import ExcelJS from 'exceljs';
 import { randomUUID } from 'crypto';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { whatsappService } from '../services/whatsapp.service';
+import { quoteWhatsappChannelKey } from '../services/whatsapp-channel.service';
 
 const prisma = new PrismaClient();
 const APP_TIME_ZONE = 'America/Sao_Paulo';
@@ -13,6 +14,7 @@ const APP_TIME_ZONE = 'America/Sao_Paulo';
 type QuoteItem = {
     query: string;
     description?: string;
+    category?: string;
     label: string;
 };
 
@@ -258,7 +260,7 @@ async function sendWhatsappSupplierQuoteRequests(job: QuoteJob) {
             let result: any = baseResult;
 
             try {
-                const sent = await whatsappService.sendMessage(job.userId, supplier.whatsappPhone || '', message);
+                const sent = await whatsappService.sendMessage(job.userId, supplier.whatsappPhone || '', message, quoteWhatsappChannelKey);
                 result = {
                     ...baseResult,
                     stockText: 'Enviado ao servidor do WhatsApp',
@@ -317,6 +319,7 @@ function normalizeQuoteItems(body: any): QuoteItem[] {
             .map((item: any) => {
                 const query = String(item?.query || item?.product || '').trim();
                 const description = String(item?.description || '').trim();
+                const category = String(item?.category || '').trim();
 
                 if (!query) {
                     return null;
@@ -325,6 +328,7 @@ function normalizeQuoteItems(body: any): QuoteItem[] {
                 return {
                     query,
                     description: description || undefined,
+                    category: category || undefined,
                     label: buildItemLabel(query, description),
                 };
             })

@@ -13,6 +13,7 @@ type CatalogItem = {
   family: string;
   applications: string[];
   references: string[];
+  source?: string;
   score: number;
 };
 
@@ -97,7 +98,12 @@ export const CatalogSearch = ({ onUseCode }: CatalogSearchProps) => {
               <article key={`${item.code}-${item.description}`} className="catalog-result-card">
                 <div className="catalog-result-top">
                   <div>
-                    <div className="catalog-result-code">{item.code}</div>
+                    <div className="catalog-result-code-row">
+                      <div className="catalog-result-code">{item.code}</div>
+                      <span className="catalog-source-badge">
+                        Catalogo {item.source || 'geral'}
+                      </span>
+                    </div>
                     <div className="catalog-result-description">
                       {item.description || 'Descricao nao informada'}
                     </div>
@@ -239,7 +245,26 @@ export const CatalogSearch = ({ onUseCode }: CatalogSearchProps) => {
           color: var(--primary-color);
           font-weight: 800;
           font-size: 1rem;
+        }
+        .catalog-result-code-row {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 0.5rem;
           margin-bottom: 0.3rem;
+        }
+        .catalog-source-badge {
+          display: inline-flex;
+          align-items: center;
+          min-height: 24px;
+          border-radius: 999px;
+          border: 1px solid var(--border-color);
+          background: var(--panel-bg);
+          color: var(--text-muted);
+          padding: 0.15rem 0.55rem;
+          font-size: 0.72rem;
+          font-weight: 800;
+          text-transform: uppercase;
         }
         .catalog-result-description {
           color: var(--text-main);
