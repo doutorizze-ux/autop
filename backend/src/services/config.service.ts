@@ -17,7 +17,16 @@ export class ConfigService {
         return config;
     }
 
-    static async updateConfig(data: { aiKey?: string; whatsappMode?: string; themeColor?: string; themeLogo?: string | null }) {
+    static async updateConfig(data: {
+        aiKey?: string;
+        whatsappMode?: string;
+        themeColor?: string;
+        themeAccentColor?: string;
+        themeSidebarStart?: string;
+        themeSidebarEnd?: string;
+        themeBackground?: string;
+        themeLogo?: string | null;
+    }) {
         return await prisma.systemConfig.update({
             where: { id: 'system_settings' },
             data

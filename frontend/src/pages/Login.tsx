@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { LogIn } from 'lucide-react';
 import { API_URL } from '../services/api';
+import { applyAppearanceTheme } from '../utils/theme';
 
 export const Login = () => {
   const [themeLogo, setThemeLogo] = useState(() => localStorage.getItem('theme_logo') || '');
@@ -17,24 +18,11 @@ export const Login = () => {
     const loadPublicAppearance = async () => {
       try {
         const response = await axios.get(`${API_URL}/api/config/public`);
-        const color = response.data.themeColor || localStorage.getItem('theme_color') || '#0056b3';
-        const logo = response.data.themeLogo || '';
-
-        document.documentElement.style.setProperty('--primary-color', color);
-        localStorage.setItem('theme_color', color);
-
-        if (logo) {
-          localStorage.setItem('theme_logo', logo);
-        } else {
-          localStorage.removeItem('theme_logo');
-        }
-
-        setThemeLogo(logo);
+        const applied = applyAppearanceTheme(response.data);
+        setThemeLogo(applied.themeLogo);
       } catch (err) {
-        const savedColor = localStorage.getItem('theme_color');
-        if (savedColor) {
-          document.documentElement.style.setProperty('--primary-color', savedColor);
-        }
+        const applied = applyAppearanceTheme();
+        setThemeLogo(applied.themeLogo);
       }
     };
 

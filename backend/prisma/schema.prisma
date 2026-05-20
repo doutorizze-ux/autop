@@ -84,12 +84,16 @@ model Quote {
 }
 
 model SystemConfig {
-  id           String   @id @default("system_settings")
-  aiKey        String?
-  whatsappMode String   @default("baileys")
-  themeColor   String   @default("#0056b3")
-  themeLogo    String?
-  updatedAt    DateTime @updatedAt
+  id                String   @id @default("system_settings")
+  aiKey             String?
+  whatsappMode      String   @default("baileys")
+  themeColor        String   @default("#0056b3")
+  themeAccentColor  String   @default("#0c7ff2")
+  themeSidebarStart String   @default("#0f172a")
+  themeSidebarEnd   String   @default("#172f4c")
+  themeBackground   String   @default("#eef2f6")
+  themeLogo         String?
+  updatedAt         DateTime @updatedAt
 }
 
 model BotConfig {

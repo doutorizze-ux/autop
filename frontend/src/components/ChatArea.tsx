@@ -883,7 +883,7 @@ export const ChatArea = ({ channelKey = defaultWhatsappChannelKey, channelLabel 
 
         .conversation-item:hover,
         .conversation-item.active {
-          background: rgba(0, 86, 179, 0.05);
+          background: var(--primary-subtle-bg);
         }
 
         .conversation-item.active {
@@ -898,7 +898,7 @@ export const ChatArea = ({ channelKey = defaultWhatsappChannelKey, channelLabel 
           align-items: center;
           justify-content: center;
           color: var(--primary-color);
-          background: rgba(0, 86, 179, 0.08);
+          background: var(--primary-muted-bg);
           border-radius: 16px;
         }
 
@@ -1120,7 +1120,7 @@ export const ChatArea = ({ channelKey = defaultWhatsappChannelKey, channelLabel 
 
         .sent .message-bubble {
           color: #fff;
-          background: linear-gradient(135deg, var(--primary-color), #0c7ff2);
+          background: linear-gradient(135deg, var(--primary-color), var(--primary-gradient-end));
           border-top-right-radius: 4px;
         }
 
@@ -1289,7 +1289,7 @@ export const ChatArea = ({ channelKey = defaultWhatsappChannelKey, channelLabel 
 
         .send-btn {
           color: #fff;
-          background: linear-gradient(135deg, var(--primary-color), #0c7ff2);
+          background: linear-gradient(135deg, var(--primary-color), var(--primary-gradient-end));
         }
 
         .send-btn:disabled {

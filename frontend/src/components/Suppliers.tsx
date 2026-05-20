@@ -627,7 +627,7 @@ export const Suppliers = () => {
                             <div
                                 style={{
                                     border: `1px solid ${testResult.error ? '#ffb3b3' : 'var(--border-color)'}`,
-                                    background: testResult.error ? 'rgba(255, 77, 77, 0.08)' : 'rgba(0, 86, 179, 0.08)',
+                                    background: testResult.error ? 'rgba(255, 77, 77, 0.08)' : 'var(--primary-muted-bg)',
                                     borderRadius: '8px',
                                     padding: '1rem',
                                     marginBottom: '1rem',
@@ -722,7 +722,7 @@ export const Suppliers = () => {
                 }
                 .type-badge {
                     font-size: 0.7rem;
-                    background: rgba(0, 86, 179, 0.1);
+                    background: var(--primary-soft-bg);
                     color: var(--primary-color);
                     padding: 0.2rem 0.5rem;
                     border-radius: 4px;
@@ -770,8 +770,8 @@ export const Suppliers = () => {
                     align-items: center;
                     gap: 0.5rem;
                     color: var(--primary-color);
-                    background: rgba(0, 86, 179, 0.08);
-                    border: 1px solid rgba(0, 86, 179, 0.15);
+                    background: var(--primary-muted-bg);
+                    border: 1px solid var(--primary-soft-border);
                     border-radius: 6px;
                     padding: 0.45rem 0.75rem;
                     cursor: pointer;
@@ -779,7 +779,7 @@ export const Suppliers = () => {
                     font-weight: 500;
                 }
                 .test-link:hover {
-                    background: rgba(0, 86, 179, 0.14);
+                    background: var(--primary-strong-bg);
                 }
                 .modal-overlay {
                     position: fixed;

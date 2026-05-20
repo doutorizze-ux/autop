@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Save, User, Key, Shield, MessageSquare, AlertCircle, CheckCircle, Users, Plus, Trash2, Bot } from 'lucide-react';
 import { API_URL } from '../services/api';
+import { applyAppearanceTheme, defaultThemeAppearance, type ThemeAppearance } from '../utils/theme';
 
 type EmployeeUser = {
     id: string;
@@ -20,6 +21,33 @@ type BotConfig = {
     handoffMessage: string;
     fallbackText: string;
 };
+
+type AppearanceData = {
+    color: string;
+    accentColor: string;
+    sidebarStart: string;
+    sidebarEnd: string;
+    background: string;
+    logo: string;
+};
+
+const getStoredAppearanceData = (): AppearanceData => ({
+    color: localStorage.getItem('theme_color') || defaultThemeAppearance.themeColor,
+    accentColor: localStorage.getItem('theme_accent_color') || defaultThemeAppearance.themeAccentColor,
+    sidebarStart: localStorage.getItem('theme_sidebar_start') || defaultThemeAppearance.themeSidebarStart,
+    sidebarEnd: localStorage.getItem('theme_sidebar_end') || defaultThemeAppearance.themeSidebarEnd,
+    background: localStorage.getItem('theme_background') || defaultThemeAppearance.themeBackground,
+    logo: localStorage.getItem('theme_logo') || '',
+});
+
+const getThemeFromAppearance = (appearance: AppearanceData, logoOverride?: string | null): ThemeAppearance => ({
+    themeColor: appearance.color || defaultThemeAppearance.themeColor,
+    themeAccentColor: appearance.accentColor || defaultThemeAppearance.themeAccentColor,
+    themeSidebarStart: appearance.sidebarStart || defaultThemeAppearance.themeSidebarStart,
+    themeSidebarEnd: appearance.sidebarEnd || defaultThemeAppearance.themeSidebarEnd,
+    themeBackground: appearance.background || defaultThemeAppearance.themeBackground,
+    themeLogo: logoOverride !== undefined ? logoOverride : appearance.logo.trim(),
+});
 
 export const Settings = () => {
     const { user } = useAuth();
@@ -40,6 +68,10 @@ export const Settings = () => {
         aiKey: '',
         whatsappMode: 'baileys',
         themeColor: '#0056b3',
+        themeAccentColor: '#0c7ff2',
+        themeSidebarStart: '#0f172a',
+        themeSidebarEnd: '#172f4c',
+        themeBackground: '#eef2f6',
         themeLogo: ''
     });
     const [botConfig, setBotConfig] = useState<BotConfig>({
@@ -50,10 +82,7 @@ export const Settings = () => {
         handoffMessage: '',
         fallbackText: '',
     });
-    const [appearanceData, setAppearanceData] = useState({
-        color: localStorage.getItem('theme_color') || '#0056b3',
-        logo: localStorage.getItem('theme_logo') || ''
-    });
+    const [appearanceData, setAppearanceData] = useState<AppearanceData>(() => getStoredAppearanceData());
     const [employees, setEmployees] = useState<EmployeeUser[]>([]);
     const [employeeForm, setEmployeeForm] = useState({
         id: '',
@@ -83,16 +112,29 @@ export const Settings = () => {
         try {
             const response = await axios.get(`${API_URL}/api/config`);
             setSystemConfig(response.data);
-            const themeColor = response.data.themeColor || localStorage.getItem('theme_color') || '#0056b3';
-            const themeLogo = response.data.themeLogo || localStorage.getItem('theme_logo') || '';
-            setAppearanceData({ color: themeColor, logo: themeLogo });
-            document.documentElement.style.setProperty('--primary-color', themeColor);
+            const applied = applyAppearanceTheme(response.data);
+            setAppearanceData({
+                color: applied.themeColor,
+                accentColor: applied.themeAccentColor,
+                sidebarStart: applied.themeSidebarStart,
+                sidebarEnd: applied.themeSidebarEnd,
+                background: applied.themeBackground,
+                logo: applied.themeLogo,
+            });
             window.dispatchEvent(new CustomEvent('theme-updated', {
-                detail: { themeColor, themeLogo }
+                detail: applied
             }));
         } catch (err) {
             console.error('Erro ao buscar configurações do sistema');
         }
+    };
+
+    const updateAppearanceData = (updates: Partial<AppearanceData>) => {
+        setAppearanceData((current) => {
+            const next = { ...current, ...updates };
+            applyAppearanceTheme(getThemeFromAppearance(next), { persist: false });
+            return next;
+        });
     };
 
     const handleProfileSubmit = async (e: React.FormEvent) => {
@@ -545,26 +587,24 @@ export const Settings = () => {
                             <form onSubmit={(e) => {
                                 e.preventDefault();
                                 setLoading(true);
-                                const color = appearanceData.color || '#0056b3';
                                 const logo = appearanceData.logo.trim();
+                                const themeToSave = getThemeFromAppearance(appearanceData, logo || null);
                                 axios.post(`${API_URL}/api/config`, {
                                     ...systemConfig,
-                                    themeColor: color,
-                                    themeLogo: logo || null,
+                                    ...themeToSave,
                                 }).then((response) => {
-                                    const themeColor = response.data.themeColor || color;
-                                    const themeLogo = response.data.themeLogo || '';
+                                    const applied = applyAppearanceTheme(response.data);
                                     setSystemConfig(response.data);
-                                    setAppearanceData({ color: themeColor, logo: themeLogo });
-                                    localStorage.setItem('theme_color', themeColor);
-                                    if (themeLogo) {
-                                        localStorage.setItem('theme_logo', themeLogo);
-                                    } else {
-                                        localStorage.removeItem('theme_logo');
-                                    }
-                                    document.documentElement.style.setProperty('--primary-color', themeColor);
+                                    setAppearanceData({
+                                        color: applied.themeColor,
+                                        accentColor: applied.themeAccentColor,
+                                        sidebarStart: applied.themeSidebarStart,
+                                        sidebarEnd: applied.themeSidebarEnd,
+                                        background: applied.themeBackground,
+                                        logo: applied.themeLogo,
+                                    });
                                     window.dispatchEvent(new CustomEvent('theme-updated', {
-                                        detail: { themeColor, themeLogo }
+                                        detail: applied
                                     }));
                                     setMessage({ type: 'success', text: 'Tema atualizado para todos os acessos!' });
                                 }).catch(() => {
@@ -579,14 +619,67 @@ export const Settings = () => {
                                         <input 
                                             type="color" 
                                             value={appearanceData.color}
-                                            onChange={e => {
-                                                const color = e.target.value;
-                                                setAppearanceData(prev => ({ ...prev, color }));
-                                                document.documentElement.style.setProperty('--primary-color', color);
-                                            }}
-                                            style={{ height: '45px', width: '80px', padding: '0', cursor: 'pointer', border: '1px solid var(--border-color)', borderRadius: '6px' }}
+                                            onChange={e => updateAppearanceData({ color: e.target.value })}
+                                            className="appearance-color-input"
                                         />
                                         <span style={{color: 'var(--text-muted)', fontSize: '0.9rem'}}>Escolha a cor que combine com a loja.</span>
+                                    </div>
+                                </div>
+                                <div className="appearance-color-grid">
+                                    <div className="form-group">
+                                        <label>Cor final do degrade dos botoes</label>
+                                        <div className="appearance-control-row">
+                                            <input
+                                                type="color"
+                                                value={appearanceData.accentColor}
+                                                onChange={e => updateAppearanceData({ accentColor: e.target.value })}
+                                                className="appearance-color-input"
+                                            />
+                                            <span style={{color: 'var(--text-muted)', fontSize: '0.9rem'}}>Controla o azul final dos botoes e brilhos.</span>
+                                        </div>
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Fundo do sistema</label>
+                                        <div className="appearance-control-row">
+                                            <input
+                                                type="color"
+                                                value={appearanceData.background}
+                                                onChange={e => updateAppearanceData({ background: e.target.value })}
+                                                className="appearance-color-input"
+                                            />
+                                            <span style={{color: 'var(--text-muted)', fontSize: '0.9rem'}}>Ajusta o fundo claro das telas.</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="form-group">
+                                    <label>Degrade do menu lateral</label>
+                                    <div className="appearance-color-grid">
+                                        <div className="appearance-mini-control">
+                                            <span>Inicio</span>
+                                            <input
+                                                type="color"
+                                                value={appearanceData.sidebarStart}
+                                                onChange={e => updateAppearanceData({ sidebarStart: e.target.value })}
+                                                className="appearance-color-input"
+                                            />
+                                        </div>
+                                        <div className="appearance-mini-control">
+                                            <span>Fim</span>
+                                            <input
+                                                type="color"
+                                                value={appearanceData.sidebarEnd}
+                                                onChange={e => updateAppearanceData({ sidebarEnd: e.target.value })}
+                                                className="appearance-color-input"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div
+                                        className="appearance-gradient-preview"
+                                        style={{
+                                            background: `linear-gradient(135deg, ${appearanceData.sidebarStart}, ${appearanceData.sidebarEnd})`
+                                        }}
+                                    >
+                                        <span>Previa do menu</span>
                                     </div>
                                 </div>
                                 <div className="form-group">
@@ -671,7 +764,7 @@ export const Settings = () => {
                     color: var(--text-main);
                 }
                 .settings-nav-item.active {
-                    background: rgba(0, 86, 179, 0.05);
+                    background: var(--primary-subtle-bg);
                     color: var(--primary-color);
                     font-weight: 600;
                 }
@@ -730,6 +823,46 @@ export const Settings = () => {
                     gap: 1rem;
                     align-items: center;
                     flex-wrap: wrap;
+                }
+                .appearance-color-grid {
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 1rem;
+                }
+                .appearance-color-input {
+                    height: 45px;
+                    width: 80px;
+                    padding: 0;
+                    cursor: pointer;
+                    border: 1px solid var(--border-color);
+                    border-radius: 6px;
+                    background: transparent;
+                    flex: 0 0 auto;
+                }
+                .appearance-mini-control {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 0.75rem;
+                    padding: 0.8rem;
+                    background: var(--bg-color);
+                    border: 1px solid var(--border-color);
+                    border-radius: 8px;
+                    color: var(--text-muted);
+                    font-size: 0.9rem;
+                    font-weight: 700;
+                }
+                .appearance-gradient-preview {
+                    min-height: 76px;
+                    margin-top: 0.75rem;
+                    border-radius: 8px;
+                    border: 1px solid rgba(255, 255, 255, 0.4);
+                    display: flex;
+                    align-items: center;
+                    padding: 1rem;
+                    color: #fff;
+                    font-weight: 800;
+                    box-shadow: var(--shadow-soft);
                 }
                 .bot-config-form {
                     display: flex;
@@ -924,7 +1057,8 @@ export const Settings = () => {
                         grid-template-columns: 1fr !important;
                     }
                     .employee-form-grid,
-                    .employee-card {
+                    .employee-card,
+                    .appearance-color-grid {
                         grid-template-columns: 1fr;
                     }
                     .employee-actions,

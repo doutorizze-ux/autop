@@ -9,6 +9,10 @@ router.get('/public', async (_req, res) => {
         const config = await ConfigService.getConfig();
         res.json({
             themeColor: config.themeColor,
+            themeAccentColor: config.themeAccentColor,
+            themeSidebarStart: config.themeSidebarStart,
+            themeSidebarEnd: config.themeSidebarEnd,
+            themeBackground: config.themeBackground,
             themeLogo: config.themeLogo,
         });
     } catch (err) {
@@ -29,12 +33,30 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
     try {
-        const { aiKey, whatsappMode, themeColor, themeLogo } = req.body;
+        const {
+            aiKey,
+            whatsappMode,
+            themeColor,
+            themeAccentColor,
+            themeSidebarStart,
+            themeSidebarEnd,
+            themeBackground,
+            themeLogo
+        } = req.body;
         // Apenas ADMIN pode mudar configurações globais
         if ((req as any).user.role !== 'ADMIN') {
             return res.status(403).json({ message: 'Acesso negado' });
         }
-        const config = await ConfigService.updateConfig({ aiKey, whatsappMode, themeColor, themeLogo });
+        const config = await ConfigService.updateConfig({
+            aiKey,
+            whatsappMode,
+            themeColor,
+            themeAccentColor,
+            themeSidebarStart,
+            themeSidebarEnd,
+            themeBackground,
+            themeLogo
+        });
         res.json(config);
     } catch (err) {
         res.status(500).json({ message: 'Erro ao atualizar configurações' });

@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
+import { applyAppearanceTheme } from './utils/theme';
 import './index.css';
 
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
@@ -25,10 +26,7 @@ import { useEffect } from 'react';
 
 function App() {
   useEffect(() => {
-    const savedColor = localStorage.getItem('theme_color');
-    if (savedColor) {
-      document.documentElement.style.setProperty('--primary-color', savedColor);
-    }
+    applyAppearanceTheme();
   }, []);
 
   return (

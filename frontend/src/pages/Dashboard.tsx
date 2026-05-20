@@ -33,6 +33,7 @@ import { CatalogSearch } from '../components/CatalogSearch';
 import { API_URL } from '../services/api';
 import { socket } from '../services/socket';
 import { formatDateTime } from '../utils/date';
+import { applyAppearanceTheme, type ThemeAppearance } from '../utils/theme';
 
 const suppliersAccessPassword = '080782';
 const suppliersAccessStorageKey = 'suppliers_access_granted';
@@ -145,32 +146,23 @@ export const Dashboard = () => {
   const [selectedTeamEmployeeKey, setSelectedTeamEmployeeKey] = useState('');
 
   useEffect(() => {
-    const applyTheme = (themeColor?: string, logo?: string) => {
-      const color = themeColor || localStorage.getItem('theme_color') || '#0056b3';
-      const savedLogo = logo ?? localStorage.getItem('theme_logo') ?? '';
-      document.documentElement.style.setProperty('--primary-color', color);
-      setThemeLogo(savedLogo);
-      localStorage.setItem('theme_color', color);
-
-      if (savedLogo) {
-        localStorage.setItem('theme_logo', savedLogo);
-      } else {
-        localStorage.removeItem('theme_logo');
-      }
+    const applyTheme = (appearance: ThemeAppearance = {}) => {
+      const applied = applyAppearanceTheme(appearance);
+      setThemeLogo(applied.themeLogo);
     };
 
     const fetchTheme = async () => {
       try {
         const response = await axios.get(`${API_URL}/api/config`);
-        applyTheme(response.data.themeColor, response.data.themeLogo || '');
+        applyTheme(response.data);
       } catch {
         applyTheme();
       }
     };
 
     const refreshTheme = (event?: Event) => {
-      const detail = (event as CustomEvent<{ themeColor?: string; themeLogo?: string }>)?.detail;
-      applyTheme(detail?.themeColor, detail?.themeLogo);
+      const detail = (event as CustomEvent<ThemeAppearance>)?.detail;
+      applyTheme(detail || {});
     };
 
     void fetchTheme();

@@ -2,11 +2,23 @@
   --bg-color: #eef2f6;
   --panel-bg: #ffffff;
   --primary-color: #0056b3;
-  --primary-hover: #004494;
+  --primary-hover: #0c7ff2;
+  --primary-gradient-end: #0c7ff2;
+  --primary-ring: rgba(0, 86, 179, 0.12);
+  --primary-shadow: rgba(0, 86, 179, 0.22);
+  --primary-soft-bg: rgba(0, 86, 179, 0.1);
+  --primary-subtle-bg: rgba(0, 86, 179, 0.05);
+  --primary-muted-bg: rgba(0, 86, 179, 0.08);
+  --primary-strong-bg: rgba(0, 86, 179, 0.14);
+  --primary-soft-border: rgba(0, 86, 179, 0.15);
   --text-main: #1f2937;
   --text-muted: #667085;
   --border-color: #d7dee7;
-  --sidebar-bg: linear-gradient(180deg, #0f172a 0%, #132238 56%, #172f4c 100%);
+  --sidebar-start: #0f172a;
+  --sidebar-end: #172f4c;
+  --sidebar-glow: rgba(56, 189, 248, 0.24);
+  --sidebar-active-glow: rgba(56, 189, 248, 0.18);
+  --sidebar-bg: linear-gradient(180deg, var(--sidebar-start) 0%, var(--sidebar-end) 100%);
   --sidebar-hover: rgba(255, 255, 255, 0.08);
   --sidebar-width: 320px;
   --shadow-soft: 0 18px 50px rgba(15, 23, 42, 0.12);
@@ -24,7 +36,7 @@ html, body, #root {
 
 body {
   background:
-    radial-gradient(circle at top left, rgba(0, 86, 179, 0.09), transparent 28%),
+    radial-gradient(circle at top left, var(--primary-subtle-bg), transparent 28%),
     radial-gradient(circle at bottom right, rgba(15, 118, 110, 0.08), transparent 24%),
     var(--bg-color);
   color: var(--text-main);
@@ -49,7 +61,7 @@ button {
   align-items: center;
   background:
     radial-gradient(circle at top, rgba(255, 255, 255, 0.08), transparent 30%),
-    linear-gradient(160deg, #0f172a 0%, #020617 100%);
+    linear-gradient(160deg, var(--sidebar-start) 0%, var(--sidebar-end) 100%);
 }
 
 .auth-card {
@@ -102,13 +114,13 @@ button {
 .form-input:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 4px rgba(0, 86, 179, 0.12);
+  box-shadow: 0 0 0 4px var(--primary-ring);
 }
 
 .btn-primary {
   width: 100%;
   padding: 0.95rem 1rem;
-  background: linear-gradient(135deg, var(--primary-color) 0%, #0c7ff2 100%);
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-gradient-end) 100%);
   color: white;
   border: none;
   border-radius: 14px;
@@ -116,7 +128,7 @@ button {
   font-size: 1rem;
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s, filter 0.2s;
-  box-shadow: 0 12px 28px rgba(0, 86, 179, 0.22);
+  box-shadow: 0 12px 28px var(--primary-shadow);
 }
 
 .btn-primary:hover {
@@ -185,7 +197,7 @@ button {
   inset: 0 auto auto 0;
   width: 100%;
   height: 220px;
-  background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.24), transparent 50%);
+  background: radial-gradient(circle at top left, var(--sidebar-glow), transparent 50%);
   pointer-events: none;
 }
 
@@ -287,7 +299,7 @@ button {
 }
 
 .nav-item.active {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(56, 189, 248, 0.18));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.14), var(--sidebar-active-glow));
   color: #ffffff;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
@@ -467,7 +479,7 @@ button {
   align-items: center;
   justify-content: center;
   color: var(--primary-color);
-  background: rgba(0, 86, 179, 0.1);
+  background: var(--primary-soft-bg);
   border-radius: 8px;
 }
 
@@ -628,7 +640,7 @@ button {
   align-items: center;
   justify-content: center;
   color: var(--primary-color);
-  background: rgba(0, 86, 179, 0.1);
+  background: var(--primary-soft-bg);
   flex: 0 0 46px;
 }
 
