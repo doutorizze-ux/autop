@@ -602,7 +602,7 @@ export const Dashboard = () => {
                 </div>
               )}
 
-              {activeWhatsappChannel.kind === 'attendance' && activeWhatsappStatus === 'connected' ? (
+              {activeWhatsappStatus === 'connected' ? (
                 <ChatArea
                   key={activeWhatsappChannel.key}
                   channelKey={activeWhatsappChannel.key}

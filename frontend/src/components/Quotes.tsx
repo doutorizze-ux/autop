@@ -19,6 +19,7 @@ type QuoteItemInput = {
     query: string;
     description?: string;
     category?: string;
+    categoryLocked?: boolean;
     label?: string;
 };
 
@@ -79,6 +80,24 @@ const quoteCategories = [
 ];
 const getQuoteCategoryLabel = (key?: string) =>
     quoteCategories.find((category) => category.key === key)?.label || quoteCategories[0].label;
+
+const normalizeCategoryText = (value: string) =>
+    String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+
+const inferQuoteCategory = (query: string, description?: string) => {
+    const text = normalizeCategoryText(`${query} ${description || ''}`);
+
+    if (/\bpneu\b|\baro\b|\bmedida\b|\b\d{3}\s*\d{2}\s*r?\d{2}\b/.test(text)) return 'pneu';
+    if (/\bsensor\b|\beletric|\beletron|\bbateria\b|\blampada\b|\bfarol\b|\balternador\b|\bmotor de partida\b|\bmodulo\b|\brele\b|\bfusivel\b|\bchicote\b|\bbobina\b|\bvela\b|\bignicao\b|\bsonda\b/.test(text)) return 'pecas-eletricas';
+    if (/\bconcessionaria\b|\bgenuin[ao]\b|\boriginal\b|\boem\b/.test(text)) return 'concessionarias';
+
+    return 'pecas-automotivas';
+};
 
 type QuotesProps = {
     openHistoryId?: string;
@@ -273,6 +292,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
     const [newPart, setNewPart] = useState('');
     const [newDescription, setNewDescription] = useState('');
     const [quoteCategory, setQuoteCategory] = useState(quoteCategories[0].key);
+    const [quoteCategoryLocked, setQuoteCategoryLocked] = useState(false);
     const [quoteMatrix, setQuoteMatrix] = useState<QuoteMatrix>({});
     const [suppliers, setSuppliers] = useState<string[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -298,6 +318,11 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
     useEffect(() => {
         setActiveJobId(localStorage.getItem(activeQuoteJobStorageKey) || '');
     }, [activeQuoteJobStorageKey]);
+
+    useEffect(() => {
+        if (quoteCategoryLocked) return;
+        setQuoteCategory(inferQuoteCategory(newPart, newDescription));
+    }, [newDescription, newPart, quoteCategoryLocked]);
 
     const applyQuoteJob = async (data: QuoteSearchResponse) => {
         setQuoteJobStatus(data.status || '');
@@ -418,7 +443,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                 const payload = JSON.parse(raw) as QuoteItemInput;
                 const query = String(payload.query || '').trim();
                 const description = String(payload.description || '').trim();
-                const category = String(payload.category || quoteCategory).trim();
+                const category = String(payload.category || inferQuoteCategory(query, description)).trim();
 
                 if (!query) return;
 
@@ -432,6 +457,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                             query,
                             description: description || undefined,
                             category: category || undefined,
+                            categoryLocked: !!payload.categoryLocked,
                         },
                     ];
                 });
@@ -445,13 +471,14 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
         applyPrefill();
         window.addEventListener('quote-prefill-ready', applyPrefill);
         return () => window.removeEventListener('quote-prefill-ready', applyPrefill);
-    }, [quoteCategory, quotePrefillStorageKey]);
+    }, [quotePrefillStorageKey]);
 
     const handleAddPart = (event?: React.FormEvent) => {
         if (event) event.preventDefault();
 
         const query = newPart.trim();
         const description = newDescription.trim();
+        const category = quoteCategoryLocked ? quoteCategory : inferQuoteCategory(query, description);
 
         if (!query) {
             return;
@@ -469,12 +496,15 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
             {
                 query,
                 description: description || undefined,
-                category: quoteCategory,
+                category,
+                categoryLocked: quoteCategoryLocked,
             },
         ]);
 
         setNewPart('');
         setNewDescription('');
+        setQuoteCategoryLocked(false);
+        setQuoteCategory(quoteCategories[0].key);
     };
 
     const handleRemovePart = (index: number) => {
@@ -501,6 +531,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                     query: item.query,
                     description: item.description,
                     category: item.category,
+                    categoryLocked: item.categoryLocked,
                 }))
             });
 
@@ -719,7 +750,10 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                         key={category.key}
                         type="button"
                         className={quoteCategory === category.key ? 'active' : ''}
-                        onClick={() => setQuoteCategory(category.key)}
+                        onClick={() => {
+                            setQuoteCategory(category.key);
+                            setQuoteCategoryLocked(true);
+                        }}
                     >
                         {category.label}
                     </button>

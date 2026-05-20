@@ -7,6 +7,8 @@ import { randomUUID } from 'crypto';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { whatsappService } from '../services/whatsapp.service';
 import { quoteWhatsappChannelKey } from '../services/whatsapp-channel.service';
+import { CatalogService } from '../services/catalog.service';
+import { io } from '../index';
 
 const prisma = new PrismaClient();
 const APP_TIME_ZONE = 'America/Sao_Paulo';
@@ -63,6 +65,59 @@ type QuoteJob = {
 };
 
 const quoteJobs = new Map<string, QuoteJob>();
+
+const quoteCategoryDefinitions = [
+    { key: 'pecas-automotivas', label: 'Peças automotivas', phone: 'cotacao:pecas-automotivas' },
+    { key: 'pecas-eletricas', label: 'Peças elétricas', phone: 'cotacao:pecas-eletricas' },
+    { key: 'concessionarias', label: 'Concessionárias', phone: 'cotacao:concessionarias' },
+    { key: 'pneu', label: 'Pneu', phone: 'cotacao:pneu' },
+];
+
+function normalizeCategoryText(value: string) {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+}
+
+function getQuoteCategory(value?: string | null) {
+    const normalized = normalizeCategoryText(value || '').replace(/\s+/g, '-');
+    return (
+        quoteCategoryDefinitions.find((category) => category.key === normalized) ||
+        quoteCategoryDefinitions.find((category) => normalizeCategoryText(category.label).replace(/\s+/g, '-') === normalized) ||
+        quoteCategoryDefinitions[0]
+    );
+}
+
+function inferQuoteCategory(query: string, description?: string) {
+    const text = normalizeCategoryText(`${query} ${description || ''}`);
+
+    if (/\bpneu\b|\baro\b|\bmedida\b|\b\d{3}\s*\d{2}\s*r?\d{2}\b/.test(text)) {
+        return getQuoteCategory('pneu');
+    }
+
+    if (
+        /\bsensor\b|\beletric|\beletron|\bbateria\b|\blampada\b|\bfarol\b|\balternador\b|\bmotor de partida\b|\bmodulo\b|\brele\b|\bfusivel\b|\bchicote\b|\bbobina\b|\bvela\b|\bignicao\b|\bsonda\b/.test(text)
+    ) {
+        return getQuoteCategory('pecas-eletricas');
+    }
+
+    if (/\bconcessionaria\b|\bgenuin[ao]\b|\boriginal\b|\boem\b/.test(text)) {
+        return getQuoteCategory('concessionarias');
+    }
+
+    return getQuoteCategory('pecas-automotivas');
+}
+
+function findCatalogMatchForQuoteItem(query: string) {
+    try {
+        return CatalogService.search(query, 5)[0] || null;
+    } catch {
+        return null;
+    }
+}
 
 function serializeDateTime(value?: Date | string | null) {
     if (!value) return null;
@@ -227,6 +282,75 @@ function buildWhatsappLink(phone?: string | null) {
     return `https://wa.me/${withCountry}`;
 }
 
+function parseLeadHistory(history?: string | null) {
+    try {
+        const parsed = JSON.parse(history || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
+function buildQuoteLeadMessage(item: QuoteItem, userName: string, createdAt: string) {
+    const category = getQuoteCategory(item.category);
+    return [
+        `Nova pesquisa de orçamento - ${category.label}`,
+        `Código/peça: ${item.query}`,
+        `Descrição: ${item.description || 'Descrição não informada'}`,
+        `Solicitante: ${userName || 'Usuário do sistema'}`,
+        `Data: ${formatDateTime(createdAt)}`,
+    ].join('\n');
+}
+
+async function recordQuoteCategoryLeads(job: QuoteJob) {
+    const user = await prisma.user.findUnique({
+        where: { id: job.userId },
+        select: { name: true, email: true },
+    }).catch(() => null);
+    const userName = user?.name || user?.email || '';
+    const timestamp = Math.floor(new Date(job.createdAt).getTime() / 1000) || Math.floor(Date.now() / 1000);
+
+    for (const item of job.items) {
+        const category = getQuoteCategory(item.category);
+        const message = {
+            text: buildQuoteLeadMessage(item, userName, job.createdAt),
+            fromMe: false,
+            timestamp,
+        };
+
+        const existing = await prisma.client.findFirst({
+            where: {
+                userId: job.userId,
+                whatsappChannelKey: quoteWhatsappChannelKey,
+                phone: category.phone,
+            },
+        });
+        const history = [...parseLeadHistory(existing?.history), message].slice(-300);
+
+        const client = existing
+            ? await prisma.client.update({
+                  where: { id: existing.id },
+                  data: {
+                      name: category.label,
+                      status: 'COTACAO',
+                      history: JSON.stringify(history),
+                  },
+              })
+            : await prisma.client.create({
+                  data: {
+                      name: category.label,
+                      phone: category.phone,
+                      whatsappChannelKey: quoteWhatsappChannelKey,
+                      status: 'COTACAO',
+                      history: JSON.stringify(history),
+                      userId: job.userId,
+                  },
+              });
+
+        io.to(`user:${job.userId}`).emit('client_upserted', client);
+    }
+}
+
 async function sendWhatsappSupplierQuoteRequests(job: QuoteJob) {
     const suppliers = await prisma.supplier.findMany({
         where: {
@@ -319,7 +443,13 @@ function normalizeQuoteItems(body: any): QuoteItem[] {
             .map((item: any) => {
                 const query = String(item?.query || item?.product || '').trim();
                 const description = String(item?.description || '').trim();
+                const catalogMatch = findCatalogMatchForQuoteItem(query);
+                const resolvedDescription = description || catalogMatch?.description || catalogMatch?.applications?.[0] || '';
                 const category = String(item?.category || '').trim();
+                const categoryLocked = item?.categoryLocked === true;
+                const inferredCategory = inferQuoteCategory(query, resolvedDescription);
+                const selectedCategory = category ? getQuoteCategory(category) : null;
+                const resolvedCategory = categoryLocked && selectedCategory ? selectedCategory : inferredCategory;
 
                 if (!query) {
                     return null;
@@ -327,9 +457,9 @@ function normalizeQuoteItems(body: any): QuoteItem[] {
 
                 return {
                     query,
-                    description: description || undefined,
-                    category: category || undefined,
-                    label: buildItemLabel(query, description),
+                    description: resolvedDescription || undefined,
+                    category: resolvedCategory.key,
+                    label: buildItemLabel(query, resolvedDescription),
                 };
             })
             .filter(Boolean) as QuoteItem[];
@@ -923,6 +1053,7 @@ export const searchQuote = async (req: Request, res: Response) => {
         };
 
         quoteJobs.set(job.id, job);
+        await recordQuoteCategoryLeads(job);
 
         void runQuoteJob(job);
 

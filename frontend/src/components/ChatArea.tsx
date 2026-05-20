@@ -148,7 +148,11 @@ const formatDigitsAsPhone = (value: string) => {
   return digits || String(value || '');
 };
 
+const isQuoteCategoryLead = (client?: Client | null) => String(client?.phone || '').startsWith('cotacao:');
+
 const getResolvedClientPhone = (client: Client) => {
+  if (isQuoteCategoryLead(client)) return 'Lead interno de cotacao';
+
   const rawPhone = String(client.phone || '');
   if (!isTechnicalLid(rawPhone)) {
     return formatDigitsAsPhone(rawPhone);
@@ -519,6 +523,7 @@ export const ChatArea = ({ channelKey = defaultWhatsappChannelKey, channelLabel 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedClient || !inputText.trim()) return;
+    if (isQuoteCategoryLead(selectedClient)) return;
 
     const text = inputText.trim();
     setInputText('');
@@ -681,7 +686,7 @@ export const ChatArea = ({ channelKey = defaultWhatsappChannelKey, channelLabel 
             </div>
 
             <div className="chat-header-actions">
-              {!getResolvedClientPhone(selectedClient) && (
+              {!isQuoteCategoryLead(selectedClient) && !getResolvedClientPhone(selectedClient) && (
                 <button type="button" className="fix-phone-btn" onClick={handleFixSelectedPhone}>
                   Corrigir telefone
                 </button>
@@ -729,11 +734,12 @@ export const ChatArea = ({ channelKey = defaultWhatsappChannelKey, channelLabel 
             </button>
             <input
               type="text"
-              placeholder="Digite uma mensagem..."
+              placeholder={isQuoteCategoryLead(selectedClient) ? 'Lead interno de cotacao' : 'Digite uma mensagem...'}
               value={inputText}
               onChange={(event) => setInputText(event.target.value)}
+              disabled={isQuoteCategoryLead(selectedClient)}
             />
-            <button type="submit" className="send-btn" disabled={!inputText.trim()} title="Enviar">
+            <button type="submit" className="send-btn" disabled={!inputText.trim() || isQuoteCategoryLead(selectedClient)} title="Enviar">
               <Send size={20} />
             </button>
           </form>
