@@ -526,8 +526,9 @@ function isExactResultForQuery(result: any, query: string) {
 }
 
 function shouldRenderResultInPdf(result: any, query: string) {
-    if (!result || result.error || result.whatsappStatus) return false;
+    if (!result || result.error) return false;
     if (!Number.isFinite(parseExportPrice(result.price))) return false;
+    if (result.whatsappStatus) return true;
     return isExactResultForQuery(result, query) || result.exportSelectedSimilar === true;
 }
 
@@ -952,7 +953,8 @@ async function renderExcel(res: Response, items: QuoteItem[], suppliers: string[
     items.forEach((item) => {
         const rowPrices = suppliers.map((supplier: string) => {
             const result = selectedOffers[item.query]?.[supplier];
-            return result && !result.error ? Number.parseFloat(String(result.price)) : Infinity;
+            const price = result && !result.error ? parseExportPrice(result.price) : Number.POSITIVE_INFINITY;
+            return Number.isFinite(price) ? price : Number.POSITIVE_INFINITY;
         });
         const minPrice = Math.min(...rowPrices);
 
@@ -963,7 +965,8 @@ async function renderExcel(res: Response, items: QuoteItem[], suppliers: string[
 
         suppliers.forEach((supplier: string) => {
             const result = selectedOffers[item.query]?.[supplier];
-            rowData[supplier] = result && !result.error ? Number.parseFloat(String(result.price)) : '---';
+            const price = result && !result.error ? parseExportPrice(result.price) : Number.POSITIVE_INFINITY;
+            rowData[supplier] = Number.isFinite(price) ? price : '---';
         });
 
         const excelRow = worksheet.addRow(rowData);
@@ -996,6 +999,8 @@ async function renderExcel(res: Response, items: QuoteItem[], suppliers: string[
         suppliers.forEach((supplier) => {
             const result = selectedOffers[item.query]?.[supplier];
             if (!result || result.error) return;
+            const price = parseExportPrice(result.price);
+            if (!Number.isFinite(price)) return;
 
             const normalizedQuery = String(item.query || '').toLowerCase().replace(/[^a-z0-9]/g, '');
             const normalizedCode = String(result.code || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -1003,7 +1008,9 @@ async function renderExcel(res: Response, items: QuoteItem[], suppliers: string[
                 ? normalizedCode === normalizedQuery
                     ? 'Código exato'
                     : 'Similar real'
-                : 'Código não informado';
+                : result.whatsappStatus
+                    ? 'Valor informado por WhatsApp'
+                    : 'Código não informado';
 
             detailWorksheet.addRow({
                 query: item.query,
@@ -1015,7 +1022,7 @@ async function renderExcel(res: Response, items: QuoteItem[], suppliers: string[
                 brand: result.brand || '',
                 application: result.application || '',
                 stock: result.stockText || result.stock || '',
-                price: Number.parseFloat(String(result.price)),
+                price,
             });
         });
     });
@@ -1265,6 +1272,47 @@ export const getQuoteHistoryById = async (req: Request, res: Response) => {
     } catch (err) {
         console.error('Get Quote History Error:', err);
         res.status(500).json({ message: 'Erro ao carregar cotacao salva' });
+    }
+};
+
+export const updateQuoteHistory = async (req: Request, res: Response) => {
+    try {
+        const existingQuote = await prisma.quote.findFirst({
+            where: getReadableQuoteWhere(req, req.params.id),
+        });
+
+        if (!existingQuote) {
+            return res.status(404).json({ message: 'Cotacao nao encontrada' });
+        }
+
+        const { items, suppliers, matrix, selectedOffers } = normalizeExportData(req.body);
+        const payload: StoredQuotePayload = {
+            version: 2,
+            items,
+            suppliers,
+            matrix,
+            selectedOffers,
+        };
+
+        const updatedQuote = await prisma.quote.update({
+            where: { id: existingQuote.id },
+            data: {
+                product: items.map((item: QuoteItem) => item.label).join(' | '),
+                results: JSON.stringify(payload),
+            },
+        });
+        const parsed = parseStoredQuote(updatedQuote);
+
+        return res.json({
+            id: updatedQuote.id,
+            createdAt: serializeDateTime(updatedQuote.createdAt),
+            items: parsed.items,
+            suppliers: parsed.suppliers,
+            matrix: parsed.matrix,
+        });
+    } catch (err) {
+        console.error('Update Quote History Error:', err);
+        res.status(500).json({ message: 'Erro ao atualizar cotacao salva' });
     }
 };
 

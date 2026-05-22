@@ -40,6 +40,8 @@ type QuoteResult = {
     whatsappError?: string;
     whatsappMessageId?: string;
     whatsappJid?: string;
+    whatsappManualQuote?: boolean;
+    whatsappManualQuoteAt?: string;
     exportSelectedSimilar?: boolean;
 };
 
@@ -131,12 +133,29 @@ const parsePriceValue = (value?: string | number) => {
     return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
 };
 
+const formatCurrencyValue = (value?: string | number) => {
+    const parsed = parsePriceValue(value);
+    if (!Number.isFinite(parsed)) return '---';
+
+    return parsed.toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+};
+
+const hasUsablePrice = (result?: QuoteResult | null) =>
+    !!result && !result.error && Number.isFinite(parsePriceValue(result.price));
+
+const hasManualWhatsappQuote = (result?: QuoteResult | null) =>
+    !!result?.whatsappStatus && hasUsablePrice(result);
+
 const formatResultPrice = (result?: QuoteResult | null) => {
     if (!result) return '---';
+    if (hasUsablePrice(result)) return `R$ ${formatCurrencyValue(result.price)}`;
     if (result.whatsappStatus === 'queued') return 'Aguardando resposta';
     if (result.whatsappStatus === 'pending') return 'Enviando WhatsApp';
     if (result.whatsappStatus === 'failed') return 'Falha no envio';
-    return `R$ ${result.price}`;
+    return '---';
 };
 
 const getMatchType = (result: QuoteResult, normalizedQueryCode: string, hasExactMatch: boolean) => {
@@ -182,6 +201,31 @@ const buildOfferSelectionKey = (query: string, provider: string, variantKey?: st
 
 const buildSimilarExportKey = (query: string, provider: string, result?: QuoteResult | null) =>
     `${query}::${provider}::${result ? buildResultIdentity(result) : 'sem-resultado'}`;
+
+const isSameQuoteResult = (candidate: QuoteResult, target: QuoteResult) => {
+    if (target.whatsappMessageId && candidate.whatsappMessageId === target.whatsappMessageId) {
+        return true;
+    }
+
+    if (target.whatsappJid && candidate.whatsappJid === target.whatsappJid && candidate.provider === target.provider) {
+        return normalizeCodeValue(candidate.code) === normalizeCodeValue(target.code);
+    }
+
+    if (target.whatsappStatus || candidate.whatsappStatus) {
+        return (
+            candidate.provider === target.provider &&
+            normalizeCodeValue(candidate.whatsappPhone) === normalizeCodeValue(target.whatsappPhone) &&
+            normalizeCodeValue(candidate.code) === normalizeCodeValue(target.code)
+        );
+    }
+
+    return buildResultIdentity(candidate) === buildResultIdentity(target);
+};
+
+const getManualPriceDefaultValue = (result: QuoteResult) => {
+    const price = parsePriceValue(result.price);
+    return Number.isFinite(price) ? String(price).replace('.', ',') : '';
+};
 
 const buildVariantGroups = (results: QuoteResult[], query: string) => {
     const groupMap = new Map<string, VariantGroup>();
@@ -566,6 +610,72 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
         }
     };
 
+    const persistQuoteSnapshot = async (nextMatrix: QuoteMatrix) => {
+        if (!currentQuoteId) return;
+
+        try {
+            await axios.put(`${apiBase}/api/quotes/history/${currentQuoteId}`, {
+                items: partList.map((item) => ({
+                    query: item.query,
+                    description: item.description,
+                    category: item.category,
+                    label: item.label,
+                })),
+                suppliers,
+                matrix: nextMatrix,
+            });
+        } catch (error) {
+            console.error('Persist Manual WhatsApp Quote Error:', error);
+        }
+    };
+
+    const handleSaveWhatsappManualQuote = (
+        event: React.FormEvent<HTMLFormElement>,
+        query: string,
+        result: QuoteResult
+    ) => {
+        event.preventDefault();
+
+        const formData = new FormData(event.currentTarget);
+        const rawPrice = String(formData.get('price') || '').trim();
+        const price = parsePriceValue(rawPrice);
+
+        if (!Number.isFinite(price) || price <= 0) {
+            alert('Informe um valor valido para este fornecedor.');
+            return;
+        }
+
+        const product = String(formData.get('product') || '').trim();
+        const brand = String(formData.get('brand') || '').trim();
+        const stockText = String(formData.get('stockText') || '').trim();
+        const application = String(formData.get('application') || '').trim();
+
+        let nextMatrix: QuoteMatrix = {};
+        setQuoteMatrix((current) => {
+            nextMatrix = {
+                ...current,
+                [query]: (current[query] || []).map((entry) =>
+                    isSameQuoteResult(entry, result)
+                        ? {
+                              ...entry,
+                              price,
+                              product: product || entry.product || `Cotacao WhatsApp: ${query}`,
+                              brand: brand || entry.brand || 'WhatsApp',
+                              stockText: stockText || 'Valor informado pelo WhatsApp',
+                              application: application || entry.application || '',
+                              whatsappManualQuote: true,
+                              whatsappManualQuoteAt: new Date().toISOString(),
+                          }
+                        : entry
+                ),
+            };
+
+            return nextMatrix;
+        });
+
+        void persistQuoteSnapshot(nextMatrix);
+    };
+
     const handleExportCurrent = async (type: 'pdf' | 'excel') => {
         try {
             const response = await axios.post(`${apiBase}/api/quotes/export/${type}`, {
@@ -711,8 +821,13 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
 
             suppliers.forEach((provider) => {
                 const selectedResult = selectedOffersByQuerySupplier[item.query]?.[provider] || null;
-                if (!selectedResult || selectedResult.error || selectedResult.whatsappStatus) {
+                if (!selectedResult || selectedResult.error) {
                     querySelections[provider] = null;
+                    return;
+                }
+
+                if (selectedResult.whatsappStatus) {
+                    querySelections[provider] = hasManualWhatsappQuote(selectedResult) ? selectedResult : null;
                     return;
                 }
 
@@ -945,12 +1060,16 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                             const visibleSelectedResults = providerCards
                                 .map((card) => card.selectedResult)
                                 .filter((entry): entry is QuoteResult => !!entry);
-                            const comparableSelectedResults = visibleSelectedResults.filter((entry) => !entry.whatsappStatus);
+                            const comparableSelectedResults = visibleSelectedResults.filter(
+                                (entry) => !entry.whatsappStatus || hasManualWhatsappQuote(entry)
+                            );
                             const bestComparableResults = comparableSelectedResults.length > 0
                                 ? comparableSelectedResults
                                 : visibleSelectedResults;
                             const hasExactMatch = visibleSelectedResults.some(
-                                (entry) => !entry.whatsappStatus && normalizeCodeValue(entry.code) === normalizedQueryCode
+                                (entry) =>
+                                    (!entry.whatsappStatus || hasManualWhatsappQuote(entry)) &&
+                                    normalizeCodeValue(entry.code) === normalizedQueryCode
                             );
                             const bestResult =
                                 [...bestComparableResults].sort((a, b) => {
@@ -967,7 +1086,9 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                         {bestResult && (
                                             <div className="best-offer-badge">
                                                 {bestResult.whatsappStatus
-                                                    ? 'Solicitação WhatsApp'
+                                                    ? hasManualWhatsappQuote(bestResult)
+                                                        ? 'Melhor valor WhatsApp'
+                                                        : 'Solicitação WhatsApp'
                                                     : hasExactMatch
                                                         ? 'Melhor oferta exata atual'
                                                         : 'Melhor similar atual'}: {bestResult.provider} • {formatResultPrice(bestResult)}
@@ -1009,7 +1130,10 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                                     supplierResult.code === bestResult.code &&
                                                     supplierResult.product === bestResult.product;
                                                 const matchType = getMatchType(supplierResult, normalizedQueryCode, card.hasExactMatch);
-                                                const matchLabel = supplierResult.whatsappStatus === 'queued'
+                                                const isManualWhatsappQuote = hasManualWhatsappQuote(supplierResult);
+                                                const matchLabel = isManualWhatsappQuote
+                                                    ? 'Valor lancado'
+                                                    : supplierResult.whatsappStatus === 'queued'
                                                     ? 'Envio confirmado'
                                                     : supplierResult.whatsappStatus === 'pending'
                                                         ? 'Enviando WhatsApp'
@@ -1020,9 +1144,9 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                                             : matchType === 'similar'
                                                                 ? 'Similar real'
                                                                 : 'Código não informado';
-                                                const matchClass = supplierResult.whatsappStatus || matchType;
+                                                const matchClass = isManualWhatsappQuote ? 'manual-whatsapp' : supplierResult.whatsappStatus || matchType;
                                                 const isExactForPdf =
-                                                    !supplierResult.whatsappStatus &&
+                                                    (!supplierResult.whatsappStatus || isManualWhatsappQuote) &&
                                                     !!normalizeCodeValue(supplierResult.code) &&
                                                     normalizeCodeValue(supplierResult.code) === normalizedQueryCode;
                                                 const canIncludeSimilarInPdf =
@@ -1138,25 +1262,96 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                                                 {supplierResult.product || 'Peça sem descrição clara'}
                                                             </div>
                                                             {supplierResult.whatsappStatus ? (
-                                                                <div className="supplier-meta-grid">
-                                                                    <div className="supplier-result-meta">
-                                                                        <strong>Canal:</strong> WhatsApp
-                                                                    </div>
-                                                                    <div className="supplier-result-meta">
-                                                                        <strong>Telefone:</strong> {supplierResult.whatsappPhone || 'Não informado'}
-                                                                    </div>
-                                                                    <div className="supplier-result-meta">
-                                                                        <strong>Status:</strong> {supplierResult.whatsappStatus === 'queued' ? 'Enviado ao servidor do WhatsApp' : supplierResult.whatsappStatus === 'pending' ? 'Enviando' : 'Falha no envio'}
-                                                                    </div>
-                                                                    <div className="supplier-result-meta">
-                                                                        <strong>Retorno:</strong> {supplierResult.stockText || 'Aguardando resposta'}
-                                                                    </div>
-                                                                    {supplierResult.whatsappMessageId && (
+                                                                <>
+                                                                    <div className="supplier-meta-grid">
                                                                         <div className="supplier-result-meta">
-                                                                            <strong>ID:</strong> {supplierResult.whatsappMessageId}
+                                                                            <strong>Canal:</strong> WhatsApp
                                                                         </div>
-                                                                    )}
-                                                                </div>
+                                                                        <div className="supplier-result-meta">
+                                                                            <strong>Telefone:</strong> {supplierResult.whatsappPhone || 'Não informado'}
+                                                                        </div>
+                                                                        <div className="supplier-result-meta">
+                                                                            <strong>Status:</strong> {supplierResult.whatsappStatus === 'queued' ? 'Enviado ao servidor do WhatsApp' : supplierResult.whatsappStatus === 'pending' ? 'Enviando' : 'Falha no envio'}
+                                                                        </div>
+                                                                        <div className="supplier-result-meta">
+                                                                            <strong>Retorno:</strong> {supplierResult.stockText || 'Aguardando resposta'}
+                                                                        </div>
+                                                                        {supplierResult.whatsappMessageId && (
+                                                                            <div className="supplier-result-meta">
+                                                                                <strong>ID:</strong> {supplierResult.whatsappMessageId}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                    <form
+                                                                        className="whatsapp-manual-quote-form"
+                                                                        onSubmit={(event) => handleSaveWhatsappManualQuote(event, item.query, supplierResult)}
+                                                                    >
+                                                                        <div className="whatsapp-manual-grid">
+                                                                            <label>
+                                                                                Valor recebido
+                                                                                <input
+                                                                                    name="price"
+                                                                                    type="text"
+                                                                                    inputMode="decimal"
+                                                                                    placeholder="Ex: 125,90"
+                                                                                    defaultValue={getManualPriceDefaultValue(supplierResult)}
+                                                                                />
+                                                                            </label>
+                                                                            <label>
+                                                                                Fabricante / marca
+                                                                                <input
+                                                                                    name="brand"
+                                                                                    type="text"
+                                                                                    placeholder="Ex: Monroe"
+                                                                                    defaultValue={supplierResult.brand && supplierResult.brand !== 'WhatsApp' ? supplierResult.brand : ''}
+                                                                                />
+                                                                            </label>
+                                                                            <label className="whatsapp-manual-wide">
+                                                                                Peça retornada
+                                                                                <input
+                                                                                    name="product"
+                                                                                    type="text"
+                                                                                    placeholder="Descrição enviada pelo fornecedor"
+                                                                                    defaultValue={
+                                                                                        supplierResult.whatsappManualQuote
+                                                                                            ? supplierResult.product || ''
+                                                                                            : ''
+                                                                                    }
+                                                                                />
+                                                                            </label>
+                                                                            <label>
+                                                                                Estoque / prazo
+                                                                                <input
+                                                                                    name="stockText"
+                                                                                    type="text"
+                                                                                    placeholder="Ex: pronta entrega"
+                                                                                    defaultValue={
+                                                                                        supplierResult.whatsappManualQuote
+                                                                                            ? supplierResult.stockText || ''
+                                                                                            : ''
+                                                                                    }
+                                                                                />
+                                                                            </label>
+                                                                            <label>
+                                                                                Observação
+                                                                                <input
+                                                                                    name="application"
+                                                                                    type="text"
+                                                                                    placeholder="Opcional"
+                                                                                    defaultValue={supplierResult.application || ''}
+                                                                                />
+                                                                            </label>
+                                                                        </div>
+                                                                        <button type="submit">
+                                                                            Salvar valor no orçamento
+                                                                        </button>
+                                                                        {supplierResult.whatsappManualQuoteAt && (
+                                                                            <small>
+                                                                                Valor lançado em {formatDateTime(supplierResult.whatsappManualQuoteAt)}
+                                                                            </small>
+                                                                        )}
+                                                                    </form>
+                                                                </>
                                                             ) : (
                                                                 <div className="supplier-meta-grid">
                                                                     <div className="supplier-result-meta">
@@ -1636,6 +1831,66 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                     height: 16px;
                     margin: 0;
                 }
+                .whatsapp-manual-quote-form {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.65rem;
+                    margin-top: 0.75rem;
+                    padding: 0.75rem;
+                    border: 1px solid rgba(34, 197, 94, 0.18);
+                    background: rgba(34, 197, 94, 0.06);
+                    border-radius: 8px;
+                }
+                .whatsapp-manual-grid {
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 0.6rem;
+                }
+                .whatsapp-manual-grid label {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.3rem;
+                    color: var(--text-muted);
+                    font-size: 0.74rem;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    letter-spacing: 0.04em;
+                }
+                .whatsapp-manual-grid input {
+                    width: 100%;
+                    border: 1px solid var(--border-color);
+                    background: var(--panel-bg);
+                    color: var(--text-main);
+                    border-radius: 8px;
+                    padding: 0.55rem 0.65rem;
+                    font-size: 0.84rem;
+                    text-transform: none;
+                    letter-spacing: 0;
+                    font-weight: 600;
+                }
+                .whatsapp-manual-grid input:focus {
+                    outline: none;
+                    border-color: var(--primary-color);
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+                }
+                .whatsapp-manual-wide {
+                    grid-column: 1 / -1;
+                }
+                .whatsapp-manual-quote-form button {
+                    align-self: flex-start;
+                    border-radius: 8px;
+                    background: #16a34a;
+                    color: #fff;
+                    padding: 0.55rem 0.75rem;
+                    font-size: 0.8rem;
+                    font-weight: 800;
+                    cursor: pointer;
+                }
+                .whatsapp-manual-quote-form small {
+                    color: #047857;
+                    font-size: 0.74rem;
+                    font-weight: 700;
+                }
                 .supplier-card-badge {
                     display: inline-flex;
                     align-items: center;
@@ -1689,6 +1944,11 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                     background: rgba(239, 68, 68, 0.12);
                     color: #b91c1c;
                     border: 1px solid rgba(239, 68, 68, 0.18);
+                }
+                .supplier-card-match.manual-whatsapp {
+                    background: rgba(16, 185, 129, 0.14);
+                    color: #047857;
+                    border: 1px solid rgba(16, 185, 129, 0.22);
                 }
                 .supplier-view-error {
                     color: #dc2626;
@@ -1965,7 +2225,8 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                         flex-direction: column;
                         align-items: flex-start;
                     }
-                    .supplier-meta-grid {
+                    .supplier-meta-grid,
+                    .whatsapp-manual-grid {
                         grid-template-columns: 1fr;
                     }
                     .history-header-actions,

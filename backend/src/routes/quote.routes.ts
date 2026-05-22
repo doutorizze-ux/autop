@@ -9,6 +9,7 @@ import {
     listQuoteHistory,
     listTeamQuoteHistory,
     getQuoteHistoryById,
+    updateQuoteHistory,
     deleteQuoteHistory,
     exportSavedQuotePDF,
     exportMultipleSavedQuotesPDF,
@@ -27,6 +28,7 @@ router.post('/export/excel', exportExcel);
 router.get('/admin/team-history', listTeamQuoteHistory);
 router.get('/history', listQuoteHistory);
 router.get('/history/:id', getQuoteHistoryById);
+router.put('/history/:id', updateQuoteHistory);
 router.delete('/history/:id', deleteQuoteHistory);
 router.post('/history/export/pdf', exportMultipleSavedQuotesPDF);
 router.get('/history/:id/export/pdf', exportSavedQuotePDF);
