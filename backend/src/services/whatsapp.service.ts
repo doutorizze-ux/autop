@@ -833,20 +833,27 @@ class WhatsAppSession {
         });
     }
 
+    private handleSocketError(error: unknown) {
+        const message = error instanceof Error ? error.message : String(error || '');
+        if (message.includes('WebSocket was closed before the connection was established')) {
+            console.warn('WhatsApp WebSocket fechou antes de conectar; a reconexao vai continuar.');
+            return;
+        }
+
+        console.error('WhatsApp WebSocket error:', error);
+    }
+
+    private attachErrorHandlerToEmitter(emitter: any) {
+        if (!emitter || typeof emitter.on !== 'function' || emitter[whatsappSocketErrorHandlerAttached]) return;
+
+        emitter[whatsappSocketErrorHandlerAttached] = true;
+        emitter.on('error', (error: unknown) => this.handleSocketError(error));
+    }
+
     private attachSocketErrorHandler(sock: any) {
         const ws = sock?.ws;
-        if (!ws || typeof ws.on !== 'function' || ws[whatsappSocketErrorHandlerAttached]) return;
-
-        ws[whatsappSocketErrorHandlerAttached] = true;
-        ws.on('error', (error: unknown) => {
-            const message = error instanceof Error ? error.message : String(error || '');
-            if (message.includes('WebSocket was closed before the connection was established')) {
-                console.warn('WhatsApp WebSocket fechou antes de conectar; a reconexao vai continuar.');
-                return;
-            }
-
-            console.error('WhatsApp WebSocket error:', error);
-        });
+        this.attachErrorHandlerToEmitter(ws);
+        this.attachErrorHandlerToEmitter(ws?.socket);
     }
 
     async init() {
@@ -1184,10 +1191,28 @@ class WhatsAppSession {
     }
 
     private closeSocket() {
+        if (!this.sock) return;
+
         try {
             this.attachSocketErrorHandler(this.sock);
-            this.sock?.end?.();
+            const ws = this.sock?.ws;
+
+            if (ws?.isConnecting) {
+                ws.socket?.terminate?.();
+                ws.socket = null;
+                return;
+            }
+
+            if (ws?.isClosing || ws?.isClosed) return;
+
+            this.sock.end?.();
         } catch (error) {
+            const message = error instanceof Error ? error.message : String(error || '');
+            if (message.includes('WebSocket was closed before the connection was established')) {
+                console.warn('WhatsApp WebSocket ja estava encerrando antes de conectar.');
+                return;
+            }
+
             console.error('Erro ao encerrar socket do WhatsApp:', error);
         }
     }
