@@ -25,6 +25,7 @@ import { defaultWhatsappChannelKey, getWhatsappChannel, normalizeWhatsappChannel
 const prisma = new PrismaClient();
 const whatsappIdentityMapPath = path.join(__dirname, '../../data/whatsapp-identity-map.json');
 const whatsappIdentityCache = new Map<string, string>();
+const whatsappSocketErrorHandlerAttached = Symbol('whatsappSocketErrorHandlerAttached');
 let whatsappIdentityCacheLoaded = false;
 
 type StoredChatMessage = {
@@ -832,6 +833,22 @@ class WhatsAppSession {
         });
     }
 
+    private attachSocketErrorHandler(sock: any) {
+        const ws = sock?.ws;
+        if (!ws || typeof ws.on !== 'function' || ws[whatsappSocketErrorHandlerAttached]) return;
+
+        ws[whatsappSocketErrorHandlerAttached] = true;
+        ws.on('error', (error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error || '');
+            if (message.includes('WebSocket was closed before the connection was established')) {
+                console.warn('WhatsApp WebSocket fechou antes de conectar; a reconexao vai continuar.');
+                return;
+            }
+
+            console.error('WhatsApp WebSocket error:', error);
+        });
+    }
+
     async init() {
         if (this.initializing) return;
         this.initializing = true;
@@ -859,6 +876,7 @@ class WhatsAppSession {
                 syncFullHistory: false,
                 markOnlineOnConnect: false,
             });
+            this.attachSocketErrorHandler(this.sock);
 
             this.store.bind(this.sock.ev);
 
@@ -1167,6 +1185,7 @@ class WhatsAppSession {
 
     private closeSocket() {
         try {
+            this.attachSocketErrorHandler(this.sock);
             this.sock?.end?.();
         } catch (error) {
             console.error('Erro ao encerrar socket do WhatsApp:', error);
