@@ -95,6 +95,10 @@ module.exports = {
 
         for (const root of roots) {
             const text = normalize(root.textContent);
+            const availabilityText = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const unavailable = /\bfora\s+de\s+estoque\b|\bsem\s+estoque\b|\bindisponivel\b|\bavise\s*[- ]?me\b|\besgotad[oa]\b/.test(availabilityText);
+            if (unavailable) continue;
+
             const preco = parsePriceText(text);
             if (!preco) continue;
 
@@ -111,7 +115,9 @@ module.exports = {
             items.push({
                 nome,
                 preco,
-                estoque: '1',
+                estoque: '',
+                estoqueTexto: getText(root, ['.stock', '.availability', '[class*="stock"]']),
+                textoCompleto: text,
                 link: linkNode ? linkNode.href : window.location.href,
             });
         }
@@ -121,6 +127,11 @@ module.exports = {
         }
 
         const bodyText = normalize(document.body && document.body.textContent);
+        const availabilityText = bodyText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (/\bfora\s+de\s+estoque\b|\bsem\s+estoque\b|\bindisponivel\b|\bavise\s*[- ]?me\b|\besgotad[oa]\b/.test(availabilityText)) {
+            return [];
+        }
+
         const preco = parsePriceText(bodyText);
         if (!preco) {
             return [];
@@ -130,7 +141,9 @@ module.exports = {
         return [{
             nome: normalize(nameMatch ? nameMatch[1] : 'Produto Real Moto Pecas'),
             preco,
-            estoque: '1',
+            estoque: '',
+            estoqueTexto: '',
+            textoCompleto: bodyText,
             link: window.location.href,
         }];
     }),

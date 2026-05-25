@@ -12,6 +12,42 @@ function parsePrice(priceStr) {
     return parseFloat(clean) || 0;
 }
 
+function normalizeAvailabilityText(value) {
+    return safeString(value)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function isPackagingQuantityText(value) {
+    const text = normalizeAvailabilityText(value);
+    return /\bquantidade\s+por\s+embalagem\b|\bqtd\.?\s+por\s+embalagem\b|\bembalagem\b/.test(text);
+}
+
+function hasUnavailableSignal(value) {
+    const text = normalizeAvailabilityText(value);
+    if (!text) return false;
+
+    return (
+        /\bfora\s+de\s+estoque\b/.test(text) ||
+        /\bsem\s+estoque\b/.test(text) ||
+        /\bindisponivel\b/.test(text) ||
+        /\bnao\s+disponivel\b/.test(text) ||
+        /\besgotad[oa]\b/.test(text) ||
+        /\bavise\s*[- ]?me\b/.test(text) ||
+        /\bout\s+of\s+stock\b/.test(text) ||
+        /\bunavailable\b/.test(text) ||
+        /(?:estoque|saldo|disponivel|disponibilidade)\D{0,20}\b0\b/.test(text)
+    );
+}
+
+function parseStockValue(stock, stockText) {
+    if (isPackagingQuantityText(stockText)) return 0;
+    return parseInt(stock || 0, 10) || 0;
+}
+
 function ensureDirectory(dirPath) {
     if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
@@ -489,19 +525,31 @@ async function performSearch(page, supplier, query, strategy = {}) {
 }
 
 function buildBrowserPayload(items, supplier) {
-    const mappedItems = items.map((item) => ({
-        provider: safeString(item.provider || supplier.name),
-        product: safeString(item.nome || item.name || item.product),
-        price: parsePrice(item.preco || item.price),
-        available: true,
-        link: safeString(item.link || supplier.url),
-        code: safeString(item.codigo || item.code),
-        brand: safeString(item.marca || item.brand),
-        application: safeString(item.aplicacao || item.application),
-        stock: parseInt(item.estoque || item.stock || 0, 10) || 0,
-        stockText: safeString(item.estoqueTexto || item.stockText),
-        variantKey: buildVariantKey(item.nome || item.name || item.product, item.aplicacao || item.application),
-    })).filter((item) => item.price > 0);
+    const mappedItems = items.map((item) => {
+        const stockText = safeString(item.estoqueTexto || item.stockText);
+        const rawText = [
+            item.textoCompleto,
+            item.fullText,
+            stockText,
+            item.disponibilidade,
+            item.availability,
+        ].map(safeString).filter(Boolean).join(' ');
+        const unavailable = item.available === false || item.disponivel === false || hasUnavailableSignal(rawText);
+
+        return {
+            provider: safeString(item.provider || supplier.name),
+            product: safeString(item.nome || item.name || item.product),
+            price: parsePrice(item.preco || item.price),
+            available: !unavailable,
+            link: safeString(item.link || supplier.url),
+            code: safeString(item.codigo || item.code),
+            brand: safeString(item.marca || item.brand),
+            application: safeString(item.aplicacao || item.application),
+            stock: parseStockValue(item.estoque || item.stock, stockText),
+            stockText,
+            variantKey: buildVariantKey(item.nome || item.name || item.product, item.aplicacao || item.application),
+        };
+    }).filter((item) => item.price > 0 && item.available);
 
     const uniqueItems = [];
     const seen = new Set();
@@ -606,6 +654,8 @@ async function extractWithConfiguredSelectors(page, supplier, strategy = {}) {
                 marca: tryText(el, brandSelectors) || marca,
                 aplicacao,
                 estoque,
+                estoqueTexto,
+                textoCompleto: text,
                 link,
             };
         }).filter((item) => item.preco);
@@ -632,6 +682,7 @@ async function extractGeneric(page) {
                 marca: (text.match(/(?:Marca)[:\s]*([^\n]+)/i) || [null, ''])[1],
                 aplicacao: (text.match(/(?:Aplicação|Aplicacao)[:\s]*([^\n]+)/i) || [null, ''])[1],
                 estoque: (text.match(/(?:Estoque|Qtd|Disponível|Disponivel)[:\s]*([0-9]+)/i) || [null, '0'])[1],
+                textoCompleto: text,
                 link: linkNode ? linkNode.href : '',
             });
         }
@@ -915,6 +966,19 @@ async function runExclusiveForSupplier(supplier, operation) {
     return current;
 }
 
+function resolveInstalledBrowserExecutable() {
+    const candidates = [
+        process.env.LOCAL_AGENT_BROWSER_PATH,
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+        path.join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+        'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+        'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    ].filter(Boolean);
+
+    return candidates.find((candidate) => fs.existsSync(candidate)) || '';
+}
+
 function getBrowser() {
     if (!globalBrowserPromise) {
         console.error("[Playwright] Inicializando Browser Global pela primeira vez...");
@@ -935,6 +999,15 @@ function getBrowser() {
                     '--window-size=1920,1080',
                 ],
             };
+
+            const executablePath = resolveInstalledBrowserExecutable();
+            if (executablePath) {
+                console.error(`[Playwright] Usando navegador instalado: ${executablePath}`);
+                return chromium.launch({
+                    ...launchOptions,
+                    executablePath,
+                });
+            }
 
             try {
                 return await chromium.launch({

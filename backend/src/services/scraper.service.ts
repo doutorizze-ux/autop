@@ -112,6 +112,70 @@ function normalizeCodeLike(value: string) {
         .replace(/[^A-Z0-9]+/g, '');
 }
 
+function parsePriceNumber(value: unknown) {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+
+    const raw = String(value ?? '').trim();
+    if (!raw || /^-+$/.test(raw)) return 0;
+
+    const match = raw.match(/([0-9.,]+)/);
+    if (!match) return 0;
+
+    const normalized = match[1].replace(/\./g, '').replace(',', '.');
+    const parsed = Number.parseFloat(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeAvailabilityText(value: unknown) {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function isPackagingQuantityText(value: unknown) {
+    const text = normalizeAvailabilityText(value);
+    return /\bquantidade\s+por\s+embalagem\b|\bqtd\.?\s+por\s+embalagem\b|\bembalagem\b/.test(text);
+}
+
+function hasUnavailableSignal(value: unknown) {
+    const text = normalizeAvailabilityText(value);
+    if (!text) return false;
+
+    return (
+        /\bfora\s+de\s+estoque\b/.test(text) ||
+        /\bsem\s+estoque\b/.test(text) ||
+        /\bindisponivel\b/.test(text) ||
+        /\bnao\s+disponivel\b/.test(text) ||
+        /\besgotad[oa]\b/.test(text) ||
+        /\bavise\s*[- ]?me\b/.test(text) ||
+        /\bout\s+of\s+stock\b/.test(text) ||
+        /\bunavailable\b/.test(text) ||
+        /(?:estoque|saldo|disponivel|disponibilidade)\D{0,20}\b0\b/.test(text)
+    );
+}
+
+function parseStockValue(stock: unknown, stockText: unknown) {
+    if (isPackagingQuantityText(stockText)) return 0;
+    const parsed = Number.parseInt(String(stock ?? 0), 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isUnavailableResult(item: any) {
+    const rawText = [
+        item?.stockText,
+        item?.estoqueTexto,
+        item?.availability,
+        item?.disponibilidade,
+        item?.fullText,
+        item?.textoCompleto,
+    ].filter(Boolean).join(' ');
+
+    return item?.available === false || item?.disponivel === false || hasUnavailableSignal(rawText);
+}
+
 function getResultRelevance(item: any, productName: string) {
     const rawQuery = String(productName || '').trim();
     const queryText = normalizeVariantKey(productName);
@@ -152,17 +216,19 @@ function normalizeSupplierResults(data: any, supplier: any, productName: string)
 
     for (const item of data) {
         const provider = String(item?.provider || supplier.name || '').trim() || supplier.name;
-        const numericPrice = Number(item?.price) || 0;
+        const numericPrice = parsePriceNumber(item?.price);
         if (!numericPrice) continue;
+        if (isUnavailableResult(item)) continue;
 
+        const stockText = item?.stockText ? String(item.stockText) : '';
         const normalizedItem = {
             provider,
             product: item?.product || productName,
-            price: item.price,
-            available: item?.available ?? true,
+            price: numericPrice,
+            available: true,
             link: item?.link || supplier.url,
-            stock: Number.parseInt(String(item?.stock ?? 0), 10) || 0,
-            stockText: item?.stockText ? String(item.stockText) : '',
+            stock: parseStockValue(item?.stock, stockText),
+            stockText,
             code: item?.code ? String(item.code) : '',
             brand: item?.brand ? String(item.brand) : '',
             application: item?.application ? String(item.application) : '',
@@ -205,14 +271,27 @@ export async function runSupplierSearch(supplier: any, productName: string) {
         }
 
         if (data && data.items && data.items.length > 0) {
-            const bestItem = data.items[0];
+            const normalizedItems = normalizeSupplierResults(data.items, supplier, productName);
+            const bestItem = normalizedItems[0];
+            if (!bestItem) {
+                return {
+                    provider: data.provider || supplier.name,
+                    product: productName,
+                    price: '---',
+                    error: 'Fornecedor retornou apenas item indisponivel ou sem preco valido.',
+                    link: supplier.url,
+                    available: false,
+                    debug: null,
+                };
+            }
+
             return {
                 provider: data.provider || supplier.name,
-                product: bestItem.product || bestItem.name || productName,
+                product: bestItem.product || productName,
                 price: bestItem.price,
                 available: true,
                 link: bestItem.link || supplier.url,
-                stock: Number.parseInt(String(bestItem.stock ?? 0), 10) || 0,
+                stock: parseStockValue(bestItem.stock, bestItem.stockText),
                 stockText: bestItem.stockText ? String(bestItem.stockText) : '',
                 code: bestItem.code ? String(bestItem.code) : '',
                 brand: bestItem.brand ? String(bestItem.brand) : '',
