@@ -48,6 +48,26 @@ function parseStockValue(stock, stockText) {
     return parseInt(stock || 0, 10) || 0;
 }
 
+function isGenericProductName(product, supplierName) {
+    const normalize = (value) => safeString(value)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+    const productText = normalize(product);
+    const supplierText = normalize(supplierName);
+    if (!productText) return true;
+
+    return [
+        'produto',
+        'produto fornecedor',
+        'produto real moto pecas',
+        supplierText ? `produto ${supplierText}` : '',
+        supplierText,
+    ].filter(Boolean).includes(productText);
+}
+
 function ensureDirectory(dirPath) {
     if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
@@ -535,10 +555,11 @@ function buildBrowserPayload(items, supplier) {
             item.availability,
         ].map(safeString).filter(Boolean).join(' ');
         const unavailable = item.available === false || item.disponivel === false || hasUnavailableSignal(rawText);
+        const product = safeString(item.nome || item.name || item.product);
 
         return {
             provider: safeString(item.provider || supplier.name),
-            product: safeString(item.nome || item.name || item.product),
+            product,
             price: parsePrice(item.preco || item.price),
             available: !unavailable,
             link: safeString(item.link || supplier.url),
@@ -549,7 +570,7 @@ function buildBrowserPayload(items, supplier) {
             stockText,
             variantKey: buildVariantKey(item.nome || item.name || item.product, item.aplicacao || item.application),
         };
-    }).filter((item) => item.price > 0 && item.available);
+    }).filter((item) => item.price > 0 && item.available && !isGenericProductName(item.product, supplier.name));
 
     const uniqueItems = [];
     const seen = new Set();

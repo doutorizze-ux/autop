@@ -176,6 +176,36 @@ function isUnavailableResult(item: any) {
     return item?.available === false || item?.disponivel === false || hasUnavailableSignal(rawText);
 }
 
+function isGenericProductName(product: unknown, supplierName: unknown) {
+    const productText = normalizeVariantKey(String(product || ''));
+    const supplierText = normalizeVariantKey(String(supplierName || ''));
+    if (!productText) return true;
+
+    const genericNames = [
+        'produto',
+        'produto fornecedor',
+        'produto real moto pecas',
+        supplierText ? `produto ${supplierText}` : '',
+    ].filter(Boolean);
+
+    return genericNames.includes(productText) || productText === supplierText;
+}
+
+function hasReliableProductIdentity(item: any, supplier: any, productName: string) {
+    const product = String(item?.product || item?.nome || item?.name || '').trim();
+    const code = normalizeCodeLike(item?.code || item?.codigo || '');
+    const queryCode = normalizeCodeLike(productName);
+    const brand = normalizeVariantKey(item?.brand || item?.marca || '');
+    const application = normalizeVariantKey(item?.application || item?.aplicacao || '');
+    const productKey = normalizeVariantKey(product);
+    const queryKey = normalizeVariantKey(productName);
+
+    if (code) return true;
+    if (isGenericProductName(product, supplier?.name)) return false;
+    if (queryKey && productKey === queryKey && !brand && !application) return false;
+    return productKey.length >= 4 || Boolean(brand || application);
+}
+
 function getResultRelevance(item: any, productName: string) {
     const rawQuery = String(productName || '').trim();
     const queryText = normalizeVariantKey(productName);
@@ -219,6 +249,7 @@ function normalizeSupplierResults(data: any, supplier: any, productName: string)
         const numericPrice = parsePriceNumber(item?.price);
         if (!numericPrice) continue;
         if (isUnavailableResult(item)) continue;
+        if (!hasReliableProductIdentity(item, supplier, productName)) continue;
 
         const stockText = item?.stockText ? String(item.stockText) : '';
         const normalizedItem = {

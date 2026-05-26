@@ -69,6 +69,12 @@ module.exports = {
     },
     extractItems: async ({ page }) => page.evaluate(() => {
         const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+        const bodyText = normalize(document.body && document.body.textContent);
+        const bodyAvailabilityText = bodyText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (/pesquisa\s+nao\s+retornou\s+resultados|nao\s+retornou\s+resultados|nenhum\s+resultado|sem\s+resultado/.test(bodyAvailabilityText)) {
+            return [];
+        }
+
         const parsePriceText = (text) => {
             const match = normalize(text).match(/R\$\s*[0-9.]+,\d{2}/);
             return match ? match[0] : '';
@@ -126,25 +132,6 @@ module.exports = {
             return items;
         }
 
-        const bodyText = normalize(document.body && document.body.textContent);
-        const availabilityText = bodyText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        if (/\bfora\s+de\s+estoque\b|\bsem\s+estoque\b|\bindisponivel\b|\bavise\s*[- ]?me\b|\besgotad[oa]\b/.test(availabilityText)) {
-            return [];
-        }
-
-        const preco = parsePriceText(bodyText);
-        if (!preco) {
-            return [];
-        }
-
-        const nameMatch = bodyText.match(/([A-Z0-9][A-Z0-9\s./-]{12,}HF\s*87B[A-Z0-9\s./-]*)/i);
-        return [{
-            nome: normalize(nameMatch ? nameMatch[1] : 'Produto Real Moto Pecas'),
-            preco,
-            estoque: '',
-            estoqueTexto: '',
-            textoCompleto: bodyText,
-            link: window.location.href,
-        }];
+        return [];
     }),
 };
