@@ -149,6 +149,9 @@ const hasUsablePrice = (result?: QuoteResult | null) =>
 const hasManualWhatsappQuote = (result?: QuoteResult | null) =>
     !!result?.whatsappStatus && hasUsablePrice(result);
 
+const isComparableOffer = (result?: QuoteResult | null) =>
+    hasUsablePrice(result) && (!result?.whatsappStatus || hasManualWhatsappQuote(result));
+
 const formatResultPrice = (result?: QuoteResult | null) => {
     if (!result) return '---';
     if (hasUsablePrice(result)) return `R$ ${formatCurrencyValue(result.price)}`;
@@ -1060,19 +1063,14 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                             const visibleSelectedResults = providerCards
                                 .map((card) => card.selectedResult)
                                 .filter((entry): entry is QuoteResult => !!entry);
-                            const comparableSelectedResults = visibleSelectedResults.filter(
-                                (entry) => !entry.whatsappStatus || hasManualWhatsappQuote(entry)
-                            );
-                            const bestComparableResults = comparableSelectedResults.length > 0
-                                ? comparableSelectedResults
-                                : visibleSelectedResults;
+                            const comparableSelectedResults = visibleSelectedResults.filter(isComparableOffer);
                             const hasExactMatch = visibleSelectedResults.some(
                                 (entry) =>
-                                    (!entry.whatsappStatus || hasManualWhatsappQuote(entry)) &&
+                                    isComparableOffer(entry) &&
                                     normalizeCodeValue(entry.code) === normalizedQueryCode
                             );
                             const bestResult =
-                                [...bestComparableResults].sort((a, b) => {
+                                [...comparableSelectedResults].sort((a, b) => {
                                     const aExact = normalizeCodeValue(a.code) === normalizedQueryCode;
                                     const bExact = normalizeCodeValue(b.code) === normalizedQueryCode;
                                     if (aExact !== bExact) return aExact ? -1 : 1;

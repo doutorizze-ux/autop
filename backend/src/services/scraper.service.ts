@@ -552,7 +552,8 @@ export class ScraperService {
                     }
                     const result = await executeSupplierSearchWithGuards(supplier, productName);
                     const normalizedPayload = normalizeSearchResultPayload(result, supplier, productName);
-                    const normalizedResults = Array.isArray(normalizedPayload) ? normalizedPayload : [normalizedPayload];
+                    const normalizedResults = (Array.isArray(normalizedPayload) ? normalizedPayload : [normalizedPayload])
+                        .filter((entry) => entry && typeof entry === 'object');
 
                     for (const entry of normalizedResults) {
                         const progressPayload = {
