@@ -237,6 +237,18 @@ function buildResultIdentity(item: any) {
     return [provider, variantKey, brand, code].join('::');
 }
 
+function buildNoOfferResult(supplier: any, productName: string, message = 'Fornecedor nao retornou oferta real para esta peca.') {
+    return {
+        provider: supplier.name,
+        product: productName,
+        price: '---',
+        error: message,
+        link: supplier.url,
+        available: false,
+        debug: null,
+    };
+}
+
 function normalizeSupplierResults(data: any, supplier: any, productName: string) {
     if (!Array.isArray(data) || data.length === 0) {
         return [];
@@ -487,7 +499,9 @@ async function executeSupplierSearchWithGuards(supplier: any, productName: strin
 function normalizeSearchResultPayload(result: any, supplier: any, productName: string) {
     if (Array.isArray(result)) {
         const normalizedItems = normalizeSupplierResults(result, supplier, productName);
-        return normalizedItems.length <= 1 ? (normalizedItems[0] || null) : normalizedItems;
+        return normalizedItems.length <= 1
+            ? (normalizedItems[0] || buildNoOfferResult(supplier, productName))
+            : normalizedItems;
     }
 
     return result;
