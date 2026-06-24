@@ -18,6 +18,7 @@ const supplierFilters = String(process.env.LOCAL_AGENT_SUPPLIERS || process.env.
     .map((entry) => entry.trim())
     .filter(Boolean);
 const pollIntervalMs = Number.parseInt(process.env.LOCAL_AGENT_POLL_INTERVAL_MS || '3000', 10) || 3000;
+const httpTimeoutMs = Number.parseInt(process.env.LOCAL_AGENT_HTTP_TIMEOUT_MS || '20000', 10) || 20000;
 const headless = String(process.env.HEADLESS || 'true').trim() === 'true';
 const searchWorkerCount = Math.max(1, Number.parseInt(process.env.LOCAL_AGENT_SEARCH_WORKERS || '3', 10) || 3);
 const shouldReadDashboardToken = String(process.env.LOCAL_AGENT_READ_DASHBOARD_TOKEN || 'false').trim() === 'true';
@@ -178,20 +179,37 @@ async function readDashboardTokenFromChromeUnsafe(forceRefresh = false) {
 }
 
 async function postJson(url, body, retry = true) {
+    const routeLabel = new URL(url).pathname;
+    console.log(`[Local Agent] Enviando requisicao para ${routeLabel}`);
     const browserToken = await readDashboardTokenFromChrome();
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'x-local-agent-token': agentToken,
-            'x-local-agent-id': agentId,
-            'x-local-agent-name': agentName,
-            'x-local-agent-version': agentVersion,
-            ...(supplierFilters.length ? { 'x-local-agent-suppliers': supplierFilters.join(',') } : {}),
-            ...(browserToken ? { Authorization: `Bearer ${browserToken}` } : {}),
-        },
-        body: JSON.stringify(body || {}),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), httpTimeoutMs);
+    let response;
+    try {
+        response = await fetch(url, {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+                'Content-Type': 'application/json',
+                'x-local-agent-token': agentToken,
+                'x-local-agent-id': agentId,
+                'x-local-agent-name': agentName,
+                'x-local-agent-version': agentVersion,
+                ...(supplierFilters.length ? { 'x-local-agent-suppliers': supplierFilters.join(',') } : {}),
+                ...(browserToken ? { Authorization: `Bearer ${browserToken}` } : {}),
+            },
+            body: JSON.stringify(body || {}),
+        });
+    } catch (error) {
+        if (error?.name === 'AbortError') {
+            throw new Error(`Timeout de ${Math.round(httpTimeoutMs / 1000)}s ao chamar o backend (${routeLabel}).`);
+        }
+        const cause = error?.cause?.message || error?.cause?.code || '';
+        const details = [error?.message, cause].filter(Boolean).join(' - ');
+        throw new Error(`Falha de conexao com o backend (${routeLabel}): ${details || 'fetch failed'}`);
+    } finally {
+        clearTimeout(timeout);
+    }
 
     if (response.status === 401 && retry) {
         const responseText = await response.text().catch(() => '');
@@ -214,6 +232,7 @@ async function postJson(url, body, retry = true) {
     if (!response.ok) {
         throw new Error(data?.message || `Falha HTTP ${response.status}`);
     }
+    console.log(`[Local Agent] Backend respondeu ${response.status} para ${routeLabel}`);
     return data;
 }
 

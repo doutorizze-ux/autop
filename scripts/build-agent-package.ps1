@@ -90,6 +90,43 @@ $config = [ordered]@{
 
 $config | ConvertTo-Json -Depth 4 | Set-Content -Path (Join-Path $packageDir "local-agent\cloud-agent.config.json") -Encoding UTF8
 
+$launcherSource = @"
+using System;
+using System.Diagnostics;
+using System.IO;
+
+public static class Program
+{
+    public static int Main()
+    {
+        try
+        {
+            var appDir = AppDomain.CurrentDomain.BaseDirectory;
+            var scriptPath = Path.Combine(appDir, "local-agent", "start-cloud-agents.ps1");
+            var psi = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = string.Format("-NoProfile -ExecutionPolicy Bypass -File \"{0}\"", scriptPath),
+                WorkingDirectory = appDir,
+                UseShellExecute = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            };
+
+            Process.Start(psi);
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+    }
+}
+"@
+
+$launcherPath = Join-Path $packageDir "Iniciar Agentes Autopecas.exe"
+Add-Type -TypeDefinition $launcherSource -Language CSharp -OutputAssembly $launcherPath -OutputType ConsoleApplication
+
 @"
 # Autopecas Agente da Loja
 
@@ -98,11 +135,11 @@ $config | ConvertTo-Json -Depth 4 | Set-Content -Path (Join-Path $packageDir "lo
 1. Extraia esta pasta em `C:\Autopecas Agente`.
 2. Instale o Node.js LTS se ainda nao estiver instalado.
 3. Abra `local-agent\cloud-agent.config.json` e confira o token.
-4. Clique duas vezes em `Iniciar Agentes Autopecas.cmd`.
+4. Clique duas vezes em `Iniciar Agentes Autopecas.exe` ou use o `.cmd` se preferir.
 
 ## Uso diario
 
-- Para iniciar: clique em `Iniciar Agentes Autopecas.cmd`.
+- Para iniciar: clique em `Iniciar Agentes Autopecas.exe`.
 - Para parar: clique em `Parar Agentes Autopecas.cmd`.
 
 ## Fornecedores ativos

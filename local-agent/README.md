@@ -13,9 +13,25 @@ Este agente roda no Windows da loja e executa as pesquisas de fornecedores fora 
 .\local-agent\start-agent.ps1 -BackendUrl "https://SEU-SISTEMA" -Token "SEU_TOKEN"
 ```
 
+## Agente unico da loja
+
+Para o uso diario no PC da loja, rode um unico agente atendendo todos os fornecedores configurados:
+
+```powershell
+.\local-agent\start-agent.ps1 `
+  -BackendUrl "https://SEU-SISTEMA" `
+  -Token "SEU_TOKEN" `
+  -AgentId "$env:COMPUTERNAME-loja-agent" `
+  -AgentName "Agente Loja $env:COMPUTERNAME" `
+  -Suppliers "Comdip,KKI,Real Moto Pecas,Furacao,Sky Pecas,DPK" `
+  -SearchWorkers "1"
+```
+
+Esse e o mesmo caminho usado pelo atalho `Iniciar Agentes Autopecas.cmd`.
+
 ## Agente por fornecedor
 
-Para deixar as buscas mais rapidas e evitar que o servidor do Coolify acesse diretamente os fornecedores, rode agentes filtrados por fornecedor no PC da loja:
+O script antigo por fornecedor continua disponivel para diagnostico ou operacoes avancadas, mas nao e o fluxo recomendado para uso diario:
 
 ```powershell
 .\local-agent\start-supplier-agents.ps1 `
@@ -34,7 +50,7 @@ No PC da loja, use o arquivo:
 Iniciar Agentes Autopecas.cmd
 ```
 
-Ele le a configuracao em:
+Ele para processos antigos e inicia um unico agente. A configuracao fica em:
 
 ```text
 local-agent/cloud-agent.config.json
