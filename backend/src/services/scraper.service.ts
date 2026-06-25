@@ -1,7 +1,6 @@
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { io } from '../index';
-import { LocalAgentService } from './local-agent.service';
 
 const prisma = new PrismaClient();
 const enginePath = path.resolve(__dirname, '../../../scraping/engine.js');
@@ -413,48 +412,6 @@ export async function runSupplierSearch(supplier: any, productName: string) {
 }
 
 async function executeSupplierSearch(supplier: any, productName: string) {
-    const localAgentEnabled = process.env.LOCAL_AGENT_MODE !== 'disabled';
-    const useLocalAgent = localAgentEnabled && LocalAgentService.hasFreshAgentsForSupplier(supplier);
-    if (useLocalAgent) {
-        try {
-            const agentResult = await LocalAgentService.dispatchSearchTask(supplier, productName);
-            const isArray = Array.isArray(agentResult);
-            const hasError = !isArray && (agentResult as any)?.error;
-            console.log(`[Local Agent] Resultado de ${supplier.name} para "${productName}": ${isArray ? `array[${(agentResult as any[]).length}]` : hasError ? `erro: ${(agentResult as any).error}` : 'objeto unico'}`);
-            return agentResult;
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            const allowServerFallback = process.env.LOCAL_AGENT_FALLBACK_ON_FAILURE === 'true';
-            console.error(`[Local Agent] Falha para ${supplier.name}: ${message}`);
-
-            if (!allowServerFallback) {
-                return {
-                    provider: supplier.name,
-                    product: productName,
-                    price: '---',
-                    error: `Erro do Bot: Agente local falhou para ${supplier.name}. ${message}`,
-                    link: supplier.url,
-                    available: false,
-                    debug: null,
-                };
-            }
-
-            console.error(`[Local Agent] Fallback no servidor habilitado para ${supplier.name}.`);
-        }
-    }
-
-    if (localAgentEnabled && process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH === 'true') {
-        return {
-            provider: supplier.name,
-            product: productName,
-            price: '---',
-            error: `Erro do Bot: Nenhum agente local online para ${supplier.name}.`,
-            link: supplier.url,
-            available: false,
-            debug: null,
-        };
-    }
-
     return runSupplierSearch(supplier, productName);
 }
 
@@ -464,28 +421,6 @@ async function executeSupplierSearchWithGuards(supplier: any, productName: strin
     const timeoutMs = parsePositiveInt(process.env.SCRAPER_SUPPLIER_TIMEOUT_MS, 165_000);
     const cacheKey = getSupplierCacheKey(supplier, productName);
     const cached = cacheEnabled ? supplierSearchCache.get(cacheKey) : null;
-    const localAgentEnabled = String(process.env.LOCAL_AGENT_MODE || '').trim().toLowerCase() !== 'disabled';
-    const requireLocalAgent = String(process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH || '').trim().toLowerCase() === 'true';
-    const allowServerFallback = String(process.env.LOCAL_AGENT_FALLBACK_ON_FAILURE || '').trim().toLowerCase() === 'true';
-    const hasAgentForSupplier = LocalAgentService.hasFreshAgentsForSupplier(supplier);
-
-    if (localAgentEnabled && requireLocalAgent && !hasAgentForSupplier) {
-        console.warn(`[Scraper] Bloqueando pesquisa local em ${supplier.name} para "${productName}" porque nao ha agente online.`);
-        return {
-            provider: supplier.name,
-            product: productName,
-            price: '---',
-            error: `Erro do Bot: Nenhum agente local online para ${supplier.name}.`,
-            link: supplier.url,
-            available: false,
-            debug: {
-                localAgentEnabled,
-                requireLocalAgent,
-                allowServerFallback,
-                hasAgentForSupplier,
-            },
-        };
-    }
 
     if (cached && cached.expiresAt > Date.now()) {
         return clonePayload(cached.value);
