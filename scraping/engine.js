@@ -347,6 +347,25 @@ async function clickFirstVisible(page, selectors, options = {}) {
 }
 
 async function dismissTransientUi(page) {
+    // Aguarda que overlays de carregamento comuns (ex: Magento loaders) fiquem ocultos
+    const loaders = [
+        '.loading-mask',
+        '.loader',
+        '.spinner',
+        '[data-role="loader"]',
+        '.preloader',
+        '#loading',
+        '.loading'
+    ];
+    for (const loaderSelector of loaders) {
+        try {
+            const locator = page.locator(loaderSelector).first();
+            if (await locator.isVisible({ timeout: 500 }).catch(() => false)) {
+                await locator.waitFor({ state: 'hidden', timeout: 6000 }).catch(() => {});
+            }
+        } catch (_) {}
+    }
+
     const dismissSelectors = [
         'button:has-text("Aceitar")',
         'button:has-text("Agora não")',
@@ -826,6 +845,7 @@ async function createContext(browser, supplier, strategy = {}) {
         // Se falhar (ex: Chrome não instalado), cai de volta para o Chromium.
         try {
             context = await chromium.launchPersistentContext(effectiveProfilePath, {
+                headless: process.env.HEADLESS !== 'false',
                 ...contextOptions,
                 channel: 'chrome',
                 ignoreDefaultArgs: ['--enable-automation'],
@@ -837,6 +857,7 @@ async function createContext(browser, supplier, strategy = {}) {
             console.error(`[DEBUG] Chrome real indisponivel para ${supplier.name}, usando Chromium: ${error.message}`);
             try {
                 context = await chromium.launchPersistentContext(effectiveProfilePath, {
+                    headless: process.env.HEADLESS !== 'false',
                     ...contextOptions,
                     ignoreDefaultArgs: ['--enable-automation'],
                     args: systemChromeProfileRoot

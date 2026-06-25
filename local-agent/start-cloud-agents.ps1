@@ -55,25 +55,16 @@ $agentId = "$env:COMPUTERNAME-loja-agent"
 $agentName = "Agente Loja $env:COMPUTERNAME"
 $supplierFilter = $suppliers -join ","
 $outLogPath = Join-Path $logsDir "loja.out.log"
-$errLogPath = Join-Path $logsDir "loja.err.log"
-
-$command = @"
-& "$starterPath" -BackendUrl "$backendUrl" -Token "$token" -AgentId "$agentId" -AgentName "$agentName" -Suppliers "$supplierFilter" -SearchWorkers "$searchWorkers" -Headless "$headless" 1> "$outLogPath" 2> "$errLogPath"
-"@
-$encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
-$processInfo = New-Object System.Diagnostics.ProcessStartInfo
-$processInfo.FileName = "powershell.exe"
-$processInfo.Arguments = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encodedCommand"
-$processInfo.WorkingDirectory = $agentDir
-$processInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
-$processInfo.UseShellExecute = $true
-[System.Diagnostics.Process]::Start($processInfo) | Out-Null
 
 Write-Host ""
-Write-Host "Agente Autopecas iniciado."
-Write-Host "Fornecedores: $($suppliers -join ', ')"
-Write-Host "Logs: $logsDir"
-Write-Host "Processo: $agentName"
+Write-Host "Iniciando Agente Autopecas..."
+Write-Host "Fornecedores ativos: $($suppliers -join ', ')"
+Write-Host "Modo headless: $headless"
+Write-Host "Workers: $searchWorkers"
+Write-Host "Logs salvos em: $outLogPath"
 Write-Host ""
-Write-Host "Pode fechar esta janela."
-Start-Sleep -Seconds 5
+Write-Host "Mantenha esta janela aberta para o agente continuar funcionando."
+Write-Host "Pressione Ctrl+C nesta janela para encerrar."
+Write-Host ""
+
+& "$starterPath" -BackendUrl "$backendUrl" -Token "$token" -AgentId "$agentId" -AgentName "$agentName" -Suppliers "$supplierFilter" -SearchWorkers "$searchWorkers" -Headless "$headless" *>&1 | Tee-Object -FilePath "$outLogPath"

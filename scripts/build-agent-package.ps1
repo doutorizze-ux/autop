@@ -84,8 +84,8 @@ $config = [ordered]@{
     backendUrl = $BackendUrl
     token = $configToken
     suppliers = $Suppliers
-    searchWorkers = "1"
-    headless = "true"
+    searchWorkers = "3"
+    headless = "false"
 }
 
 $config | ConvertTo-Json -Depth 4 | Set-Content -Path (Join-Path $packageDir "local-agent\cloud-agent.config.json") -Encoding UTF8
@@ -101,15 +101,23 @@ public static class Program
     {
         try
         {
-            var appDir = AppDomain.CurrentDomain.BaseDirectory;
+            var appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
             var scriptPath = Path.Combine(appDir, "local-agent", "start-cloud-agents.ps1");
+            if (!File.Exists(scriptPath))
+            {
+                scriptPath = Path.Combine(appDir, "start-cloud-agents.ps1");
+            }
+            if (!File.Exists(scriptPath))
+            {
+                throw new FileNotFoundException("Não foi possível localizar o script start-cloud-agents.ps1.");
+            }
+
             var psi = new ProcessStartInfo
             {
                 FileName = "powershell.exe",
                 Arguments = string.Format("-NoProfile -ExecutionPolicy Bypass -File \"{0}\"", scriptPath),
-                WorkingDirectory = appDir,
+                WorkingDirectory = Path.GetDirectoryName(scriptPath),
                 UseShellExecute = true,
-                WindowStyle = ProcessWindowStyle.Hidden,
             };
 
             Process.Start(psi);
