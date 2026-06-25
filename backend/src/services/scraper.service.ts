@@ -414,7 +414,7 @@ export async function runSupplierSearch(supplier: any, productName: string) {
 
 async function executeSupplierSearch(supplier: any, productName: string) {
     const localAgentEnabled = process.env.LOCAL_AGENT_MODE !== 'disabled';
-    const useLocalAgent = localAgentEnabled && LocalAgentService.hasActiveAgentsForSupplier(supplier);
+    const useLocalAgent = localAgentEnabled && LocalAgentService.hasFreshAgentsForSupplier(supplier);
     if (useLocalAgent) {
         try {
             const agentResult = await LocalAgentService.dispatchSearchTask(supplier, productName);
@@ -467,7 +467,7 @@ async function executeSupplierSearchWithGuards(supplier: any, productName: strin
     const localAgentEnabled = String(process.env.LOCAL_AGENT_MODE || '').trim().toLowerCase() !== 'disabled';
     const requireLocalAgent = String(process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH || '').trim().toLowerCase() === 'true';
     const allowServerFallback = String(process.env.LOCAL_AGENT_FALLBACK_ON_FAILURE || '').trim().toLowerCase() === 'true';
-    const hasAgentForSupplier = LocalAgentService.hasActiveAgentsForSupplier(supplier);
+    const hasAgentForSupplier = LocalAgentService.hasFreshAgentsForSupplier(supplier);
 
     if (localAgentEnabled && requireLocalAgent && !hasAgentForSupplier) {
         console.warn(`[Scraper] Bloqueando pesquisa local em ${supplier.name} para "${productName}" porque nao ha agente online.`);

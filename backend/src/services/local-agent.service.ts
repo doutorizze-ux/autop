@@ -40,6 +40,7 @@ type TaskKindFilter = AgentTaskPayload['kind'] | 'any';
 const connectedAgents = new Map<string, ConnectedAgent>();
 const pendingTasks = new Map<string, AgentTask>();
 const agentTimeoutMs = Number.parseInt(process.env.LOCAL_AGENT_HEARTBEAT_TIMEOUT_MS || '45000', 10) || 45_000;
+const searchFreshnessWindowMs = Number.parseInt(process.env.LOCAL_AGENT_SEARCH_FRESHNESS_MS || '15000', 10) || 15_000;
 const taskTimeoutMs = Number.parseInt(process.env.LOCAL_AGENT_TASK_TIMEOUT_MS || '180000', 10) || 180_000;
 const sessionTaskTimeoutMs = Number.parseInt(process.env.LOCAL_AGENT_SESSION_TASK_TIMEOUT_MS || '120000', 10) || 120_000;
 
@@ -158,6 +159,17 @@ export class LocalAgentService {
     static hasActiveAgentsForSupplier(supplier: any) {
         cleanupAgents();
         return Array.from(connectedAgents.values()).some((agent) => agentAcceptsSupplier(agent, supplier));
+    }
+
+    static hasFreshAgentsForSupplier(supplier: any) {
+        cleanupAgents();
+        const now = Date.now();
+        return Array.from(connectedAgents.values()).some((agent) => {
+            if (now - agent.lastSeenAt > searchFreshnessWindowMs) {
+                return false;
+            }
+            return agentAcceptsSupplier(agent, supplier);
+        });
     }
 
     static listAgents() {
