@@ -199,10 +199,12 @@ function hasReliableProductIdentity(item: any, supplier: any, productName: strin
     const application = normalizeVariantKey(item?.application || item?.aplicacao || '');
     const productKey = normalizeVariantKey(product);
     const queryKey = normalizeVariantKey(productName);
+    const queryLooksLikeCode = /^[A-Za-z0-9./_-]{3,}$/.test(String(productName || '').trim()) && !/\s/.test(String(productName || '').trim());
 
     if (code) return true;
     if (isGenericProductName(product, supplier?.name)) return false;
     if (queryKey && productKey === queryKey && !brand && !application) return false;
+    if (queryLooksLikeCode && productKey.length >= 3) return true;
     return productKey.length >= 4 || Boolean(brand || application);
 }
 

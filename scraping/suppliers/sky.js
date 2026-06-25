@@ -168,12 +168,20 @@ async function getSelectedBranchLabel(selectLocator) {
 async function extractBranchResults(page, providerName) {
     return page.evaluate(({ providerName }) => {
         const clean = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+        const firstPrice = (text) => {
+            const match = clean(text).match(/R\$\s*[0-9.]+,\d{2}/);
+            return match ? match[0] : '';
+        };
 
         const parseProductCards = () => {
-            const cards = Array.from(document.querySelectorAll('#tb_produto .bx_produto, .bx_produto'));
+            const cards = Array.from(document.querySelectorAll('#tb_produto .bx_produto, .bx_produto, .produto, .resultado, .item, tr, li'));
             return cards.map((card) => {
                 const text = clean(card.textContent);
-                const price = clean(card.querySelector('.valor .preco_final')?.textContent || '');
+                const price =
+                    clean(card.querySelector('.valor .preco_final')?.textContent || '')
+                    || clean(card.querySelector('.preco_final')?.textContent || '')
+                    || clean(card.querySelector('.preco')?.textContent || '')
+                    || firstPrice(text);
                 if (!price) return null;
 
                 const fabCode = clean(card.querySelector('.codfab strong')?.textContent || '');
@@ -255,7 +263,7 @@ async function extractBranchResults(page, providerName) {
         };
 
         const fallbackCards = () => {
-            const nodes = Array.from(document.querySelectorAll('tr, article, .produto, .item, .card, .product-card'));
+            const nodes = Array.from(document.querySelectorAll('tr, article, .produto, .item, .card, .product-card, li, .resultado-item'));
             return nodes.map((node) => {
                 const text = clean(node.textContent);
                 const price = (text.match(/R\$\s*[0-9.,]+/) || [])[0] || '';

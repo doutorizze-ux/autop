@@ -105,7 +105,10 @@ module.exports = {
             const unavailable = /\bfora\s+de\s+estoque\b|\bsem\s+estoque\b|\bindisponivel\b|\bavise\s*[- ]?me\b|\besgotad[oa]\b/.test(availabilityText);
             if (unavailable) continue;
 
-            const preco = parsePriceText(text);
+            const preco =
+                parsePriceText(text)
+                || parsePriceText(getText(root, ['.price-box', '.special-price', '.regular-price', '[class*="price"]']))
+                || parsePriceText(Array.from(root.querySelectorAll('span, strong, div, p')).map((node) => normalize(node.textContent || '')).join(' '));
             if (!preco) continue;
 
             const nome = getText(root, [
@@ -115,7 +118,7 @@ module.exports = {
                 '.product-name',
                 'h2',
                 'h3',
-            ]) || text.split('APLICA')[0].replace(preco, '').trim();
+            ]) || text.split('APLICA')[0].replace(preco, '').trim().split('R$')[0].trim();
             const linkNode = root.querySelector('a[href]');
 
             items.push({
