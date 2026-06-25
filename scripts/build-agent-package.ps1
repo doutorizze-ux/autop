@@ -115,7 +115,7 @@ public static class Program
             var psi = new ProcessStartInfo
             {
                 FileName = "powershell.exe",
-                Arguments = string.Format("-NoProfile -ExecutionPolicy Bypass -File \"{0}\"", scriptPath),
+                Arguments = string.Format("-NoExit -NoProfile -ExecutionPolicy Bypass -File \"{0}\"", scriptPath),
                 WorkingDirectory = Path.GetDirectoryName(scriptPath),
                 UseShellExecute = true,
             };
