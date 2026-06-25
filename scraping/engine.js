@@ -822,34 +822,29 @@ async function createContext(browser, supplier, strategy = {}) {
     let context;
     const effectiveProfilePath = selectedProfilePath || fallbackProfilePath;
     if (effectiveProfilePath) {
-        // Quando o perfil é do sistema Chrome, tenta o Chrome real primeiro.
-        // Para perfis do agente local, usa Chromium diretamente para evitar
-        // timeout de 180s caso o Chrome do sistema já esteja aberto com esse perfil.
-        if (systemChromeProfileRoot) {
-            try {
-                context = await chromium.launchPersistentContext(effectiveProfilePath, {
-                    ...contextOptions,
-                    channel: 'chrome',
-                    ignoreDefaultArgs: ['--enable-automation'],
-                    args: [...(contextOptions.args || []), '--profile-directory=Default'],
-                });
-            } catch (error) {
-                console.error(`[DEBUG] Chrome real indisponivel para ${supplier.name}, usando Chromium: ${error.message}`);
-                context = await chromium.launchPersistentContext(effectiveProfilePath, {
-                    ...contextOptions,
-                    args: [...(contextOptions.args || []), '--profile-directory=Default'],
-                });
-            }
-        } else {
-            // Perfil do agente local: usa Chromium diretamente (sem channel:'chrome')
+        // Tenta usar o Chrome real (channel: chrome) para bypassar Cloudflare.
+        // Se falhar (ex: Chrome não instalado), cai de volta para o Chromium.
+        try {
+            context = await chromium.launchPersistentContext(effectiveProfilePath, {
+                ...contextOptions,
+                channel: 'chrome',
+                ignoreDefaultArgs: ['--enable-automation'],
+                args: systemChromeProfileRoot
+                    ? [...(contextOptions.args || []), '--profile-directory=Default']
+                    : contextOptions.args,
+            });
+        } catch (error) {
+            console.error(`[DEBUG] Chrome real indisponivel para ${supplier.name}, usando Chromium: ${error.message}`);
             try {
                 context = await chromium.launchPersistentContext(effectiveProfilePath, {
                     ...contextOptions,
                     ignoreDefaultArgs: ['--enable-automation'],
+                    args: systemChromeProfileRoot
+                        ? [...(contextOptions.args || []), '--profile-directory=Default']
+                        : contextOptions.args,
                 });
-            } catch (error) {
-                console.error(`[DEBUG] Falha ao abrir perfil persistente para ${supplier.name}: ${error.message}`);
-                // Fallback: contexto sem perfil persistente
+            } catch (fallbackError) {
+                console.error(`[DEBUG] Falha ao abrir perfil persistente para ${supplier.name}: ${fallbackError.message}`);
                 context = await browser.newContext(contextOptions);
             }
         }

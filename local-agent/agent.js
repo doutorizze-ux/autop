@@ -501,6 +501,9 @@ async function processTask(task) {
     }
 
     console.log(`[Local Agent] Pesquisando ${task.supplier.name} -> ${task.productName}`);
+    // Garante que a sessão do Login Assistido para este fornecedor seja fechada
+    // para liberar o lock do perfil de usuário do Chrome antes da busca.
+    await closeAssistSession(task.supplier.id).catch(() => {});
     let result;
     try {
         result = await scrapeProduct(task.supplier, task.productName);
