@@ -488,16 +488,35 @@ async function handleAssistTask(task) {
 async function processTask(task) {
     if (task.kind === 'supplier-session') {
         console.log(`[Local Agent] Sessao ${task.action} -> ${task.supplier.name}`);
-        const result = await handleAssistTask(task);
-        await completeTask(task.id, result);
-        console.log(`[Local Agent] Sessao concluida: ${task.id}`);
+        try {
+            const result = await handleAssistTask(task);
+            await completeTask(task.id, result);
+            console.log(`[Local Agent] Sessao concluida: ${task.id}`);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.error(`[Local Agent] Erro na sessao ${task.id} (${task.supplier.name}): ${message}`);
+            await failTask(task.id, message).catch(() => {});
+        }
         return;
     }
 
     console.log(`[Local Agent] Pesquisando ${task.supplier.name} -> ${task.productName}`);
-    const result = await scrapeProduct(task.supplier, task.productName);
-    await completeTask(task.id, result);
-    console.log(`[Local Agent] Tarefa concluida: ${task.id}`);
+    let result;
+    try {
+        result = await scrapeProduct(task.supplier, task.productName);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[Local Agent] Erro critico no scraping ${task.id} (${task.supplier.name}): ${message}`);
+        await failTask(task.id, `Erro critico no agente: ${message}`).catch(() => {});
+        return;
+    }
+    try {
+        await completeTask(task.id, result);
+        console.log(`[Local Agent] Tarefa concluida: ${task.id}`);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[Local Agent] Erro ao completar tarefa ${task.id}: ${message}`);
+    }
 }
 
 async function workerLoop(workerName, preferredKind) {
