@@ -101,6 +101,26 @@ function agentAcceptsTask(agent: ConnectedAgent, task: AgentTask) {
     );
 }
 
+function getSessionActionPriority(action: SessionTaskPayload['action']) {
+    switch (action) {
+        case 'save':
+            return 0;
+        case 'stop':
+            return 1;
+        case 'click':
+            return 2;
+        case 'type':
+            return 3;
+        case 'press':
+            return 4;
+        case 'start':
+            return 5;
+        case 'snapshot':
+        default:
+            return 6;
+    }
+}
+
 function cleanupAgents() {
     const now = Date.now();
     for (const [agentId, agent] of connectedAgents.entries()) {
@@ -215,6 +235,18 @@ export class LocalAgentService {
         action: SessionTaskPayload['action'],
         payload?: Record<string, any>,
     ) {
+        if (action === 'snapshot') {
+            for (const entry of pendingTasks.values()) {
+                if (entry.payload.kind !== 'supplier-session') continue;
+                if (entry.payload.action !== 'snapshot') continue;
+                if (entry.payload.supplier?.id !== supplier?.id) continue;
+
+                pendingTasks.delete(entry.id);
+                clearTimeout(entry.timer);
+                entry.reject(new Error('Snapshot substituido por uma atualizacao mais recente.'));
+            }
+        }
+
         return this.dispatchTask(
             {
                 kind: 'supplier-session',
@@ -246,7 +278,17 @@ export class LocalAgentService {
 
         let task: AgentTask | null = null;
         for (const kind of prioritizedKinds) {
-            task = pending.find((entry) => entry.payload.kind === kind) || null;
+            const candidates = pending.filter((entry) => entry.payload.kind === kind);
+            task = kind === 'supplier-session'
+                ? candidates.sort((a, b) => {
+                    const actionA = getSessionActionPriority((a.payload as SessionTaskPayload).action);
+                    const actionB = getSessionActionPriority((b.payload as SessionTaskPayload).action);
+                    if (actionA !== actionB) {
+                        return actionA - actionB;
+                    }
+                    return a.createdAt - b.createdAt;
+                })[0] || null
+                : candidates[0] || null;
             if (task) break;
         }
 
