@@ -464,6 +464,28 @@ async function executeSupplierSearchWithGuards(supplier: any, productName: strin
     const timeoutMs = parsePositiveInt(process.env.SCRAPER_SUPPLIER_TIMEOUT_MS, 165_000);
     const cacheKey = getSupplierCacheKey(supplier, productName);
     const cached = cacheEnabled ? supplierSearchCache.get(cacheKey) : null;
+    const localAgentEnabled = String(process.env.LOCAL_AGENT_MODE || '').trim().toLowerCase() !== 'disabled';
+    const requireLocalAgent = String(process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH || '').trim().toLowerCase() === 'true';
+    const allowServerFallback = String(process.env.LOCAL_AGENT_FALLBACK_ON_FAILURE || '').trim().toLowerCase() === 'true';
+    const hasAgentForSupplier = LocalAgentService.hasActiveAgentsForSupplier(supplier);
+
+    if (localAgentEnabled && requireLocalAgent && !hasAgentForSupplier) {
+        console.warn(`[Scraper] Bloqueando pesquisa local em ${supplier.name} para "${productName}" porque nao ha agente online.`);
+        return {
+            provider: supplier.name,
+            product: productName,
+            price: '---',
+            error: `Erro do Bot: Nenhum agente local online para ${supplier.name}.`,
+            link: supplier.url,
+            available: false,
+            debug: {
+                localAgentEnabled,
+                requireLocalAgent,
+                allowServerFallback,
+                hasAgentForSupplier,
+            },
+        };
+    }
 
     if (cached && cached.expiresAt > Date.now()) {
         return clonePayload(cached.value);
