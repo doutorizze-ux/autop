@@ -85,7 +85,7 @@ $config = [ordered]@{
     token = $configToken
     suppliers = $Suppliers
     searchWorkers = "3"
-    headless = "false"
+    headless = "true"
 }
 
 $config | ConvertTo-Json -Depth 4 | Set-Content -Path (Join-Path $packageDir "local-agent\cloud-agent.config.json") -Encoding UTF8
