@@ -40,6 +40,37 @@ module.exports = {
     priceSelector: ['button', 'span'],
     emptyResultSelector: ['text=Nenhum produto encontrado', 'text=0 resultado', 'text=0 resultados'],
     navigateToAuthenticatedAfterLogin: true,
+    fillLogin: async ({ page, supplier, fillVisibleLocator, dismissTransientUi }) => {
+        await dismissTransientUi();
+        const openButtons = [
+            'button:has-text("Já tenho conta")',
+            'button:has-text("Ja tenho conta")',
+            'button:has-text("Entrar")',
+            'a:has-text("Já tenho conta")',
+            'a:has-text("Ja tenho conta")',
+            'a:has-text("Entrar")',
+        ];
+
+        for (const selector of openButtons) {
+            const locator = page.locator(selector).first();
+            if (await locator.isVisible().catch(() => false)) {
+                await locator.click({ force: true }).catch(() => {});
+                await page.waitForTimeout(800);
+                break;
+            }
+        }
+
+        const emailField = page.locator('input[type="email"], input[placeholder*="e-mail" i], input[placeholder*="email" i], input[name*="email" i], input[name*="login" i], input:not([type="hidden"]):not([type="password"])').first();
+        const passField = page.locator('input[type="password"], input[placeholder*="senha" i], input[name*="senha" i]').first();
+
+        if (await emailField.isVisible().catch(() => false)) {
+            await fillVisibleLocator(emailField, supplier.loginCredential || supplier.loginExtraValue || '');
+        }
+
+        if (await passField.isVisible().catch(() => false)) {
+            await fillVisibleLocator(passField, supplier.password || '');
+        }
+    },
     performSearch: async ({ page, query, fillVisibleLocator, dismissTransientUi }) => {
         await dismissTransientUi();
         await page.waitForSelector('input:not([type="hidden"])', { timeout: 15000 }).catch(() => {});

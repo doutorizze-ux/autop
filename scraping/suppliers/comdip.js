@@ -43,6 +43,42 @@ module.exports = {
     productNameSelector: ['h2', 'h3', 'h4', 'a', 'strong', 'span'],
     priceSelector: ['.price', '.valor', '[class*="price"]', '[class*="valor"]'],
     buildSearchUrl: (query) => `https://portalcomdip.com.br/comdip/compras/pesquisa/termo-busca/${encodeURIComponent(String(query).toLowerCase())}/1`,
+    fillLogin: async ({ page, supplier, fillVisibleLocator, dismissTransientUi, setCheckboxState }) => {
+        await dismissTransientUi();
+        await setCheckboxState(['input[type="checkbox"]'], true).catch(() => {});
+
+        const maybeOpenLogin = async () => {
+            const candidates = [
+                'button:has-text("Acesso do Cliente")',
+                'button:has-text("Entrar")',
+                'button:has-text("Salvar Acesso")',
+                'a:has-text("Entrar")',
+                'a:has-text("Acesso do Cliente")',
+            ];
+
+            for (const selector of candidates) {
+                const locator = page.locator(selector).first();
+                if (await locator.isVisible().catch(() => false)) {
+                    await locator.click({ force: true }).catch(() => {});
+                    await page.waitForTimeout(800);
+                    break;
+                }
+            }
+        };
+
+        await maybeOpenLogin();
+
+        const emailField = page.locator('input[type="email"], input[placeholder*="e-mail" i], input[placeholder*="email" i], input[name*="login" i], input[name*="user" i], input[id*="login" i], input:not([type="hidden"]):not([type="password"])').first();
+        const passField = page.locator('input[type="password"], input[placeholder*="senha" i], input[name*="senha" i], input[id*="pass" i]').first();
+
+        if (await emailField.isVisible().catch(() => false)) {
+            await fillVisibleLocator(emailField, supplier.loginCredential || supplier.loginExtraValue || '');
+        }
+
+        if (await passField.isVisible().catch(() => false)) {
+            await fillVisibleLocator(passField, supplier.password || '');
+        }
+    },
     extractItems: async ({ page }) => {
         return page.evaluate(() => {
             const candidates = Array.from(document.querySelectorAll('[class*="produto"], [class*="item"], [class*="card"], article, li, tr')).slice(0, 400);
