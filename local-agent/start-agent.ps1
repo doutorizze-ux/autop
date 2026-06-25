@@ -10,7 +10,7 @@ param(
     [string]$Headless = "true"
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 
