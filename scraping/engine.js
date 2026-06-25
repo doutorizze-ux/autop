@@ -204,9 +204,16 @@ function parseSupplierSessionData(supplier) {
 }
 
 async function waitForAnyVisible(page, selectors, timeout = 8000) {
+    const expandedSelectors = Array.from(new Set([
+        ...selectors,
+        'input:not([type="hidden"])',
+        'textarea',
+        '[contenteditable="true"]',
+        'button',
+    ]));
     let lastError;
 
-    for (const selector of selectors) {
+    for (const selector of expandedSelectors) {
         try {
             const locator = page.locator(selector);
             const count = await locator.count().catch(() => 0);
@@ -228,7 +235,7 @@ async function waitForAnyVisible(page, selectors, timeout = 8000) {
         }
     }
 
-    throw new Error(`Nenhum seletor visível encontrado. Tentados: ${selectors.join(' | ')}. ${lastError ? `Último erro: ${lastError.message}` : ''}`);
+    throw new Error(`Nenhum seletor visível encontrado. Tentados: ${expandedSelectors.join(' | ')}. ${lastError ? `Último erro: ${lastError.message}` : ''}`);
 }
 
 async function fillFirstVisible(page, selectors, value, options = {}) {

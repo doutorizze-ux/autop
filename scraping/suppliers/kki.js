@@ -4,17 +4,24 @@ module.exports = {
     authenticatedUrl: 'https://kki.autonorte.com.br/compras',
     loginSuccessSelector: [
         'button:has-text("Pesquisar")',
-        'input[placeholder="Referência"]',
-        'input[placeholder="Descrição"]',
-        'text=Comprar peças',
+        'button:has-text("Buscar")',
+        'input[placeholder*="refer" i]',
+        'input[placeholder*="descr" i]',
+        'input[placeholder*="codigo" i]',
+        'input[placeholder*="descricao" i]',
+        'text=Comprar peÃ§as',
     ],
     searchSelector: [
-        'input[placeholder="Referência"]',
-        'input[placeholder="Descrição"]',
+        'input[placeholder*="refer" i]',
+        'input[placeholder*="descr" i]',
+        'input[placeholder*="codigo" i]',
+        'input[placeholder*="descricao" i]',
+        'input[type="search"]',
         'form input[type="text"]',
     ],
     searchButtonSelector: [
         'button:has-text("Pesquisar")',
+        'button:has-text("Buscar")',
         'button[type="submit"]',
     ],
     preferStrategySelectors: true,
@@ -35,19 +42,18 @@ module.exports = {
     navigateToAuthenticatedAfterLogin: true,
     performSearch: async ({ page, query, fillVisibleLocator, dismissTransientUi }) => {
         await dismissTransientUi();
-        await page.waitForSelector('input[type="text"]', { timeout: 15000 }).catch(() => {});
+        await page.waitForSelector('input:not([type="hidden"])', { timeout: 15000 }).catch(() => {});
         await page.waitForTimeout(1000);
 
-        const referenceSelectors = [
-            'input[placeholder="Referência"]',
-            'input[placeholder*="referencia" i]',
+        const visibleSelectors = [
+            'input[placeholder*="refer" i]',
+            'input[placeholder*="descr" i]',
             'input[placeholder*="codigo" i]',
-        ];
-        const descriptionSelectors = [
-            'input[placeholder="Descrição"]',
             'input[placeholder*="descricao" i]',
+            'input[type="search"]',
+            'form input[type="text"]',
+            'input:not([type="hidden"])',
         ];
-        const fallbackSelectors = ['form input[type="text"]'];
 
         const findVisibleLocator = async (selectors) => {
             for (const selector of selectors) {
@@ -68,18 +74,7 @@ module.exports = {
 
         const normalizedQuery = String(query || '').trim();
         const looksLikeCode = /^[A-Za-z0-9./_-]{3,}$/.test(normalizedQuery) && !/\s/.test(normalizedQuery);
-
-        let searchInput = looksLikeCode
-            ? await findVisibleLocator(referenceSelectors)
-            : await findVisibleLocator(descriptionSelectors);
-
-        if (!searchInput && !looksLikeCode) {
-            searchInput = await findVisibleLocator(referenceSelectors);
-        }
-
-        if (!searchInput) {
-            searchInput = await findVisibleLocator(fallbackSelectors);
-        }
+        const searchInput = await findVisibleLocator(visibleSelectors);
 
         if (!searchInput) {
             throw new Error('Campo de busca do KKI nao encontrado.');
@@ -87,7 +82,7 @@ module.exports = {
 
         await fillVisibleLocator(searchInput, query);
 
-        const searchButton = page.locator('button:has-text("Pesquisar"), button[type="submit"]').first();
+        const searchButton = page.locator('button:has-text("Pesquisar"), button:has-text("Buscar"), button[type="submit"]').first();
         if (await searchButton.isVisible().catch(() => false)) {
             await searchButton.click({ force: true }).catch(() => {});
         } else {
@@ -103,7 +98,7 @@ module.exports = {
                 || /distribuido por/i.test(body)
                 || /Nenhum produto encontrado/i.test(body);
         }, { timeout: 12000 }).catch(() => {});
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(2500);
         await dismissTransientUi();
     },
     extractItems: async ({ page, supplier }) => {
@@ -134,15 +129,16 @@ module.exports = {
             }
 
             const directCards = Array.from(document.querySelectorAll('div.css-1jay046, div[class*="css-1jay046"]'));
-            const candidateNodes = (directCards.length ? directCards : Array.from(document.querySelectorAll('div, article, li, section'))).filter((node) => {
-                const text = clean(node.textContent || '');
-                if (!text) return false;
-                return /distribuido por/i.test(text) || /R\$\s*[0-9.,]+/.test(text);
-            });
+            const candidateNodes = (directCards.length ? directCards : Array.from(document.querySelectorAll('div, article, li, section')))
+                .filter((node) => {
+                    const text = clean(node.textContent || '');
+                    if (!text) return false;
+                    return /distribuido por/i.test(text) || /R\$\s*[0-9.,]+/.test(text);
+                });
 
             const filteredNodes = candidateNodes.filter((node) => {
                 const text = clean(node.textContent || '');
-                return text.length > 20 && text.length < 2000;
+                return text.length > 20 && text.length < 2500;
             });
 
             const parseCard = (node) => {
@@ -168,14 +164,12 @@ module.exports = {
                     if (normalized.includes('distribuido por')) return false;
                     if (normalized.includes('em estoque')) return false;
                     if (normalized.includes('ver carrinho')) return false;
-                    if (normalized.includes('comprar peças')) return false;
+                    if (normalized.includes('comprar peÃ§as')) return false;
                     if (normalized.includes('lancamentos')) return false;
-                    if (normalized.includes('promoção')) return false;
-                    if (normalized.includes('promoçao')) return false;
-                    if (normalized.includes('placa do veículo')) return false;
+                    if (normalized.includes('promocao')) return false;
                     if (normalized.includes('placa do veiculo')) return false;
-                    if (normalized.includes('menor preço')) return false;
-                    if (normalized.includes('maior preço')) return false;
+                    if (normalized.includes('menor preco')) return false;
+                    if (normalized.includes('maior preco')) return false;
                     if (normalized.includes('transporte')) return false;
                     return line.length > 6;
                 }) || '';
@@ -187,11 +181,9 @@ module.exports = {
                     if (normalized.includes('distribuido por')) return false;
                     if (normalized.includes('em estoque')) return false;
                     if (normalized.includes('ver carrinho')) return false;
-                    if (normalized.includes('comprar peças')) return false;
+                    if (normalized.includes('comprar peÃ§as')) return false;
                     if (normalized.includes('lancamentos')) return false;
-                    if (normalized.includes('promoção')) return false;
-                    if (normalized.includes('promoçao')) return false;
-                    if (normalized.includes('placa do veículo')) return false;
+                    if (normalized.includes('promocao')) return false;
                     if (normalized.includes('placa do veiculo')) return false;
                     return line.length > 1 && line.length <= 40;
                 }) || '';

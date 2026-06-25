@@ -2,19 +2,39 @@ module.exports = {
     key: 'comdip',
     matches: (supplierName) => supplierName.includes('comdip'),
     authenticatedUrl: 'https://portalcomdip.com.br/comdip/compras',
-    userSelector: ['input[name*="cnpj" i]', 'input[placeholder*="cnpj" i]', '#Cnpj', '#Login'],
-    passSelector: ['input[id="pass"]', 'input[type="password"]'],
-    submitSelector: ['button:has-text("Entrar")', 'button:has-text("Login")', 'button.btn-success'],
+    userSelector: [
+        'input[name*="cnpj" i]',
+        'input[placeholder*="cnpj" i]',
+        'input[placeholder*="email" i]',
+        'input[type="email"]',
+        '#Cnpj',
+        '#Login',
+        'input:not([type="hidden"]):not([type="password"])',
+    ],
+    passSelector: [
+        'input[id="pass"]',
+        'input[type="password"]',
+        'input[placeholder*="senha" i]',
+    ],
+    submitSelector: ['button:has-text("Entrar")', 'button:has-text("Login")', 'button.btn-success', 'button[type="submit"]'],
     loginSuccessSelector: [
         'body:has-text("Sair")',
         'body:has-text("OFICINA DO")',
         'a:has-text("Sair")',
-        'a:has-text("Meu histórico")',
         'a:has-text("Meu histÃ³rico")',
+        'a:has-text("Meu histÃƒÂ³rico")',
         'a:has-text("Minhas Listas")',
         'text=OFICINA DO',
+        'input[type="search"]',
+        'input[placeholder*="buscar" i]',
     ],
-    searchSelector: ['input[type="search"]', 'input[placeholder*="nome" i]', 'input[placeholder*="marca" i]', '.search-input'],
+    searchSelector: [
+        'input[type="search"]',
+        'input[placeholder*="nome" i]',
+        'input[placeholder*="marca" i]',
+        'input[placeholder*="buscar" i]',
+        '.search-input',
+    ],
     searchButtonSelector: ['button[type="submit"]', 'button .fa-search', '.fa-search', '.icon-search'],
     preferStrategySelectors: true,
     waitForResultsOnly: true,
@@ -25,7 +45,7 @@ module.exports = {
     buildSearchUrl: (query) => `https://portalcomdip.com.br/comdip/compras/pesquisa/termo-busca/${encodeURIComponent(String(query).toLowerCase())}/1`,
     extractItems: async ({ page }) => {
         return page.evaluate(() => {
-            const candidates = Array.from(document.querySelectorAll('[class*="produto"], [class*="item"], [class*="card"], article, li')).slice(0, 300);
+            const candidates = Array.from(document.querySelectorAll('[class*="produto"], [class*="item"], [class*="card"], article, li, tr')).slice(0, 400);
             const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
             const seen = new Set();
             const items = [];
@@ -35,12 +55,12 @@ module.exports = {
                 const priceMatch = text.match(/R\$\s?[0-9.,]+/);
                 if (!priceMatch) continue;
 
-                const rawNameCandidates = Array.from(el.querySelectorAll('h1, h2, h3, h4, h5, a, strong, span'))
+                const rawNameCandidates = Array.from(el.querySelectorAll('h1, h2, h3, h4, h5, a, strong, span, div'))
                     .map((node) => normalize(node.textContent || ''))
                     .filter(Boolean);
 
                 const nome =
-                    rawNameCandidates.find((value) => /[A-Za-z]/.test(value) && !/^R\$\s?[0-9.,]+$/.test(value) && value.length > 6)
+                    rawNameCandidates.find((value) => /[A-Za-z]/.test(value) && !/^R\$\s?[0-9.,]+$/.test(value) && value.length > 4)
                     || text.split('R$')[0].trim();
 
                 if (!nome) continue;
@@ -58,7 +78,7 @@ module.exports = {
                 });
             }
 
-            return items.slice(0, 24);
+            return items.slice(0, 30);
         });
     },
     beforeLogin: async ({ dismissTransientUi, setCheckboxState }) => {
