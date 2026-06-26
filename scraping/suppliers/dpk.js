@@ -91,7 +91,12 @@ module.exports = {
     ],
     searchButtonSelector: ['button.btn-buscar', '.btn-buscar'],
     buildSearchUrl: (query) => `https://www.dpk.com.br/#/busca-produto?termo=${encodeURIComponent(query)}`,
-    preparePage: async ({ page }) => {
+    preferProfileOverSessionData: true,
+    preparePage: async ({ page, hasPreloadedSession }) => {
+        if (hasPreloadedSession) {
+            return;
+        }
+
         const state = readBootstrapStateFromChrome();
         if (!state) {
             return;

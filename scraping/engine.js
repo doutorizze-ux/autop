@@ -864,26 +864,29 @@ async function createContext(browser, supplier, strategy = {}) {
         }
     };
 
-    const selectedSessionState = supplierSessionState || null;
     const systemChromeProfileRoot = strategy.useSystemChromeProfile ? getSystemChromeUserDataRoot() : null;
-    const selectedProfilePath = systemChromeProfileRoot
-        || (!preferSessionDataOverProfile && profilePath && !selectedSessionState ? profilePath : null);
-    const fallbackProfilePath = systemChromeProfileRoot
-        || (preferSessionDataOverProfile && profilePath && !selectedSessionState ? profilePath : null);
+    const useProfilePath = Boolean(
+        systemChromeProfileRoot
+        || (profilePath && (
+            Boolean(strategy.preferProfileOverSessionData)
+            || !supplierSessionState
+        ))
+    );
+    const effectiveProfilePath = useProfilePath
+        ? (systemChromeProfileRoot || profilePath)
+        : null;
+    const selectedSessionState = effectiveProfilePath ? null : (supplierSessionState || null);
 
-    if (selectedProfilePath) {
+    if (effectiveProfilePath) {
         console.error(`[DEBUG] Reutilizando perfil persistente para: ${supplier.name}`);
     } else if (selectedSessionState) {
         console.error(`[DEBUG] Reutilizando sessionData para: ${supplier.name} (${supplierSessionState.cookieCount || 0} cookies)`);
-    } else if (fallbackProfilePath) {
-        console.error(`[DEBUG] Reutilizando perfil persistente para: ${supplier.name}`);
     } else if (fs.existsSync(sessionStatePath)) {
         console.error(`[DEBUG] Reutilizando sessao salva em arquivo para: ${supplier.name}`);
         contextOptions.storageState = sessionStatePath;
     }
 
     let context;
-    const effectiveProfilePath = selectedProfilePath || fallbackProfilePath;
     if (effectiveProfilePath) {
         // Tenta usar o Chrome real (channel: chrome) para bypassar Cloudflare.
         // Se falhar (ex: Chrome não instalado), cai de volta para o Chromium.
@@ -1147,7 +1150,7 @@ async function scrapeProductUnsafe(supplier, productName, options = {}) {
         console.error(`[DEBUG] Iniciando scraping para: ${supplier.name}`);
 
         if (typeof strategy.preparePage === 'function') {
-            await strategy.preparePage({ page, supplier, productName, context }).catch((error) => {
+            await strategy.preparePage({ page, supplier, productName, context, hasPreloadedSession }).catch((error) => {
                 console.error(`[WARN] Falha ao preparar pagina para ${supplier.name}: ${error.message}`);
             });
         }
