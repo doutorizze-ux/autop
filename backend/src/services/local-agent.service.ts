@@ -235,18 +235,6 @@ export class LocalAgentService {
         action: SessionTaskPayload['action'],
         payload?: Record<string, any>,
     ) {
-        if (action === 'snapshot') {
-            for (const entry of pendingTasks.values()) {
-                if (entry.payload.kind !== 'supplier-session') continue;
-                if (entry.payload.action !== 'snapshot') continue;
-                if (entry.payload.supplier?.id !== supplier?.id) continue;
-
-                pendingTasks.delete(entry.id);
-                clearTimeout(entry.timer);
-                entry.reject(new Error('Snapshot substituido por uma atualizacao mais recente.'));
-            }
-        }
-
         return this.dispatchTask(
             {
                 kind: 'supplier-session',
