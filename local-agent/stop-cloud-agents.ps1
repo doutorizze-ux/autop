@@ -6,9 +6,11 @@ $ErrorActionPreference = "SilentlyContinue"
 
 $agentDir = $PSScriptRoot
 $escapedAgentPath = [regex]::Escape((Join-Path $agentDir "agent.js"))
+$currentPid = $PID
 
 Get-CimInstance Win32_Process | Where-Object {
-    $_.Name -match "node|powershell" -and (
+    $_.Name -match "node|powershell" -and
+    $_.ProcessId -ne $currentPid -and (
         $_.CommandLine -match $escapedAgentPath -or
         $_.CommandLine -match "start-cloud-agents.ps1" -or
         $_.CommandLine -match "start-agent.ps1" -or
