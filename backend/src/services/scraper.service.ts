@@ -433,6 +433,10 @@ export async function runSupplierSearch(supplier: any, productName: string) {
 }
 
 async function executeSupplierSearch(supplier: any, productName: string) {
+    if (!supplier?.needsLogin) {
+        return runSupplierSearch(supplier, productName);
+    }
+
     const localAgentMode = isLocalAgentModeEnabled();
     const requireLocalAgent = shouldRequireLocalAgentForSearch();
     const localAgentAvailable = localAgentMode && LocalAgentService.hasActiveAgentsForSupplier(supplier);
