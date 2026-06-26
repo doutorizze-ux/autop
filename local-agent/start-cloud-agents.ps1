@@ -54,7 +54,8 @@ New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
 $agentId = "$env:COMPUTERNAME-loja-agent"
 $agentName = "Agente Loja $env:COMPUTERNAME"
 $supplierFilter = $suppliers -join ","
-$outLogPath = Join-Path $logsDir "loja.out.log"
+$sessionStamp = Get-Date -Format "yyyyMMdd-HHmmss-fff"
+$outLogPath = Join-Path $logsDir ("loja-{0}-{1}.out.log" -f $env:COMPUTERNAME, $sessionStamp)
 
 Write-Host ""
 Write-Host "Iniciando Agente Autopecas..."

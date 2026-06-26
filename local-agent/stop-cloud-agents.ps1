@@ -10,6 +10,7 @@ $escapedAgentPath = [regex]::Escape((Join-Path $agentDir "agent.js"))
 Get-CimInstance Win32_Process | Where-Object {
     $_.Name -match "node|powershell" -and (
         $_.CommandLine -match $escapedAgentPath -or
+        $_.CommandLine -match "start-cloud-agents.ps1" -or
         $_.CommandLine -match "start-agent.ps1" -or
         $_.CommandLine -match "start-supplier-agents.ps1"
     )
