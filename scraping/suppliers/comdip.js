@@ -43,9 +43,8 @@ module.exports = {
     productNameSelector: ['h2', 'h3', 'h4', 'a', 'strong', 'span'],
     priceSelector: ['.price', '.valor', '[class*="price"]', '[class*="valor"]'],
     buildSearchUrl: (query) => `https://portalcomdip.com.br/comdip/compras/pesquisa/termo-busca/${encodeURIComponent(String(query).toLowerCase())}/1`,
-    fillLogin: async ({ page, supplier, fillVisibleLocator, dismissTransientUi, setCheckboxState }) => {
+    fillLogin: async ({ page, supplier, fillVisibleLocator, dismissTransientUi }) => {
         await dismissTransientUi();
-        await setCheckboxState(['input[type="checkbox"]'], true).catch(() => {});
 
         const maybeOpenLogin = async () => {
             const candidates = [
@@ -67,6 +66,15 @@ module.exports = {
         };
 
         await maybeOpenLogin();
+
+        const consentCheckbox = page.locator('input[type="checkbox"]').first();
+        if (await consentCheckbox.isVisible().catch(() => false)) {
+            const checked = await consentCheckbox.isChecked().catch(() => null);
+            if (checked === false) {
+                await consentCheckbox.click({ force: true }).catch(() => {});
+                await page.waitForTimeout(400);
+            }
+        }
 
         const emailField = page.locator('input[type="email"], input[placeholder*="e-mail" i], input[placeholder*="email" i], input[name*="login" i], input[name*="user" i], input[id*="login" i], input:not([type="hidden"]):not([type="password"])').first();
         const passField = page.locator('input[type="password"], input[placeholder*="senha" i], input[name*="senha" i], input[id*="pass" i]').first();
