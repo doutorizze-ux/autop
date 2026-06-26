@@ -68,4 +68,20 @@ Write-Host "Mantenha esta janela aberta para o agente continuar funcionando."
 Write-Host "Pressione Ctrl+C nesta janela para encerrar."
 Write-Host ""
 
-& "$starterPath" -BackendUrl "$backendUrl" -Token "$token" -AgentId "$agentId" -AgentName "$agentName" -Suppliers "$supplierFilter" -SearchWorkers "$searchWorkers" -Headless "$headless" *>&1 | Tee-Object -FilePath "$outLogPath"
+$restartDelaySeconds = 8
+$runCount = 0
+
+while ($true) {
+    $runCount++
+    Write-Host "[Watchdog] Execucao $runCount do agente iniciada..."
+    & "$starterPath" -BackendUrl "$backendUrl" -Token "$token" -AgentId "$agentId" -AgentName "$agentName" -Suppliers "$supplierFilter" -SearchWorkers "$searchWorkers" -Headless "$headless" *>&1 | Tee-Object -FilePath "$outLogPath" -Append
+    $exitCode = if ($null -ne $LASTEXITCODE) { [int]$LASTEXITCODE } else { 1 }
+
+    if ($exitCode -eq 0) {
+        Write-Host "[Watchdog] Agente encerrou com codigo 0."
+        break
+    }
+
+    Write-Host "[Watchdog] Agente encerrou com codigo $exitCode. Reiniciando em $restartDelaySeconds segundos..."
+    Start-Sleep -Seconds $restartDelaySeconds
+}

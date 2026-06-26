@@ -92,11 +92,7 @@ module.exports = {
     searchButtonSelector: ['button.btn-buscar', '.btn-buscar'],
     buildSearchUrl: (query) => `https://www.dpk.com.br/#/busca-produto?termo=${encodeURIComponent(query)}`,
     preferProfileOverSessionData: true,
-    preparePage: async ({ page, hasPreloadedSession }) => {
-        if (hasPreloadedSession) {
-            return;
-        }
-
+    preparePage: async ({ page }) => {
         const state = readBootstrapStateFromChrome();
         if (!state) {
             return;
@@ -118,7 +114,7 @@ module.exports = {
     },
     performSearch: async ({ page, query }) => {
         const targetUrl = `https://www.dpk.com.br/#/busca-produto?termo=${encodeURIComponent(query)}`;
-        await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 60000 }).catch(() => {});
+        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
         await Promise.race([
             page.locator('.column-view-card, .column-view, h2.mat-h4 a[href*="#/produtos/"], div.cardsAlinhamento > mat-card.produto-card, mat-card.produto-card').first().waitFor({ state: 'visible', timeout: 12000 }).catch(() => null),
             page.locator('.sem-resultados, text="Nao encontramos resultados", text="NÃ£o encontramos resultados", text="0 resultados"').first().waitFor({ state: 'visible', timeout: 12000 }).catch(() => null),

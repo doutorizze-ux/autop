@@ -1,4 +1,5 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { chromium } = require('playwright');
 const { resolveStrategy } = require('./suppliers');
@@ -111,8 +112,14 @@ function getSupplierSlug(supplier) {
 }
 
 function getPersistentProfilePath(supplier) {
+    const sharedProfileRoot = path.join(
+        process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'),
+        'Autopecas',
+        'browser-profiles'
+    );
     const profileRoots = [
         process.env.SCRAPER_PROFILE_ROOT,
+        sharedProfileRoot,
         path.join(__dirname, '../local-agent/browser-profiles'),
         path.join(__dirname, '../backend/data/browser-profiles'),
     ].filter(Boolean);
@@ -876,6 +883,10 @@ async function createContext(browser, supplier, strategy = {}) {
         ? (systemChromeProfileRoot || profilePath)
         : null;
     const selectedSessionState = effectiveProfilePath ? null : (supplierSessionState || null);
+    const forceVisiblePersistentContext = Boolean(
+        strategy.preferProfileOverSessionData
+        || selectedSessionState
+    );
 
     if (effectiveProfilePath) {
         console.error(`[DEBUG] Reutilizando perfil persistente para: ${supplier.name}`);
@@ -892,7 +903,7 @@ async function createContext(browser, supplier, strategy = {}) {
         // Se falhar (ex: Chrome não instalado), cai de volta para o Chromium.
         try {
             context = await chromium.launchPersistentContext(effectiveProfilePath, {
-                headless: process.env.HEADLESS !== 'false',
+                headless: forceVisiblePersistentContext ? false : process.env.HEADLESS !== 'false',
                 ...contextOptions,
                 channel: 'chrome',
                 ignoreDefaultArgs: ['--enable-automation'],
@@ -904,7 +915,7 @@ async function createContext(browser, supplier, strategy = {}) {
             console.error(`[DEBUG] Chrome real indisponivel para ${supplier.name}, usando Chromium: ${error.message}`);
             try {
                 context = await chromium.launchPersistentContext(effectiveProfilePath, {
-                    headless: process.env.HEADLESS !== 'false',
+                    headless: forceVisiblePersistentContext ? false : process.env.HEADLESS !== 'false',
                     ...contextOptions,
                     ignoreDefaultArgs: ['--enable-automation'],
                     args: systemChromeProfileRoot

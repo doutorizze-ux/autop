@@ -19,6 +19,7 @@ const supplierFilters = String(process.env.LOCAL_AGENT_SUPPLIERS || process.env.
     .filter(Boolean);
 const pollIntervalMs = Number.parseInt(process.env.LOCAL_AGENT_POLL_INTERVAL_MS || '3000', 10) || 3000;
 const httpTimeoutMs = Number.parseInt(process.env.LOCAL_AGENT_HTTP_TIMEOUT_MS || '20000', 10) || 20000;
+const searchTaskTimeoutMs = Number.parseInt(process.env.LOCAL_AGENT_TASK_TIMEOUT_MS || process.env.LOCAL_AGENT_SEARCH_TASK_TIMEOUT_MS || '180000', 10) || 180000;
 const headless = String(process.env.HEADLESS || 'true').trim() === 'true';
 const searchWorkerCount = Math.max(1, Number.parseInt(process.env.LOCAL_AGENT_SEARCH_WORKERS || '3', 10) || 3);
 const shouldReadDashboardToken = String(process.env.LOCAL_AGENT_READ_DASHBOARD_TOKEN || 'false').trim() === 'true';
@@ -26,10 +27,26 @@ let cachedDashboardToken = null;
 let didTryDashboardToken = false;
 let dashboardTokenPromise = null;
 
-const sessionRoot = path.resolve(__dirname, 'browser-profiles');
+const sharedSessionRoot = path.join(
+    process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'),
+    'Autopecas',
+    'browser-profiles'
+);
+const legacySessionRoot = path.resolve(__dirname, 'browser-profiles');
+const sessionRoot = path.resolve(process.env.SCRAPER_PROFILE_ROOT || sharedSessionRoot);
+
 if (!process.env.SCRAPER_PROFILE_ROOT) {
     process.env.SCRAPER_PROFILE_ROOT = sessionRoot;
 }
+
+if (sessionRoot !== legacySessionRoot && fs.existsSync(legacySessionRoot)) {
+    const sessionRootHasContent = fs.existsSync(sessionRoot) && fs.readdirSync(sessionRoot).length > 0;
+    if (!sessionRootHasContent) {
+        copyDirectory(legacySessionRoot, sessionRoot);
+    }
+}
+
+ensureDirectory(sessionRoot);
 const assistSessions = new Map();
 const knownBrowserExecutables = [
     process.env.LOCAL_AGENT_BROWSER_PATH,
@@ -313,6 +330,25 @@ function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function withTimeout(operation, timeoutMs, label) {
+    let timer = null;
+
+    try {
+        return await Promise.race([
+            operation,
+            new Promise((_, reject) => {
+                timer = setTimeout(() => {
+                    reject(new Error(`${label} excedeu ${Math.round(timeoutMs / 1000)}s.`));
+                }, timeoutMs);
+            }),
+        ]);
+    } finally {
+        if (timer) {
+            clearTimeout(timer);
+        }
+    }
+}
+
 async function findFreePort() {
     return new Promise((resolve, reject) => {
         const server = net.createServer();
@@ -506,16 +542,29 @@ async function processTask(task) {
     const activeAssistSession = assistSessions.get(task.supplier.id) || null;
     let result;
     try {
+        const searchOperation = activeAssistSession?.context
+            ? scrapeProduct(task.supplier, task.productName, { reuseContext: activeAssistSession.context })
+            : scrapeProduct(task.supplier, task.productName);
+
         if (activeAssistSession?.context) {
             console.log(`[Local Agent] Reaproveitando sessao assistida ao pesquisar ${task.supplier.name}`);
-            result = await scrapeProduct(task.supplier, task.productName, { reuseContext: activeAssistSession.context });
-        } else {
-            result = await scrapeProduct(task.supplier, task.productName);
         }
+
+        result = await withTimeout(
+            searchOperation,
+            searchTaskTimeoutMs,
+            `Pesquisa de ${task.supplier.name} (${task.productName})`
+        );
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.error(`[Local Agent] Erro critico no scraping ${task.id} (${task.supplier.name}): ${message}`);
         await failTask(task.id, `Erro critico no agente: ${message}`).catch(() => {});
+
+        if (/excedeu|timeout/i.test(message)) {
+            console.error(`[Local Agent] Timeout de busca detectado. Reiniciando agente para limpar estado.`);
+            setTimeout(() => process.exit(1), 1000);
+        }
+
         return;
     }
     try {
