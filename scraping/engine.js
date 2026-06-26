@@ -1122,12 +1122,23 @@ function getBrowser() {
     return globalBrowserPromise;
 }
 
-async function scrapeProductUnsafe(supplier, productName) {
-    const browser = await getBrowser();
+async function scrapeProductUnsafe(supplier, productName, options = {}) {
+    const externalContext = options.reuseContext || null;
+    const browser = externalContext ? null : await getBrowser();
     const strategy = resolveStrategy(supplier);
 
-    const { context, hasPreloadedSession } = await createContext(browser, supplier, strategy);
-    const page = await context.newPage();
+    let context;
+    let hasPreloadedSession = false;
+    if (externalContext) {
+        context = externalContext;
+        hasPreloadedSession = true;
+    } else {
+        const created = await createContext(browser, supplier, strategy);
+        context = created.context;
+        hasPreloadedSession = created.hasPreloadedSession;
+    }
+
+    const page = options.reusePage || await context.newPage();
     const defaultTimeoutMs = parsePositiveInt(process.env.SCRAPER_PAGE_TIMEOUT_MS, 90_000);
     page.setDefaultTimeout(defaultTimeoutMs);
     page.setDefaultNavigationTimeout(defaultTimeoutMs);
@@ -1181,7 +1192,7 @@ async function scrapeProductUnsafe(supplier, productName) {
                 await dismissTransientUi(page);
                 await ensureLoggedIn(page, loginUrl, supplier, strategy);
             }
-            await persistSession(context, supplier, didLoginThisRun);
+            await persistSession(context, supplier, didLoginThisRun || hasPreloadedSession);
         }
 
         const authenticatedTargetUrl = resolveAuthenticatedUrl(strategy, supplier, loginUrl);
@@ -1332,12 +1343,15 @@ async function scrapeProductUnsafe(supplier, productName) {
             debug,
         };
     } finally {
-        await context.close().catch(() => {});
+        await page.close().catch(() => {});
+        if (!externalContext) {
+            await context.close().catch(() => {});
+        }
         // O browser.close() foi removido para manter a instancia global viva
     }
 }
 
-async function scrapeProduct(supplier, productName) {
+async function scrapeProduct(supplier, productName, options = {}) {
     const cacheEnabled = isResultCacheEnabled();
     const cacheTtlMs = cacheEnabled
         ? parseNonNegativeInt(process.env.SCRAPER_ENGINE_CACHE_TTL_MS || process.env.SCRAPER_CACHE_TTL_MS, 0)
@@ -1361,7 +1375,7 @@ async function scrapeProduct(supplier, productName) {
             return clonePayload(secondLook.value);
         }
 
-        const result = await scrapeProductUnsafe(supplier, productName);
+        const result = await scrapeProductUnsafe(supplier, productName, options);
         if (cacheTtlMs > 0 && isCacheableResult(result)) {
             pruneResultCache();
             supplierResultCache.set(cacheKey, {

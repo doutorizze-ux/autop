@@ -503,10 +503,15 @@ async function processTask(task) {
     console.log(`[Local Agent] Pesquisando ${task.supplier.name} -> ${task.productName}`);
     // Garante que a sessão do Login Assistido para este fornecedor seja fechada
     // para liberar o lock do perfil de usuário do Chrome antes da busca.
-    await closeAssistSession(task.supplier.id).catch(() => {});
+    const activeAssistSession = assistSessions.get(task.supplier.id) || null;
     let result;
     try {
-        result = await scrapeProduct(task.supplier, task.productName);
+        if (activeAssistSession?.context) {
+            console.log(`[Local Agent] Reaproveitando sessao assistida ao pesquisar ${task.supplier.name}`);
+            result = await scrapeProduct(task.supplier, task.productName, { reuseContext: activeAssistSession.context });
+        } else {
+            result = await scrapeProduct(task.supplier, task.productName);
+        }
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.error(`[Local Agent] Erro critico no scraping ${task.id} (${task.supplier.name}): ${message}`);
