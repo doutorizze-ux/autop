@@ -1,6 +1,7 @@
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { io } from '../index';
+import { LocalAgentService } from './local-agent.service';
 
 const prisma = new PrismaClient();
 const enginePath = path.resolve(__dirname, '../../../scraping/engine.js');
@@ -25,6 +26,26 @@ function parseNonNegativeInt(value: string | undefined, fallback: number) {
 
 function isResultCacheEnabled() {
     return String(process.env.SCRAPER_RESULT_CACHE_ENABLED || '').trim().toLowerCase() === 'true';
+}
+
+function isTruthyEnv(value: string | undefined, defaultValue = false) {
+    if (value === undefined || value === null || value === '') {
+        return defaultValue;
+    }
+
+    return ['1', 'true', 'yes', 'on', 'enabled'].includes(String(value).trim().toLowerCase());
+}
+
+function isLocalAgentModeEnabled() {
+    return String(process.env.LOCAL_AGENT_MODE || '').trim().toLowerCase() !== 'disabled';
+}
+
+function shouldRequireLocalAgentForSearch() {
+    return isLocalAgentModeEnabled() && isTruthyEnv(process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH, false);
+}
+
+function shouldFallbackOnLocalAgentFailure() {
+    return isTruthyEnv(process.env.LOCAL_AGENT_FALLBACK_ON_FAILURE, true);
 }
 
 function clonePayload<T>(value: T): T {
@@ -412,6 +433,28 @@ export async function runSupplierSearch(supplier: any, productName: string) {
 }
 
 async function executeSupplierSearch(supplier: any, productName: string) {
+    const localAgentMode = isLocalAgentModeEnabled();
+    const requireLocalAgent = shouldRequireLocalAgentForSearch();
+    const localAgentAvailable = localAgentMode && LocalAgentService.hasActiveAgentsForSupplier(supplier);
+    const shouldUseLocalAgent = localAgentMode && (requireLocalAgent || localAgentAvailable);
+
+    if (shouldUseLocalAgent) {
+        try {
+            console.log(
+                `[Scraper] Encaminhando busca via agente local para ${supplier.name} -> ${productName}` +
+                ` (require=${requireLocalAgent ? 'sim' : 'nao'}, active=${localAgentAvailable ? 'sim' : 'nao'})`
+            );
+            return await LocalAgentService.dispatchSearchTask(supplier, productName);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (requireLocalAgent || !shouldFallbackOnLocalAgentFailure()) {
+                throw error;
+            }
+
+            console.warn(`[Scraper] Falha no agente local para ${supplier.name}; fallback direto habilitado. Motivo: ${message}`);
+        }
+    }
+
     return runSupplierSearch(supplier, productName);
 }
 
