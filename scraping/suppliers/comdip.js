@@ -3,26 +3,27 @@ module.exports = {
     matches: (supplierName) => supplierName.includes('comdip'),
     authenticatedUrl: 'https://portalcomdip.com.br/comdip/compras',
     userSelector: [
+        'input[placeholder*="cnpj/cpf" i]',
+        'input[id^="mat-input-0"]',
         'input[name*="cnpj" i]',
         'input[placeholder*="cnpj" i]',
         'input[placeholder*="email" i]',
         'input[type="email"]',
         '#Cnpj',
         '#Login',
-        'input:not([type="hidden"]):not([type="password"])',
     ],
     passSelector: [
+        'input[placeholder*="senha" i]',
+        'input[id^="mat-input-1"]',
         'input[id="pass"]',
         'input[type="password"]',
-        'input[placeholder*="senha" i]',
     ],
     submitSelector: ['button:has-text("Entrar")', 'button:has-text("Login")', 'button.btn-success', 'button[type="submit"]'],
     loginSuccessSelector: [
         'body:has-text("Sair")',
         'body:has-text("OFICINA DO")',
         'a:has-text("Sair")',
-        'a:has-text("Meu histÃ³rico")',
-        'a:has-text("Meu histÃƒÂ³rico")',
+        'a:has-text("Meu Histórico")',
         'a:has-text("Minhas Listas")',
         'text=OFICINA DO',
         'input[type="search"]',
@@ -46,38 +47,29 @@ module.exports = {
     fillLogin: async ({ page, supplier, fillVisibleLocator, dismissTransientUi }) => {
         await dismissTransientUi();
 
-        const maybeOpenLogin = async () => {
-            const candidates = [
-                'button:has-text("Acesso do Cliente")',
-                'button:has-text("Entrar")',
-                'button:has-text("Salvar Acesso")',
-                'a:has-text("Entrar")',
-                'a:has-text("Acesso do Cliente")',
-            ];
+        const consentSelectors = [
+            'input[name="cbAceitarTermos"]',
+            '#mat-slide-toggle-1-input',
+            'input[type="checkbox"]',
+        ];
 
-            for (const selector of candidates) {
-                const locator = page.locator(selector).first();
-                if (await locator.isVisible().catch(() => false)) {
+        for (const selector of consentSelectors) {
+            const locator = page.locator(selector).first();
+            if (await locator.isVisible().catch(() => false)) {
+                const checked = await locator.isChecked().catch(() => null);
+                if (checked === false) {
                     await locator.click({ force: true }).catch(() => {});
-                    await page.waitForTimeout(800);
-                    break;
+                    await page.waitForTimeout(300);
                 }
-            }
-        };
-
-        await maybeOpenLogin();
-
-        const consentCheckbox = page.locator('input[type="checkbox"]').first();
-        if (await consentCheckbox.isVisible().catch(() => false)) {
-            const checked = await consentCheckbox.isChecked().catch(() => null);
-            if (checked === false) {
-                await consentCheckbox.click({ force: true }).catch(() => {});
-                await page.waitForTimeout(400);
             }
         }
 
-        const emailField = page.locator('input[type="email"], input[placeholder*="e-mail" i], input[placeholder*="email" i], input[name*="login" i], input[name*="user" i], input[id*="login" i], input:not([type="hidden"]):not([type="password"])').first();
-        const passField = page.locator('input[type="password"], input[placeholder*="senha" i], input[name*="senha" i], input[id*="pass" i]').first();
+        const emailField = page.locator(
+            'input[placeholder*="cnpj/cpf" i], input[id^="mat-input-0"], input[name*="cnpj" i], input[type="email"], input[placeholder*="email" i]'
+        ).first();
+        const passField = page.locator(
+            'input[placeholder*="senha" i], input[type="password"], input[id^="mat-input-1"]'
+        ).first();
 
         if (await emailField.isVisible().catch(() => false)) {
             await fillVisibleLocator(emailField, supplier.loginCredential || supplier.loginExtraValue || '');
@@ -125,8 +117,16 @@ module.exports = {
             return items.slice(0, 30);
         });
     },
-    beforeLogin: async ({ dismissTransientUi, setCheckboxState }) => {
+    beforeLogin: async ({ page, dismissTransientUi }) => {
         await dismissTransientUi();
-        await setCheckboxState(['input[type="checkbox"]'], true);
+        for (const selector of ['input[name="cbAceitarTermos"]', '#mat-slide-toggle-1-input', 'input[type="checkbox"]']) {
+            const locator = page.locator(selector).first();
+            if (await locator.isVisible().catch(() => false)) {
+                const checked = await locator.isChecked().catch(() => null);
+                if (checked === false) {
+                    await locator.click({ force: true }).catch(() => {});
+                }
+            }
+        }
     },
 };

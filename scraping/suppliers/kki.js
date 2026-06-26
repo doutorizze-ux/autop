@@ -5,11 +5,12 @@ module.exports = {
     loginSuccessSelector: [
         'button:has-text("Pesquisar")',
         'button:has-text("Buscar")',
+        'text=Comprar peças',
+        'text=Comprar peÃƒÂ§as',
         'input[placeholder*="refer" i]',
         'input[placeholder*="descr" i]',
         'input[placeholder*="codigo" i]',
         'input[placeholder*="descricao" i]',
-        'text=Comprar peÃ§as',
     ],
     searchSelector: [
         'input[placeholder*="refer" i]',
@@ -42,26 +43,37 @@ module.exports = {
     navigateToAuthenticatedAfterLogin: true,
     fillLogin: async ({ page, supplier, fillVisibleLocator, dismissTransientUi }) => {
         await dismissTransientUi();
-        const openButtons = [
-            'button:has-text("Já tenho conta")',
-            'button:has-text("Ja tenho conta")',
-            'button:has-text("Entrar")',
-            'a:has-text("Já tenho conta")',
-            'a:has-text("Ja tenho conta")',
-            'a:has-text("Entrar")',
-        ];
 
-        for (const selector of openButtons) {
-            const locator = page.locator(selector).first();
-            if (await locator.isVisible().catch(() => false)) {
-                await locator.click({ force: true }).catch(() => {});
-                await page.waitForTimeout(800);
-                break;
+        const emailField = page.locator(
+            'input[type="email"], input[placeholder*="digite seu e-mail" i], input[placeholder*="e-mail" i], input[placeholder*="email" i], input[name*="email" i], input[name*="login" i]'
+        ).first();
+        const passField = page.locator(
+            'input[type="password"], input[placeholder*="digite sua senha" i], input[placeholder*="senha" i], input[name*="senha" i]'
+        ).first();
+
+        const hasVisibleLoginFields =
+            await emailField.isVisible().catch(() => false)
+            || await passField.isVisible().catch(() => false);
+
+        if (!hasVisibleLoginFields) {
+            const openButtons = [
+                'button:has-text("Já tenho conta")',
+                'button:has-text("Ja tenho conta")',
+                'button:has-text("Entrar")',
+                'a:has-text("Já tenho conta")',
+                'a:has-text("Ja tenho conta")',
+                'a:has-text("Entrar")',
+            ];
+
+            for (const selector of openButtons) {
+                const locator = page.locator(selector).first();
+                if (await locator.isVisible().catch(() => false)) {
+                    await locator.click({ force: true }).catch(() => {});
+                    await page.waitForTimeout(800);
+                    break;
+                }
             }
         }
-
-        const emailField = page.locator('input[type="email"], input[placeholder*="e-mail" i], input[placeholder*="email" i], input[name*="email" i], input[name*="login" i], input:not([type="hidden"]):not([type="password"])').first();
-        const passField = page.locator('input[type="password"], input[placeholder*="senha" i], input[name*="senha" i]').first();
 
         if (await emailField.isVisible().catch(() => false)) {
             await fillVisibleLocator(emailField, supplier.loginCredential || supplier.loginExtraValue || '');
@@ -103,10 +115,7 @@ module.exports = {
             return null;
         };
 
-        const normalizedQuery = String(query || '').trim();
-        const looksLikeCode = /^[A-Za-z0-9./_-]{3,}$/.test(normalizedQuery) && !/\s/.test(normalizedQuery);
         const searchInput = await findVisibleLocator(visibleSelectors);
-
         if (!searchInput) {
             throw new Error('Campo de busca do KKI nao encontrado.');
         }
@@ -138,7 +147,7 @@ module.exports = {
 
             const bodyText = clean(document.body?.innerText || document.body?.textContent || '');
             const textResults = [];
-            const textPattern = /R\$\s*([0-9.,]+)\s*R\$\s*([0-9.,]+)\s*([A-Z0-9ÇÁÉÍÓÚÃÕ/\- ]+?)\s*Avise-me\s*([A-Z0-9.\-]+)\s+([A-Z0-9.\-\/]+)\s*Transporte:\s*\|?\s*Em estoque:?\s*([0-9]+)/gi;
+            const textPattern = /R\$\s*([0-9.,]+)\s*R\$\s*([0-9.,]+)\s*([A-Z0-9Ã‡ÃÃ‰ÃÃ“ÃšÃƒÃ•/\- ]+?)\s*Avise-me\s*([A-Z0-9.\-]+)\s+([A-Z0-9.\-\/]+)\s*Transporte:\s*\|?\s*Em estoque:?\s*([0-9]+)/gi;
 
             for (const match of bodyText.matchAll(textPattern)) {
                 const [, currentPrice, oldPrice, productName, brandName, codeValue, stockValue] = match;
@@ -195,7 +204,7 @@ module.exports = {
                     if (normalized.includes('distribuido por')) return false;
                     if (normalized.includes('em estoque')) return false;
                     if (normalized.includes('ver carrinho')) return false;
-                    if (normalized.includes('comprar peÃ§as')) return false;
+                    if (normalized.includes('comprar peças')) return false;
                     if (normalized.includes('lancamentos')) return false;
                     if (normalized.includes('promocao')) return false;
                     if (normalized.includes('placa do veiculo')) return false;
@@ -212,7 +221,7 @@ module.exports = {
                     if (normalized.includes('distribuido por')) return false;
                     if (normalized.includes('em estoque')) return false;
                     if (normalized.includes('ver carrinho')) return false;
-                    if (normalized.includes('comprar peÃ§as')) return false;
+                    if (normalized.includes('comprar peças')) return false;
                     if (normalized.includes('lancamentos')) return false;
                     if (normalized.includes('promocao')) return false;
                     if (normalized.includes('placa do veiculo')) return false;

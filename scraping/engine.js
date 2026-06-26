@@ -203,6 +203,47 @@ function parseSupplierSessionData(supplier) {
     return null;
 }
 
+async function applySessionStateToContext(context, storageState) {
+    if (!context || !storageState) {
+        return;
+    }
+
+    const cookies = Array.isArray(storageState.cookies)
+        ? storageState.cookies.map(normalizeCookie).filter(Boolean)
+        : [];
+
+    if (cookies.length) {
+        await context.addCookies(cookies).catch((error) => {
+            console.error(`[WARN] Falha ao aplicar cookies da sessao: ${error.message}`);
+        });
+    }
+
+    const origins = Array.isArray(storageState.origins)
+        ? storageState.origins.filter((origin) => origin && origin.origin && Array.isArray(origin.localStorage))
+        : [];
+
+    if (!origins.length) {
+        return;
+    }
+
+    await context.addInitScript((payload) => {
+        const originEntries = Array.isArray(payload?.origins) ? payload.origins : [];
+        const currentOrigin = String(location.origin || '');
+        const entry = originEntries.find((item) => String(item?.origin || '') === currentOrigin);
+
+        if (!entry || !Array.isArray(entry.localStorage)) {
+            return;
+        }
+
+        try {
+            for (const item of entry.localStorage) {
+                if (!item || item.name === undefined) continue;
+                localStorage.setItem(String(item.name), String(item.value ?? ''));
+            }
+        } catch (_) {}
+    }, { origins });
+}
+
 async function waitForAnyVisible(page, selectors, timeout = 8000) {
     const expandedSelectors = Array.from(new Set([
         ...selectors,
@@ -823,10 +864,10 @@ async function createContext(browser, supplier, strategy = {}) {
         }
     };
 
+    const selectedSessionState = supplierSessionState || null;
     const systemChromeProfileRoot = strategy.useSystemChromeProfile ? getSystemChromeUserDataRoot() : null;
     const selectedProfilePath = systemChromeProfileRoot
-        || (!preferSessionDataOverProfile && profilePath ? profilePath : null);
-    const selectedSessionState = supplierSessionState || null;
+        || (!preferSessionDataOverProfile && profilePath && !selectedSessionState ? profilePath : null);
     const fallbackProfilePath = systemChromeProfileRoot
         || (preferSessionDataOverProfile && profilePath && !selectedSessionState ? profilePath : null);
 
@@ -834,10 +875,6 @@ async function createContext(browser, supplier, strategy = {}) {
         console.error(`[DEBUG] Reutilizando perfil persistente para: ${supplier.name}`);
     } else if (selectedSessionState) {
         console.error(`[DEBUG] Reutilizando sessionData para: ${supplier.name} (${supplierSessionState.cookieCount || 0} cookies)`);
-        contextOptions.storageState = {
-            cookies: selectedSessionState.cookies || [],
-            origins: selectedSessionState.origins || [],
-        };
     } else if (fallbackProfilePath) {
         console.error(`[DEBUG] Reutilizando perfil persistente para: ${supplier.name}`);
     } else if (fs.existsSync(sessionStatePath)) {
@@ -879,6 +916,11 @@ async function createContext(browser, supplier, strategy = {}) {
     } else {
         context = await browser.newContext(contextOptions);
     }
+
+    if (selectedSessionState) {
+        await applySessionStateToContext(context, selectedSessionState);
+    }
+
     await context.addInitScript(() => {
         Object.defineProperty(navigator, 'webdriver', {
             get: () => undefined,
