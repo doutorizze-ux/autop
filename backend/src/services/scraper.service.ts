@@ -56,6 +56,65 @@ function clonePayload<T>(value: T): T {
     return JSON.parse(JSON.stringify(value));
 }
 
+function isFallbackableSearchResult(result: any) {
+    if (!result) {
+        return true;
+    }
+
+    if (Array.isArray(result)) {
+        if (result.length === 0) {
+            return true;
+        }
+
+        return result.every((entry) => parsePriceNumber(entry?.preco || entry?.price) <= 0);
+    }
+
+    if (typeof result === 'object') {
+        if (result.error) {
+            return true;
+        }
+
+        if (result.available === false) {
+            return true;
+        }
+
+        if (result.price === '---') {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function hasLoginOrSessionFailureSignal(result: any) {
+    const fields = [
+        result?.error,
+        result?.message,
+        result?.debug?.pageTitle,
+        result?.debug?.bodySnippet,
+        result?.debug?.finalUrl,
+    ];
+
+    const text = fields.map((value) => String(value || '')).join(' ').toLowerCase();
+    if (!text.trim()) {
+        return false;
+    }
+
+    return (
+        text.includes('login') ||
+        text.includes('sessao') ||
+        text.includes('session') ||
+        text.includes('credenciais') ||
+        text.includes('bloqueado') ||
+        text.includes('blocked') ||
+        text.includes('cloudfront') ||
+        text.includes('403') ||
+        text.includes('nao exibiu preco') ||
+        text.includes('não exibiu preço') ||
+        text.includes('produto localizado')
+    );
+}
+
 function getSupplierCacheKey(supplier: any, productName: string) {
     const supplierVersion = supplier.updatedAt instanceof Date
         ? supplier.updatedAt.toISOString()
@@ -459,7 +518,26 @@ async function executeSupplierSearch(supplier: any, productName: string) {
         }
     }
 
-    return runSupplierSearch(supplier, productName);
+    const directResult = await runSupplierSearch(supplier, productName);
+
+    const shouldAttemptFallback =
+        localAgentAvailable &&
+        isFallbackableSearchResult(directResult) &&
+        (shouldFallbackOnLocalAgentFailure() || hasLoginOrSessionFailureSignal(directResult));
+
+    if (shouldAttemptFallback) {
+        try {
+            console.warn(
+                `[Scraper] Busca direta de ${supplier.name} falhou ou veio sem preco; tentando agente local como fallback.`
+            );
+            return await LocalAgentService.dispatchSearchTask(supplier, productName);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.warn(`[Scraper] Fallback no agente local falhou para ${supplier.name}: ${message}`);
+        }
+    }
+
+    return directResult;
 }
 
 async function executeSupplierSearchWithGuards(supplier: any, productName: string) {
