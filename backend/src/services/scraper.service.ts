@@ -440,7 +440,7 @@ async function executeSupplierSearch(supplier: any, productName: string) {
     const localAgentMode = isLocalAgentModeEnabled();
     const requireLocalAgent = shouldRequireLocalAgentForSearch();
     const localAgentAvailable = localAgentMode && LocalAgentService.hasActiveAgentsForSupplier(supplier);
-    const shouldUseLocalAgent = localAgentMode && (requireLocalAgent || localAgentAvailable);
+    const shouldUseLocalAgent = localAgentMode && requireLocalAgent;
 
     if (shouldUseLocalAgent) {
         try {
