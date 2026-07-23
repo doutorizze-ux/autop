@@ -48,6 +48,11 @@ function shouldFallbackOnLocalAgentFailure() {
     return isTruthyEnv(process.env.LOCAL_AGENT_FALLBACK_ON_FAILURE, true);
 }
 
+function requiresStoreNetworkForSearch(supplier: any) {
+    const supplierKey = normalizeVariantKey(`${supplier?.name || ''} ${supplier?.url || ''}`);
+    return supplierKey.includes('comdip') || supplierKey.includes('dpk');
+}
+
 function clonePayload<T>(value: T): T {
     if (value === undefined || value === null) {
         return value;
@@ -499,18 +504,20 @@ async function executeSupplierSearch(supplier: any, productName: string) {
     const localAgentMode = isLocalAgentModeEnabled();
     const requireLocalAgent = shouldRequireLocalAgentForSearch();
     const localAgentAvailable = localAgentMode && LocalAgentService.hasActiveAgentsForSupplier(supplier);
-    const shouldUseLocalAgent = localAgentMode && requireLocalAgent;
+    // Estes portais bloqueiam ou esvaziam a pagina quando acessados pelo IP do VPS.
+    const storeNetworkRequired = requiresStoreNetworkForSearch(supplier);
+    const shouldUseLocalAgent = localAgentMode && (requireLocalAgent || storeNetworkRequired);
 
     if (shouldUseLocalAgent) {
         try {
             console.log(
                 `[Scraper] Encaminhando busca via agente local para ${supplier.name} -> ${productName}` +
-                ` (require=${requireLocalAgent ? 'sim' : 'nao'}, active=${localAgentAvailable ? 'sim' : 'nao'})`
+                ` (require=${requireLocalAgent ? 'sim' : 'nao'}, storeNetwork=${storeNetworkRequired ? 'sim' : 'nao'}, active=${localAgentAvailable ? 'sim' : 'nao'})`
             );
             return await LocalAgentService.dispatchSearchTask(supplier, productName);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            if (requireLocalAgent || !shouldFallbackOnLocalAgentFailure()) {
+            if (requireLocalAgent || storeNetworkRequired || !shouldFallbackOnLocalAgentFailure()) {
                 throw error;
             }
 
