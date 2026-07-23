@@ -163,7 +163,7 @@ if (Test-Path $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force
 }
 
-Compress-Archive -LiteralPath (Join-Path $packageDir "*") -DestinationPath $zipPath -Force
+Compress-Archive -Path (Join-Path $packageDir "*") -DestinationPath $zipPath -Force
 
 Write-Host "Pacote criado:"
 Write-Host $packageDir
