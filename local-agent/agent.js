@@ -308,6 +308,39 @@ async function closeAssistSession(supplierId) {
     }
 }
 
+function isBrowserTargetClosedError(error) {
+    const message = error instanceof Error ? error.message : String(error || '');
+    return (
+        /target page, context or browser has been closed/i.test(message)
+        || /browsercontext\.newpage/i.test(message)
+        || /browser has been closed/i.test(message)
+        || /connection closed/i.test(message)
+    );
+}
+
+async function getLiveAssistSession(supplier) {
+    const existing = assistSessions.get(supplier.id);
+    if (!existing) {
+        return null;
+    }
+
+    try {
+        if (typeof existing.browser?.isConnected === 'function' && !existing.browser.isConnected()) {
+            throw new Error('Navegador do Login Assistido foi fechado.');
+        }
+
+        const pages = existing.context.pages();
+        const openPage = pages.find((page) => !page.isClosed());
+        existing.page = openPage || await existing.context.newPage();
+        return existing;
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[Local Agent] Sessao assistida encerrada para ${supplier.name}; limpando estado: ${message}`);
+        await closeAssistSession(supplier.id);
+        return null;
+    }
+}
+
 function httpGetJson(url) {
     return new Promise((resolve, reject) => {
         http.get(url, (response) => {
@@ -537,35 +570,60 @@ async function processTask(task) {
     }
 
     console.log(`[Local Agent] Pesquisando ${task.supplier.name} -> ${task.productName}`);
-    // Garante que a sessão do Login Assistido para este fornecedor seja fechada
-    // para liberar o lock do perfil de usuário do Chrome antes da busca.
-    const activeAssistSession = assistSessions.get(task.supplier.id) || null;
-    let result;
-    try {
-        const searchOperation = activeAssistSession?.context
-            ? scrapeProduct(task.supplier, task.productName, { reuseContext: activeAssistSession.context })
+    // Reaproveita a sessão assistida apenas enquanto o navegador continuar vivo.
+    let activeAssistSession = await getLiveAssistSession(task.supplier);
+    const searchStartedAt = Date.now();
+    const runSearch = async (session) => {
+        const remainingTimeoutMs = Math.max(
+            5000,
+            searchTaskTimeoutMs - (Date.now() - searchStartedAt)
+        );
+        const searchOperation = session?.context
+            ? scrapeProduct(task.supplier, task.productName, { reuseContext: session.context })
             : scrapeProduct(task.supplier, task.productName);
 
-        if (activeAssistSession?.context) {
+        if (session?.context) {
             console.log(`[Local Agent] Reaproveitando sessao assistida ao pesquisar ${task.supplier.name}`);
         }
 
-        result = await withTimeout(
+        return withTimeout(
             searchOperation,
-            searchTaskTimeoutMs,
+            remainingTimeoutMs,
             `Pesquisa de ${task.supplier.name} (${task.productName})`
         );
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(`[Local Agent] Erro critico no scraping ${task.id} (${task.supplier.name}): ${message}`);
-        await failTask(task.id, `Erro critico no agente: ${message}`).catch(() => {});
+    };
 
-        if (/excedeu|timeout/i.test(message)) {
-            console.error(`[Local Agent] Timeout de busca detectado. Reiniciando agente para limpar estado.`);
-            setTimeout(() => process.exit(1), 1000);
+    let result;
+    try {
+        result = await runSearch(activeAssistSession);
+    } catch (error) {
+        if (activeAssistSession && isBrowserTargetClosedError(error)) {
+            console.warn(
+                `[Local Agent] Navegador assistido fechou durante a busca de ${task.supplier.name}; ` +
+                'reabrindo com o perfil salvo.'
+            );
+            await closeAssistSession(task.supplier.id);
+            activeAssistSession = null;
+
+            try {
+                result = await runSearch(null);
+            } catch (retryError) {
+                error = retryError;
+            }
         }
 
-        return;
+        if (result === undefined) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.error(`[Local Agent] Erro critico no scraping ${task.id} (${task.supplier.name}): ${message}`);
+            await failTask(task.id, `Erro critico no agente: ${message}`).catch(() => {});
+
+            if (/excedeu|timeout/i.test(message) || isBrowserTargetClosedError(error)) {
+                console.error(`[Local Agent] Estado do navegador ficou invalido. Reiniciando agente para limpar estado.`);
+                setTimeout(() => process.exit(1), 1000);
+            }
+
+            return;
+        }
     }
     try {
         await completeTask(task.id, result);

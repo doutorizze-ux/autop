@@ -140,6 +140,92 @@ function getSystemChromeUserDataRoot() {
         : null;
 }
 
+function isPersistentProfileLockError(error) {
+    const message = error instanceof Error ? error.message : String(error || '');
+    return (
+        /profile appears to be in use/i.test(message)
+        || /process_singleton/i.test(message)
+        || /singletonlock/i.test(message)
+        || /locked the profile/i.test(message)
+    );
+}
+
+function isPersistentProfileLockStale(profilePath) {
+    const lockPath = path.join(profilePath, 'SingletonLock');
+
+    try {
+        const lockStat = fs.lstatSync(lockPath);
+        if (!lockStat.isSymbolicLink()) {
+            return false;
+        }
+
+        const lockTarget = fs.readlinkSync(lockPath);
+        const targetMatch = String(lockTarget).match(/^(.*)-(\d+)$/);
+        if (!targetMatch) {
+            return false;
+        }
+
+        const lockHost = targetMatch[1];
+        const lockPid = Number.parseInt(targetMatch[2], 10);
+        if (lockHost !== os.hostname()) {
+            return true;
+        }
+
+        try {
+            process.kill(lockPid, 0);
+            return false;
+        } catch (_) {
+            return true;
+        }
+    } catch (_) {
+        return false;
+    }
+}
+
+function clearStalePersistentProfileLocks(profilePath) {
+    if (!isPersistentProfileLockStale(profilePath)) {
+        return 0;
+    }
+
+    let removedCount = 0;
+
+    for (const lockName of ['SingletonLock', 'SingletonCookie', 'SingletonSocket']) {
+        const lockPath = path.join(profilePath, lockName);
+        try {
+            fs.lstatSync(lockPath);
+            fs.rmSync(lockPath, { force: true });
+            removedCount += 1;
+        } catch (error) {
+            if (error?.code !== 'ENOENT') {
+                console.error(`[WARN] Nao foi possivel remover a trava ${lockPath}: ${error.message}`);
+            }
+        }
+    }
+
+    return removedCount;
+}
+
+async function launchPersistentContextWithRecovery(profilePath, options, supplierName) {
+    try {
+        return await chromium.launchPersistentContext(profilePath, options);
+    } catch (error) {
+        if (!isPersistentProfileLockError(error)) {
+            throw error;
+        }
+
+        const removedCount = clearStalePersistentProfileLocks(profilePath);
+        if (!removedCount) {
+            throw error;
+        }
+
+        console.error(
+            `[WARN] Perfil persistente travado para ${supplierName}. ` +
+            `Removidas ${removedCount} trava(s) obsoleta(s); tentando novamente.`
+        );
+        return chromium.launchPersistentContext(profilePath, options);
+    }
+}
+
 function normalizeCookie(cookie) {
     if (!cookie || !cookie.name || cookie.value === undefined) {
         return null;
@@ -902,7 +988,7 @@ async function createContext(browser, supplier, strategy = {}) {
         // Tenta usar o Chrome real (channel: chrome) para bypassar Cloudflare.
         // Se falhar (ex: Chrome não instalado), cai de volta para o Chromium.
         try {
-            context = await chromium.launchPersistentContext(effectiveProfilePath, {
+            context = await launchPersistentContextWithRecovery(effectiveProfilePath, {
                 headless: forceVisiblePersistentContext ? false : process.env.HEADLESS !== 'false',
                 ...contextOptions,
                 channel: 'chrome',
@@ -910,18 +996,18 @@ async function createContext(browser, supplier, strategy = {}) {
                 args: systemChromeProfileRoot
                     ? [...(contextOptions.args || []), '--profile-directory=Default']
                     : contextOptions.args,
-            });
+            }, supplier.name);
         } catch (error) {
             console.error(`[DEBUG] Chrome real indisponivel para ${supplier.name}, usando Chromium: ${error.message}`);
             try {
-                context = await chromium.launchPersistentContext(effectiveProfilePath, {
+                context = await launchPersistentContextWithRecovery(effectiveProfilePath, {
                     headless: forceVisiblePersistentContext ? false : process.env.HEADLESS !== 'false',
                     ...contextOptions,
                     ignoreDefaultArgs: ['--enable-automation'],
                     args: systemChromeProfileRoot
                         ? [...(contextOptions.args || []), '--profile-directory=Default']
                         : contextOptions.args,
-                });
+                }, supplier.name);
             } catch (fallbackError) {
                 console.error(`[DEBUG] Falha ao abrir perfil persistente para ${supplier.name}: ${fallbackError.message}`);
                 context = await browser.newContext(contextOptions);
