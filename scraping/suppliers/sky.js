@@ -80,15 +80,17 @@ async function pickSearchInput(page, query) {
     return findVisibleSearchInput(page);
 }
 
-async function waitForSearchRender(page) {
-    await page.waitForFunction(() => {
+async function waitForSearchRender(page, previousSignature = '') {
+    await page.waitForFunction((initialSignature) => {
         const bodyText = String(document.body?.innerText || '');
+        const resultContainer = document.querySelector('#tb_produto');
+        const currentSignature = String(resultContainer?.innerHTML || '');
         const hasCards = document.querySelectorAll('#tb_produto .bx_produto').length > 0;
-        const hasCounter = Boolean(document.querySelector('#tb_produto, .resultado_contador'));
-        const hasEmptyMessage = /nenhum|nao encontrado|não encontrado/i.test(bodyText);
+        const hasEmptyMessage = /nenhum|nao encontrado|n\u00e3o encontrado/i.test(bodyText);
         const stillLoading = /carregando/i.test(bodyText);
-        return hasCards || hasCounter || hasEmptyMessage || !stillLoading;
-    }, null, { timeout: 12000 }).catch(() => {});
+        const resultChanged = currentSignature !== initialSignature;
+        return !stillLoading && resultChanged && (hasCards || hasEmptyMessage || currentSignature.length > 0);
+    }, previousSignature, { timeout: 12000 }).catch(() => {});
 
     await page.waitForTimeout(1200);
 }
@@ -107,13 +109,14 @@ async function runBranchSearch(page, query, dismissTransientUi) {
     await input.fill(String(query || '')).catch(() => {});
     await page.waitForTimeout(200);
 
+    const previousSignature = await page.locator('#tb_produto').first().innerHTML().catch(() => '');
     const clicked = await clickVisibleSearchButton(page);
     if (!clicked) {
         await input.press('Enter').catch(() => {});
     }
 
     await page.waitForLoadState('domcontentloaded').catch(() => {});
-    await waitForSearchRender(page);
+    await waitForSearchRender(page, previousSignature);
     await dismissTransientUi();
     return true;
 }
@@ -311,6 +314,12 @@ module.exports = {
     ],
     searchSelector: SEARCH_SELECTORS,
     searchButtonSelector: SEARCH_BUTTON_SELECTORS,
+    performSearch: async ({ page, query, dismissTransientUi }) => {
+        const searched = await runBranchSearch(page, query, dismissTransientUi);
+        if (!searched) {
+            throw new Error('Campo de busca visivel nao encontrado na Sky Pecas.');
+        }
+    },
     fillLogin: async ({ page, supplier, fillVisibleLocator, dismissTransientUi }) => {
         await dismissTransientUi();
 

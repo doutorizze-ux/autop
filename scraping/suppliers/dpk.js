@@ -51,8 +51,8 @@ function readBootstrapStateFromChrome() {
 
     const tokenAccessMatch = rawText.match(/token\.access[\s\S]{0,80}(eyJ[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+)/i);
     const tokenRefreshMatch = rawText.match(/token\.refresh[\s\S]{0,80}(eyJ[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+)/i);
-    const cnpjMatch = rawText.match(/selected\.cnpj[^0-9]{0,40}([0-9]{14})/i);
-    const warehouseMatch = rawText.match(/warehouse[\s\S]{0,40}(\{"id":[\s\S]{0,300}?"priceId":[0-9]+\})/i);
+    const cnpjMatch = rawText.match(/(?:customer|selected)\.cnpj[^0-9]{0,80}([0-9]{14})/i);
+    const warehouseMatch = rawText.match(/(?:customer\.warehouse|selected\.warehouse|warehouse)[\s\S]{0,120}(\{"id"[^{}]{0,1000}"priceId":[0-9]+[^{}]{0,1000}\})/i);
     const tokenRefresh = tokenRefreshMatch?.[1] || '';
     const tokenAccess = tokenAccessMatch?.[1] || tokenRefresh;
     const warehouseJson = warehouseMatch?.[1] || '';
@@ -101,7 +101,10 @@ module.exports = {
         await page.addInitScript((payload) => {
             const applyState = () => {
                 try {
+                    localStorage.setItem('customer.cnpj', payload.cnpj);
                     localStorage.setItem('selected.cnpj', payload.cnpj);
+                    localStorage.setItem('customer.warehouse', JSON.stringify(payload.warehouse));
+                    localStorage.setItem('selected.warehouse', JSON.stringify(payload.warehouse));
                     localStorage.setItem('warehouse', JSON.stringify(payload.warehouse));
                     localStorage.setItem('token.access', payload.tokenAccess);
                     localStorage.setItem('token.refresh', payload.tokenRefresh);
@@ -117,13 +120,31 @@ module.exports = {
         await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
         await Promise.race([
             page.locator('.column-view-card, .column-view, h2.mat-h4 a[href*="#/produtos/"], div.cardsAlinhamento > mat-card.produto-card, mat-card.produto-card').first().waitFor({ state: 'visible', timeout: 12000 }).catch(() => null),
-            page.locator('.sem-resultados, text="Nao encontramos resultados", text="NÃ£o encontramos resultados", text="0 resultados"').first().waitFor({ state: 'visible', timeout: 12000 }).catch(() => null),
+            page.locator('.sem-resultados, text="Nao encontramos resultados", text="Nao encontramos resultados", text="0 resultados"').first().waitFor({ state: 'visible', timeout: 12000 }).catch(() => null),
         ]).catch(() => null);
-        await page.waitForTimeout(1500);
+        await page.waitForTimeout(500);
+        await page.waitForFunction(() => {
+            const cards = Array.from(document.querySelectorAll('.column-view-card, div.cardsAlinhamento > mat-card.produto-card, mat-card.produto-card'));
+            if (!cards.length) return false;
+
+            const hasPrice = cards.some((card) => /R\$\s*[0-9.,]+/.test(card.textContent || ''));
+            const hasUnavailable = cards.some((card) => /avise-me quando chegar|produto indispon[i\u00ed]vel/i.test(card.textContent || ''));
+            const hasVisibleSpinner = cards.some((card) => Array.from(card.querySelectorAll('mat-progress-spinner')).some((spinner) => {
+                const rect = spinner.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0;
+            }));
+
+            return hasPrice || (hasUnavailable && !hasVisibleSpinner);
+        }, null, { timeout: 20000 }).catch(() => {});
+        await page.waitForTimeout(1000);
     },
     extractItems: async ({ page }) => {
         return page.evaluate(() => {
             const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+            const normalizeKey = (value) => normalize(value)
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase();
             const findText = (root, selectors) => {
                 for (const selector of selectors) {
                     try {
@@ -165,24 +186,24 @@ module.exports = {
 
                 const stockText = findText(card, ['div.estoque', '.estoque']);
                 const brandNode = Array.from(card.querySelectorAll('div.informacoes p strong, p strong, strong')).find((node) => {
-                    const parentText = normalize(node.parentElement?.textContent || '');
-                    return /fabricante/i.test(parentText);
+                    const parentText = normalizeKey(node.parentElement?.textContent || '');
+                    return /fabricante/.test(parentText) && !/cod/.test(parentText);
                 });
                 const factoryCodeNode = Array.from(card.querySelectorAll('div.fab strong, div.informacoes strong, strong')).find((node) => {
-                    const parentText = normalize(node.parentElement?.textContent || '');
-                    return /c[oÃ³]d\.\s*de\s*f[aÃ¡]brica/i.test(parentText);
+                    const parentText = normalizeKey(node.parentElement?.textContent || '');
+                    return /cod\.?\s*(?:de|do)?\s*fabrica/.test(parentText);
                 });
 
                 const brand =
-                    normalize(brandNode?.textContent || '')
-                    || findMatch(text, [/Fabricante:\s*([^\n]+)/i]);
+                    findMatch(text, [/Fabricante:\s*(.+?)\s*C[o\u00f3]d/i])
+                    || normalize(brandNode?.textContent || '');
                 const code =
-                    normalize(factoryCodeNode?.textContent || '')
-                    || findMatch(text, [
-                        /C[oÃ³]d\.\s*de\s*F[aÃ¡]brica:\s*([A-Z0-9./_-]+)/i,
-                        /C[oÃ³]d\.\s*do\s*Produto:\s*([A-Z0-9./_-]+)/i,
+                    findMatch(text, [
+                        /C[o\u00f3]d\.?\s*(?:de|do)?\s*F[a\u00e1]brica:\s*([A-Z0-9./_-]+)/i,
+                        /C[o\u00f3]d\.?\s*do\s*Produto:\s*([A-Z0-9./_-]+)/i,
                         /SKU:\s*([A-Z0-9./_-]+)/i,
-                    ]);
+                    ])
+                    || normalize(factoryCodeNode?.textContent || '');
                 const stock = ((stockText.match(/([0-9]+)\s*un/i) || [])[1] || (text.match(/([0-9]+)\s*un\.?\s*no estoque/i) || [])[1] || '0').trim();
 
                 items.push({
