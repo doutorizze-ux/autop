@@ -8,8 +8,8 @@ import { applyAppearanceTheme } from '../utils/theme';
 
 export const Login = () => {
   const [themeLogo, setThemeLogo] = useState(() => localStorage.getItem('theme_logo') || '');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin@autopecas.com');
+  const [password, setPassword] = useState('123456');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();

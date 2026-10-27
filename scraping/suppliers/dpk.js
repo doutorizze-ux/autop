@@ -9,133 +9,81 @@ function normalizeAscii(value) {
         .replace(/[^\x20-\x7E]/g, ' ');
 }
 
-function collectLevelDbText(levelDbPath) {
-    if (!fs.existsSync(levelDbPath)) {
-        return '';
-    }
-
-    const files = fs.readdirSync(levelDbPath)
-        .filter((fileName) => /\.(ldb|log)$/i.test(fileName))
-        .sort();
-
-    let combined = '';
-
-    for (const fileName of files) {
-        const filePath = path.join(levelDbPath, fileName);
-        try {
-            combined += `\n${normalizeAscii(fs.readFileSync(filePath, 'utf8'))}`;
-        } catch (_) {
-            try {
-                combined += `\n${normalizeAscii(fs.readFileSync(filePath))}`;
-            } catch (_) {}
-        }
-    }
-
-    return combined;
-}
-
-function readBootstrapStateFromChrome() {
-    if (cachedBootstrapState !== null) {
-        return cachedBootstrapState;
-    }
-
-    const chromeRoot = process.env.LOCALAPPDATA
-        ? path.join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'User Data', 'Default', 'Local Storage', 'leveldb')
-        : '';
-
-    const rawText = collectLevelDbText(chromeRoot);
-    if (!rawText) {
-        cachedBootstrapState = null;
-        return null;
-    }
-
-    const tokenAccessMatch = rawText.match(/token\.access[\s\S]{0,80}(eyJ[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+)/i);
-    const tokenRefreshMatch = rawText.match(/token\.refresh[\s\S]{0,80}(eyJ[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+)/i);
-    const cnpjMatch = rawText.match(/(?:customer|selected)\.cnpj[^0-9]{0,80}([0-9]{14})/i);
-    const warehouseMatch = rawText.match(/(?:customer\.warehouse|selected\.warehouse|warehouse)[\s\S]{0,120}(\{"id"[^{}]{0,1000}"priceId":[0-9]+[^{}]{0,1000}\})/i);
-    const tokenRefresh = tokenRefreshMatch?.[1] || '';
-    const tokenAccess = tokenAccessMatch?.[1] || tokenRefresh;
-    const warehouseJson = warehouseMatch?.[1] || '';
-
-    if (!tokenAccess || !cnpjMatch || !warehouseJson) {
-        cachedBootstrapState = null;
-        return null;
-    }
-
-    try {
-        const warehouse = JSON.parse(warehouseJson);
-        cachedBootstrapState = {
-            cnpj: cnpjMatch[1],
-            warehouse,
-            tokenAccess,
-            tokenRefresh,
-        };
-        return cachedBootstrapState;
-    } catch (_) {
-        cachedBootstrapState = null;
-        return null;
-    }
-}
-
 module.exports = {
     key: 'dpk',
     matches: (supplierName) => supplierName.toLowerCase().includes('dpk'),
-    userSelector: ['input[type="email"]', 'input[formcontrolname="email"]', 'input[name="login"]'],
-    passSelector: ['input[type="password"]', 'input[formcontrolname="senha"]'],
-    loginSuccessSelector: ['a[href*="logout"]', '.user-info', 'button.btn-buscar', 'input[formcontrolname="descricao"]'],
+    userSelector: ['input[type="email"]', 'input[formcontrolname="userPrincipalName"]', 'input[formcontrolname="email"]', 'input[name="login"]'],
+    passSelector: ['input[type="password"]', 'input[formcontrolname="password"]', 'input[formcontrolname="senha"]'],
+    loginSuccessSelector: [
+        'text="Depósito"',
+        'text="Meus pedidos"',
+        'a[href*="logout"]',
+        'button:has-text("Sair")',
+        '.user-info'
+    ],
     searchSelector: [
+        'input[formcontrolname="searchTerm"]',
+        'input[placeholder*="código ou descrição" i]',
+        'input[placeholder*="codigo ou descricao" i]',
         'input[formcontrolname="descricao"]',
         'input[role="search"]',
-        'input[placeholder*="codigo ou descricao" i]',
-        'input[placeholder*="cÃ³digo ou descriÃ§Ã£o" i]',
     ],
-    searchButtonSelector: ['button.btn-buscar', '.btn-buscar'],
+    searchButtonSelector: ['button:has-text("Buscar")', 'button.btn-buscar', '.btn-buscar'],
     buildSearchUrl: (query) => `https://www.dpk.com.br/#/busca-produto?termo=${encodeURIComponent(query)}`,
-    preferProfileOverSessionData: true,
-    preparePage: async ({ page }) => {
-        const state = readBootstrapStateFromChrome();
-        if (!state) {
-            return;
+    preferProfileOverSessionData: false,
+    preparePage: async ({ page, sessionData }) => {
+        // If sessionData has localStorage tokens, inject them
+        if (sessionData && sessionData.localStorage) {
+            await page.addInitScript((ls) => {
+                for (const [k, v] of Object.entries(ls)) {
+                    try { localStorage.setItem(k, v); } catch (_) {}
+                }
+            }, sessionData.localStorage).catch(() => {});
         }
-
-        await page.addInitScript((payload) => {
-            const applyState = () => {
-                try {
-                    localStorage.setItem('customer.cnpj', payload.cnpj);
-                    localStorage.setItem('selected.cnpj', payload.cnpj);
-                    localStorage.setItem('customer.warehouse', JSON.stringify(payload.warehouse));
-                    localStorage.setItem('selected.warehouse', JSON.stringify(payload.warehouse));
-                    localStorage.setItem('warehouse', JSON.stringify(payload.warehouse));
-                    localStorage.setItem('token.access', payload.tokenAccess);
-                    localStorage.setItem('token.refresh', payload.tokenRefresh);
-                } catch (_) {}
-            };
-
-            applyState();
-            window.addEventListener('DOMContentLoaded', applyState, { once: true });
-        }, state);
+        try {
+            const cookieBtn = page.locator('button:has-text("ENTENDI E FECHAR"), button:has-text("Entendi e fechar")').first();
+            if (await cookieBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+                await cookieBtn.click().catch(() => {});
+            }
+        } catch (_) {}
     },
     performSearch: async ({ page, query }) => {
-        const targetUrl = `https://www.dpk.com.br/#/busca-produto?termo=${encodeURIComponent(query)}`;
-        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+        try {
+            const cookieBtn = page.locator('button:has-text("ENTENDI E FECHAR"), button:has-text("Entendi e fechar")').first();
+            if (await cookieBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+                await cookieBtn.click().catch(() => {});
+            }
+        } catch (_) {}
+
+        let searchInput = page.locator('input[formcontrolname="searchTerm"], input[placeholder*="código ou descrição" i], input[placeholder*="codigo ou descricao" i]').first();
+        let inputVisible = await searchInput.isVisible({ timeout: 2000 }).catch(() => false);
+
+        if (!inputVisible) {
+            await page.goto('https://www.dpk.com.br/#/', { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+            await page.waitForTimeout(1500);
+            try {
+                const cookieBtn = page.locator('button:has-text("ENTENDI E FECHAR"), button:has-text("Entendi e fechar")').first();
+                if (await cookieBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+                    await cookieBtn.click().catch(() => {});
+                }
+            } catch (_) {}
+            searchInput = page.locator('input[formcontrolname="searchTerm"], input[placeholder*="código ou descrição" i], input[placeholder*="codigo ou descricao" i]').first();
+        }
+
+        await searchInput.fill(query).catch(() => {});
+        const searchBtn = page.locator('button:has-text("Buscar"), button.btn-buscar').first();
+        if (await searchBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+            await searchBtn.click().catch(() => {});
+        } else {
+            await page.keyboard.press('Enter').catch(() => {});
+        }
+
+        await page.waitForTimeout(2500);
         await Promise.race([
-            page.locator('.column-view-card, .column-view, h2.mat-h4 a[href*="#/produtos/"], div.cardsAlinhamento > mat-card.produto-card, mat-card.produto-card').first().waitFor({ state: 'visible', timeout: 12000 }).catch(() => null),
-            page.locator('.sem-resultados, text="Nao encontramos resultados", text="Nao encontramos resultados", text="0 resultados"').first().waitFor({ state: 'visible', timeout: 12000 }).catch(() => null),
+            page.locator('.column-view-card, .column-view, h2.mat-h4 a[href*="#/produtos/"], div.cardsAlinhamento > mat-card.produto-card, mat-card.produto-card, text="produtos encontrados"').first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => null),
+            page.locator('.sem-resultados, text="Nao encontramos resultados", text="Não encontramos resultados", text="0 resultados"').first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => null),
         ]).catch(() => null);
-        await page.waitForTimeout(500);
-        await page.waitForFunction(() => {
-            const cards = Array.from(document.querySelectorAll('.column-view-card, div.cardsAlinhamento > mat-card.produto-card, mat-card.produto-card'));
-            if (!cards.length) return false;
 
-            const hasPrice = cards.some((card) => /R\$\s*[0-9.,]+/.test(card.textContent || ''));
-            const hasUnavailable = cards.some((card) => /avise-me quando chegar|produto indispon[i\u00ed]vel/i.test(card.textContent || ''));
-            const hasVisibleSpinner = cards.some((card) => Array.from(card.querySelectorAll('mat-progress-spinner')).some((spinner) => {
-                const rect = spinner.getBoundingClientRect();
-                return rect.width > 0 && rect.height > 0;
-            }));
-
-            return hasPrice || (hasUnavailable && !hasVisibleSpinner);
-        }, null, { timeout: 20000 }).catch(() => {});
         await page.waitForTimeout(1000);
     },
     extractItems: async ({ page }) => {
@@ -224,7 +172,7 @@ module.exports = {
     priceSelector: ['span.cor-preco', 'div.preco span.cor-preco', '.preco .cor-preco'],
     codeSelector: ['div.fab strong', 'div.informacoes strong'],
     waitForResultsOnly: true,
-    emptyResultSelector: ['text="Nao encontramos resultados"', 'text="NÃ£o encontramos resultados"', '.sem-resultados', 'text="0 resultados"'],
+    emptyResultSelector: ['text="Nao encontramos resultados"', 'text="Não encontramos resultados"', '.sem-resultados', 'text="0 resultados"'],
     navigateToAuthenticatedAfterLogin: true,
     preferStrategySelectors: true,
 };

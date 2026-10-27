@@ -882,6 +882,9 @@ class WhatsAppSession {
                 browser: Browsers.ubuntu('Chrome'),
                 syncFullHistory: false,
                 markOnlineOnConnect: false,
+                connectTimeoutMs: 60_000,
+                defaultQueryTimeoutMs: 60_000,
+                keepAliveIntervalMs: 25_000,
             });
             this.attachSocketErrorHandler(this.sock);
 

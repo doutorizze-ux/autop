@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoPecas Hub - Agente</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <div class="logo-box">
+      <div class="logo-icon">🚗</div>
+      <div>
+        <h3>AutoPecas Hub</h3>
+        <p>Agente de Busca do Lojista</p>
+      </div>
+    </div>
+    <div id="statusBadge" class="status-badge offline">
+      <span class="status-dot"></span>
+      <span id="statusText">Offline</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button id="tabConnection" class="tab-btn active">Conexao</button>
+    <button id="tabTest" class="tab-btn">Testar Busca</button>
+  </div>
+
+  <div id="viewConnection" class="view active">
+    <div class="card">
+      <label for="backendUrl">URL do Backend (Sistema)</label>
+      <input type="text" id="backendUrl" value="http://127.0.0.1:5000" placeholder="http://127.0.0.1:5000" />
+      <small>
+        Local: <code>http://127.0.0.1:5000</code>. No servidor, use o dominio do seu Coolify.
+        Use <code>127.0.0.1</code> em vez de <code>localhost</code> para evitar bloqueio de CORS.
+      </small>
+
+      <label for="agentToken">Token do Agente</label>
+      <input type="text" id="agentToken" value="autopecas-agent-token" placeholder="autopecas-agent-token" />
+
+      <div class="btn-group">
+        <button id="btnSave" class="btn btn-primary">Salvar e Conectar</button>
+        <button id="btnRefresh" class="btn btn-secondary">Atualizar Status</button>
+      </div>
+    </div>
+
+    <div class="stats-card">
+      <div class="stat-item">
+        <span class="stat-value" id="tasksCount">0</span>
+        <span class="stat-label">Buscas Concluidas</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value" id="failedCount">0</span>
+        <span class="stat-label">Falhas</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value" id="lastPing">--</span>
+        <span class="stat-label">Ultimo Contato</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <label>Ultimo Fornecedor Consultado</label>
+      <div><small id="lastSupplier">--</small></div>
+    </div>
+
+    <div id="errorBox" class="error-box" style="display: none;"></div>
+  </div>
+
+  <div id="viewTest" class="view">
+    <div class="card">
+      <label for="testSupplier">Fornecedor para Teste</label>
+      <select id="testSupplier"></select>
+
+      <label for="testQuery">Codigo da Peca ou Produto</label>
+      <input type="text" id="testQuery" placeholder="Ex: PH5949, Filtro, Pastilha..." />
+
+      <button id="btnRunTest" class="btn btn-primary">Testar Busca no Navegador</button>
+      <small>
+        O teste usa os mesmos adaptadores da cotacao real e roda na aba do portal.
+        Se o fornecedor pedir login, faca o Login Assistido antes.
+      </small>
+    </div>
+
+    <div id="testLoading" class="loading-spinner" style="display: none;">
+      <span>Buscando no portal pelo Chrome...</span>
+    </div>
+
+    <div id="testResults" class="test-results"></div>
+  </div>
+
+  <div class="footer">
+    <small>Versao 2.1 - busca na sessao real do Chrome, sem bloqueio de Cloudflare</small>
+  </div>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

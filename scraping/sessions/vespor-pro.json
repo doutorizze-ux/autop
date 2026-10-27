@@ -1,0 +1,59 @@
+{
+  "cookies": [
+    {
+      "name": "cf_clearance",
+      "value": "5BrhcuhX7Qpy.ttdkr9e.pbQsj78Wrfj8UzGp0HUF4c-1792499750-1.2.1.1-CsS1JOVh04cG9UCdcR9BcmrYM.EZxd_3fbDLDbiYueRPbcKtOuO68JeXNKnsjJ1dQ9EhOLkxr87HMkl99VHRHabrode2m3ImMUgMa4YVZYwtSW0Yljqo0l4Us1IiGy9YhMlLoZjE37NhFtUMzWHFICEI.Bxhw_Pdfs_ulBM1UTrGgu9aByS.3rXadiVfRcx8XlkZ4hEc4bOC6df24HnbmNcTyIAE4_MjEGcgjGO9Yt97hnZsGiXOzRuycF3c9D9l5HgsMN.A_0XDbH73IiCneyht677vQnXud3qaHYHqscx5eqxCeL4moq4Jv_T.fPWZ0w.2JMxx48lzlCc9dIgZ_7iGv.d.J0W.Sf9oOrxTsE8",
+      "domain": ".vesporpro.com.br",
+      "path": "/",
+      "expires": 1824035657.793533,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "authToken",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb2R1c3VhcmlvIjo0MjM3LCJsb2dpbiI6ImNlbnRyb2F1dG9tb3Rpdm8wMDU4QGhvdG1haWwuY29tIiwibm9tZSI6IkNFTlRSTyBBVVRPTU9USVZPIDAwNTggTFREQSAgTUUiLCJzdGF0dXMiOjEsImlhdCI6MTc5MjUyMzEyNywiZXhwIjoxNzkyNTI0MDI3fQ.gy2qXm7BT3ozr7ZKB75bj4-s092LS2tbyYBrGawJNRc",
+      "domain": "vesporpro.com.br",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "cf_clearance",
+      "value": "mTOBBItYl_WuPCv94ySDaGuqvej3vl2nFhQmODgfmrE-1792523134-1.2.1.1-oVig1SkuQ3hR8nmrY0xny5ePkr83A95H_wYdde8vBxKSYf1uwVo.4IyIvOrr3ryj2Dl_2sKHMA7uPRI9sosSofwxjUgR10QahL9sqeHCUMMYY95XIaqUj4XjGTULTe6d.K_JH2eK.DLd9nDAX6cinlQ4y.i2dCWAy2vHMb5npkcTGz.pRBSMKvfFgKK5u6wmL_nbI16cYmzt2sR_KR3T.tpEi3Nmx7j517rVNIooadP7hd3egKUo.oVO0.n2jYxJR88gmPljwkXiuEjeB2IYVmAlQEDBR3XavIQHphZRtd4v2x144ja1mTTbE5.T0ZnqiF6JpJbNbtN6veUp.EHpGA3I_Q2jwD1GUKG3FqdPWo0",
+      "domain": ".vesporpro.com.br",
+      "path": "/",
+      "expires": 1824059042.068446,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None",
+      "partitionKey": "https://vesporpro.com.br",
+      "_crHasCrossSiteAncestor": false
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://vesporpro.com.br",
+      "localStorage": [
+        {
+          "name": "dadosLogin",
+          "value": "{\"success\":true,\"usuario\":{\"codusuario\":4237,\"login\":\"centroautomotivo0058@hotmail.com\",\"nome\":\"CENTRO AUTOMOTIVO 0058 LTDA  ME\",\"codcliente\":\"014198\",\"codclienteloja\":\"01\",\"codempresa\":3698,\"razaosocial\":\"CENTRO AUTOMOTIVO 0058 LTDA  ME\",\"codfilial\":\"52\",\"codfilori\":\"52\",\"pvt\":false,\"status\":1,\"usuariocomercial\":2},\"empresas\":[{\"codempresa\":3698,\"codfilial\":\"52\",\"codfilori\":\"52\",\"codcliente\":\"014198\",\"codclienteloja\":\"01\",\"razaosocial\":\"CENTRO AUTOMOTIVO 0058 LTDA  ME\",\"pvt\":false,\"cep_filori\":null,\"codfilial_fav\":null}],\"token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb2R1c3VhcmlvIjo0MjM3LCJsb2dpbiI6ImNlbnRyb2F1dG9tb3Rpdm8wMDU4QGhvdG1haWwuY29tIiwibm9tZSI6IkNFTlRSTyBBVVRPTU9USVZPIDAwNTggTFREQSAgTUUiLCJzdGF0dXMiOjEsImlhdCI6MTc5MjUyMzEyNywiZXhwIjoxNzkyNTI0MDI3fQ.gy2qXm7BT3ozr7ZKB75bj4-s092LS2tbyYBrGawJNRc\"}"
+        },
+        {
+          "name": "authToken",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb2R1c3VhcmlvIjo0MjM3LCJsb2dpbiI6ImNlbnRyb2F1dG9tb3Rpdm8wMDU4QGhvdG1haWwuY29tIiwibm9tZSI6IkNFTlRSTyBBVVRPTU9USVZPIDAwNTggTFREQSAgTUUiLCJzdGF0dXMiOjEsImlhdCI6MTc5MjUyMzEyNywiZXhwIjoxNzkyNTI0MDI3fQ.gy2qXm7BT3ozr7ZKB75bj4-s092LS2tbyYBrGawJNRc"
+        },
+        {
+          "name": "estadoCarrinho",
+          "value": "{\"LScarrinhoAtivo\":\"67975\",\"LScodusuario\":4237,\"LScodcliente\":\"014198\",\"LScodempresaAtual\":3698,\"LSisDarkMode\":true}"
+        },
+        {
+          "name": "ultimoCarrinhoAtivo",
+          "value": "67975"
+        }
+      ]
+    }
+  ]
+}

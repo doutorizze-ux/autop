@@ -18,7 +18,7 @@ module.exports = {
         'input[id="pass"]',
         'input[type="password"]',
     ],
-    submitSelector: ['button:has-text("Entrar")', 'button:has-text("Login")', 'button.btn-success', 'button[type="submit"]'],
+    submitSelector: ['button.btn-parametro', 'button:has-text("Entrar"):visible', 'button:has-text("Login"):visible', 'button.btn-success'],
     loginSuccessSelector: [
         'body:has-text("Sair")',
         'body:has-text("OFICINA DO")',
@@ -48,6 +48,8 @@ module.exports = {
         await dismissTransientUi();
 
         const consentSelectors = [
+            'label:has-text("Confirmo")',
+            'text="Confirmo que li"',
             'input[name="cbAceitarTermos"]',
             '#mat-slide-toggle-1-input',
             'input[type="checkbox"]',
@@ -55,12 +57,10 @@ module.exports = {
 
         for (const selector of consentSelectors) {
             const locator = page.locator(selector).first();
-            if (await locator.isVisible().catch(() => false)) {
-                const checked = await locator.isChecked().catch(() => null);
-                if (checked === false) {
-                    await locator.click({ force: true }).catch(() => {});
-                    await page.waitForTimeout(300);
-                }
+            if (await locator.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await locator.click({ force: true }).catch(() => {});
+                await page.waitForTimeout(400);
+                break;
             }
         }
 
@@ -77,6 +77,12 @@ module.exports = {
 
         if (await passField.isVisible().catch(() => false)) {
             await fillVisibleLocator(passField, supplier.password || '');
+        }
+    },
+    afterLogin: async ({ page }) => {
+        await page.waitForTimeout(1500);
+        if (page.url().includes('login-otp') || (await page.locator('text=Receber código de acesso, text=código de acesso').first().isVisible().catch(() => false))) {
+            throw new Error('Comdip exige código OTP (2FA). Realize o login no portal para atualizar a sessão.');
         }
     },
     extractItems: async ({ page }) => {

@@ -8,14 +8,15 @@ services:
     volumes:
       - ./backend/sessions:/app/backend/sessions
       - ./backend/data:/app/backend/data
+      - ./scraping/sessions:/app/scraping/sessions
     environment:
       - DATABASE_URL=file:///app/backend/data/dev.db
       - JWT_SECRET=${JWT_SECRET:-secret}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - LOCAL_AGENT_TOKEN=${LOCAL_AGENT_TOKEN}
-      - LOCAL_AGENT_MODE=${LOCAL_AGENT_MODE:-enabled}
-      - LOCAL_AGENT_REQUIRE_FOR_SEARCH=${LOCAL_AGENT_REQUIRE_FOR_SEARCH:-true}
-      - LOCAL_AGENT_FALLBACK_ON_FAILURE=${LOCAL_AGENT_FALLBACK_ON_FAILURE:-false}
+      - LOCAL_AGENT_MODE=${LOCAL_AGENT_MODE:-disabled}
+      - LOCAL_AGENT_REQUIRE_FOR_SEARCH=${LOCAL_AGENT_REQUIRE_FOR_SEARCH:-false}
+      - LOCAL_AGENT_FALLBACK_ON_FAILURE=${LOCAL_AGENT_FALLBACK_ON_FAILURE:-true}
       - LOCAL_AGENT_TASK_TIMEOUT_MS=${LOCAL_AGENT_TASK_TIMEOUT_MS:-180000}
       - LOCAL_AGENT_SESSION_TASK_TIMEOUT_MS=${LOCAL_AGENT_SESSION_TASK_TIMEOUT_MS:-120000}
       - LOCAL_AGENT_HEARTBEAT_TIMEOUT_MS=${LOCAL_AGENT_HEARTBEAT_TIMEOUT_MS:-45000}

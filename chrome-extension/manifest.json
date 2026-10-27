@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "AutoPecas Hub - Agente de Busca",
+  "version": "2.1.0",
+  "description": "Agente de cotacao para autopecas. Executa as buscas nos portais de fornecedores dentro do proprio Chrome do lojista, reutilizando a sessao ja autenticada, sem bloqueios de Cloudflare.",
+  "minimum_chrome_version": "111",
+  "permissions": [
+    "storage",
+    "alarms",
+    "cookies",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.rmp.com.br/*",
+        "*://*.dpk.com.br/*",
+        "*://*.autonorte.com.br/*",
+        "*://*.comdip.com.br/*",
+        "*://*.skypecas.com.br/*",
+        "*://*.kaizenautopecas.com.br/*",
+        "*://*.furacao.com.br/*"
+      ],
+      "js": ["page-hook.js"],
+      "run_at": "document_start",
+      "all_frames": false,
+      "world": "MAIN"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AutoPecas Hub - Agente de Busca"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

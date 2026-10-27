@@ -1,0 +1,55 @@
+{
+  "cookies": [
+    {
+      "name": "token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIyNjA4LCJ1c2VyQ09EQ0xJIjoiMjc1NTciLCJ1c2VyQ0RMb2phIjoiMDgiLCJ1c2VyQ0RfTklWRUwiOjEsInVzZXJOYW1lIjoiT0ZJQ0lOQSBETyBKT0FPWklOSE8gRSBSRU5BTiIsInVzZXJTSVRVQUNBTyI6IkEiLCJ1c2VyQ1BGIjpudWxsLCJ1c2VyQ05QSiI6bnVsbCwidXNlclRFTEVGT05FIjoiNTU2Mjk4MjA3Njc5NyIsInVzZXJMSU1fQ1JFRCI6NzUwMCwidXNlclNvY2lvcyI6W3siQ0RfQ0xJRU5URSI6IjI3NTU3IiwiTlJfQ1BGIjoiNjk0NjE5MjkxNTMiLCJOT19TT0NJTyI6IlJFTkFOIEtVUkFNT1RPIERJQVMifV0sImlhdCI6MTc5MjAxNTc0MywiZXhwIjoxNzkyMDMzNzQzfQ.bIDqkGFxkwwJugxo2WVbFef_LvUDZ10l8vIvirJ4MJk",
+      "domain": "portal.kaizenautopecas.com.br",
+      "path": "/",
+      "expires": 1792033743,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIyNjA4LCJ1c2VyQ09EQ0xJIjoiMjc1NTciLCJ1c2VyQ0RMb2phIjoiMDgiLCJ1c2VyQ0RfTklWRUwiOjEsInVzZXJOYW1lIjoiT0ZJQ0lOQSBETyBKT0FPWklOSE8gRSBSRU5BTiIsInVzZXJTSVRVQUNBTyI6IkEiLCJ1c2VyQ1BGIjpudWxsLCJ1c2VyQ05QSiI6bnVsbCwidXNlclRFTEVGT05FIjoiNTU2Mjk4MjA3Njc5NyIsInVzZXJMSU1fQ1JFRCI6NzUwMCwidXNlclNvY2lvcyI6W3siQ0RfQ0xJRU5URSI6IjI3NTU3IiwiTlJfQ1BGIjoiNjk0NjE5MjkxNTMiLCJOT19TT0NJTyI6IlJFTkFOIEtVUkFNT1RPIERJQVMifV0sImlhdCI6MTc5MjAxNTc0MywiZXhwIjoxNzkyMDMzNzQzfQ.bIDqkGFxkwwJugxo2WVbFef_LvUDZ10l8vIvirJ4MJk",
+      "domain": ".kaizenautopecas.com.br",
+      "path": "/",
+      "expires": 1792033743,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://portal.kaizenautopecas.com.br",
+      "localStorage": [
+        {
+          "name": "clientSituation_27557",
+          "value": "{\"userDEVENDO\":false,\"userBLOQUEADO\":false,\"userCADASTRO_VENCIDO\":false,\"userTIPO_PENDENCIA\":null,\"userVALOR_DEBITO_CLIENTE\":0,\"userVALOR_DEBITO_GRUPO\":0,\"userVALOR_TOTAL_DEBITO\":0,\"userDATA_VALIDADE_CADASTRO\":null,\"userSITUACAO_CLIENTE\":null,\"userSITUACAO_GRUPO_CLIENTE\":null,\"timestamp\":1792015663835}"
+        },
+        {
+          "name": "token",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIyNjA4LCJ1c2VyQ09EQ0xJIjoiMjc1NTciLCJ1c2VyQ0RMb2phIjoiMDgiLCJ1c2VyQ0RfTklWRUwiOjEsInVzZXJOYW1lIjoiT0ZJQ0lOQSBETyBKT0FPWklOSE8gRSBSRU5BTiIsInVzZXJTSVRVQUNBTyI6IkEiLCJ1c2VyQ1BGIjpudWxsLCJ1c2VyQ05QSiI6bnVsbCwidXNlclRFTEVGT05FIjoiNTU2Mjk4MjA3Njc5NyIsInVzZXJMSU1fQ1JFRCI6NzUwMCwidXNlclNvY2lvcyI6W3siQ0RfQ0xJRU5URSI6IjI3NTU3IiwiTlJfQ1BGIjoiNjk0NjE5MjkxNTMiLCJOT19TT0NJTyI6IlJFTkFOIEtVUkFNT1RPIERJQVMifV0sImlhdCI6MTc5MjAxNTc0MywiZXhwIjoxNzkyMDMzNzQzfQ.bIDqkGFxkwwJugxo2WVbFef_LvUDZ10l8vIvirJ4MJk"
+        },
+        {
+          "name": "uf",
+          "value": "GO"
+        },
+        {
+          "name": "termsResponse",
+          "value": "P"
+        },
+        {
+          "name": "userPublicProfile",
+          "value": "{\"userCASHBACK\":\"P\",\"userTMCASHBACK\":\"N\",\"userCASHBACKENABLED\":false,\"userCOBRAFT\":\"S\",\"userCDCIDADE\":\"7054\",\"userFORMAPGTO\":[{\"formaCodigo\":\"F\",\"formaDescricao\":\"FATURADO\"},{\"formaCodigo\":\"B\",\"formaDescricao\":\"DEBITO\"},{\"formaCodigo\":\"C\",\"formaDescricao\":\"CREDITO\"},{\"formaCodigo\":\"X\",\"formaDescricao\":\"PIX CONTA\"}],\"userCIDADE\":\"GOIANIA - CENTRO OESTE CIMA\",\"userFANTASIA\":\"OFICINA DO JOAOZINHO E RENAN\",\"userRAZAOSOCIAL\":\"CENTRO AUTOMOTIVO 0058 LTDA\",\"userCPFCNPJ\":\"33299637000180\",\"userPRAZORESTRITO\":\"N\",\"userTIPOSFRETE\":[{\"freteCodigo\":\"E\",\"freteDescricao\":\"Entrega\",\"freteGratis\":0,\"freteValor\":0},{\"freteCodigo\":\"M\",\"freteDescricao\":\"Moto\",\"freteGratis\":0,\"freteValor\":14}],\"userROTACARRO\":true,\"userSlaMoto\":\"00:20:00\",\"userHorariosMoto\":{\"id\":130,\"codcid\":\"7054\",\"horarioSemana\":\"16:30\",\"horarioSabado\":\"11:30\"},\"userUf\":\"GO\",\"userCdLojaDef\":\"08\",\"userRotaDF\":false,\"userActive\":true}"
+        },
+        {
+          "name": "searchtype",
+          "value": "Cod"
+        }
+      ]
+    }
+  ]
+}

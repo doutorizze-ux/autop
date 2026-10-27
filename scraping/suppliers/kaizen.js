@@ -112,7 +112,7 @@ module.exports = {
                 }
             };
 
-            const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token') || (document.cookie.match(/(?:^|;\s*)token=([^;]+)/) || [])[1] || '';
             if (!token) {
                 setMarker({ error: 'missing-token' });
                 return { error: 'missing-token' };
@@ -202,12 +202,31 @@ module.exports = {
 
             return results.map((item) => {
                 const backendData = item?.backendData || {};
-                const saleValue = (Number(backendData.valorPrecoVenda || 0) || 0) + (Number(backendData.valorSTVenda || 0) || 0);
-                const promoValue = (Number(backendData.valorPrecoPromocao || 0) || 0) + (Number(backendData.valorSTPromocao || 0) || 0);
-                const promoMinimum = Number(backendData.minimoPromocao || 0) || 0;
+                const precoProduto = Array.isArray(backendData.precosProduto) && backendData.precosProduto.length > 0
+                    ? backendData.precosProduto[0]
+                    : null;
+
+                const basePrice = Number(
+                    precoProduto?.valorPrecoVenda
+                    ?? backendData?.valorPrecoVenda
+                    ?? item?.menorValorSimilar?.menorValor?.[0]?.menorValorPrecoVenda
+                    ?? 0
+                ) || 0;
+
+                const stPrice = Number(precoProduto?.valorSTVenda ?? backendData?.valorSTVenda ?? 0) || 0;
+                const saleValue = basePrice + stPrice;
+
+                const promoPrice = Number(precoProduto?.valorPrecoPromocao ?? backendData?.valorPrecoPromocao ?? 0) || 0;
+                const promoSt = Number(precoProduto?.valorSTPromocao ?? backendData?.valorSTPromocao ?? 0) || 0;
+                const promoValue = promoPrice + promoSt;
+                const promoMinimum = Number(precoProduto?.minimoPromocao ?? backendData?.minimoPromocao ?? 0) || 0;
+
                 const hasImmediatePromo = promoValue > 0 && promoValue < saleValue && promoMinimum <= 1;
                 const priceValue = hasImmediatePromo ? promoValue : saleValue;
-                const stocks = Array.isArray(backendData.estoquesLoja) ? backendData.estoquesLoja : [];
+
+                const stocks = Array.isArray(precoProduto?.estoquesLoja)
+                    ? precoProduto.estoquesLoja
+                    : (Array.isArray(backendData.estoquesLoja) ? backendData.estoquesLoja : []);
 
                 return {
                     nome: item?.descricao || item?.nome || '',
@@ -216,7 +235,7 @@ module.exports = {
                     marca: item?.marca || '',
                     aplicacao: item?.observa || item?.observa2 || '',
                     estoque: totalStock(stocks),
-                    estoqueTexto: backendData.mensagemStock || '',
+                    estoqueTexto: precoProduto?.mensagemStock || backendData?.mensagemStock || '',
                     link: item?.cd_prod ? `https://portal.kaizenautopecas.com.br/produto/${encodeURIComponent(item.cd_prod)}` : PORTAL_HOME_URL,
                 };
             });

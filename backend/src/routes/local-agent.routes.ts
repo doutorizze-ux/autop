@@ -15,6 +15,6 @@ router.post('/tasks/next', pullNextAgentTask);
 router.post('/tasks/:taskId/complete', completeAgentTask);
 router.post('/tasks/:taskId/fail', failAgentTask);
 
-router.get('/status', authMiddleware, getLocalAgentStatus);
+router.get('/status', getLocalAgentStatus);
 
 export default router;

@@ -1,0 +1,117 @@
+{
+  "cookies": [
+    {
+      "name": "session",
+      "value": "58k4bbahr9shll5u44evt12dnh",
+      "domain": "cliente.skypecas.com.br",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "MR",
+      "value": "0",
+      "domain": ".c.bing.com",
+      "path": "/",
+      "expires": 1792615784.075034,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "MUID",
+      "value": "217B6674562B6D2021CE7186579A6CD5",
+      "domain": ".bing.com",
+      "path": "/",
+      "expires": 1825706984.07497,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "SRM_B",
+      "value": "217B6674562B6D2021CE7186579A6CD5",
+      "domain": ".c.bing.com",
+      "path": "/",
+      "expires": 1825706984.075082,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "SM",
+      "value": "C",
+      "domain": ".c.clarity.ms",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "MR",
+      "value": "0",
+      "domain": ".c.clarity.ms",
+      "path": "/",
+      "expires": 1792615783.214413,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "MUID",
+      "value": "217B6674562B6D2021CE7186579A6CD5",
+      "domain": ".clarity.ms",
+      "path": "/",
+      "expires": 1825706983.214362,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "CLID",
+      "value": "2a32e7a4b43744489a9717fce5bbe415.20261014.20271015",
+      "domain": "www.clarity.ms",
+      "path": "/",
+      "expires": 1823562429.865362,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "cf_clearance",
+      "value": "EYIITVnIJdyQTnH8MLgdvc4KzXtXgt4HCLrJSr4VF7w-1792026510-1.2.1.1-4WZyBhbUQoADotdu2.Rd8Qzn43rtv45fIQH09DGFdnuR3Z_ZZ0K8DvAcKdcgtD8YORyWSQae5iAXb2iOyo3NAsRc0IZOXVITRqKFCux4ekYzGj0.Muwklm246CtFX7MW8_3ziWylq0b6pLSfrUb8BEdLJv8OAtzws2o0WlAtw4zPYUZMopQg_H.o1BvT_UZCPNeuxwe9UFBmZDsmfT9p3MT.0Ijkr9j70XtVtmOI7JCsiF9kXAux3HF5HVV8XxnotlXdXTrXzGYR0rfmYKGZf6NsC403XgVo_SNaSax4oOLDb4aZhyspj85LKmhyx6h2rHrhxATOePqOGltULtENwkiWbAGIMvCFfrqaPLA1VXE",
+      "domain": ".skypecas.com.br",
+      "path": "/",
+      "expires": 1823562430.129245,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "_clck",
+      "value": "1y159rr%5E2%5Egab%5E0%5E2478",
+      "domain": ".skypecas.com.br",
+      "path": "/",
+      "expires": 1823562430,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "cf_clearance",
+      "value": "eh1Agc7CcKczYp75XY_h027.i5ZEm7Z.agWO0igCKZY-1792523034-1.2.1.1-t9nEyHOuN.MWCXhER_q65FcojLgEHrMgenfMDAjYyjIhi5nSG4a_RDsQmCVIYyBoP8KY9e2KBgkcifejTjCUPD4xzrur.WAMz1rv.tWRN5dCbWUYZcin8G43PagbB0KTC3o37pKMLWXZNNT2obkRndF1hUA3gGA2JyCpSYjSmJOGPndKDUYeeFs38uHkFnr7ODEHvvu_b2Bz92j4rxBFrdk2XbFgQKTS8rQ7c1DWpgzUjdGz4Un54_.l6ObaanMCZ7u0C09JNHgUrEVyM3bmKJGMxZ5OL8BF3siaFvi7iWbSemlcLqWQK0.Cqt9f9fFEAWfZNIYijtN6dD_6FyewjdqX8NVt.npRFt0ePQquKRY",
+      "domain": ".skypecas.com.br",
+      "path": "/",
+      "expires": 1824058941.545313,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None",
+      "partitionKey": "https://skypecas.com.br",
+      "_crHasCrossSiteAncestor": false
+    }
+  ],
+  "origins": []
+}

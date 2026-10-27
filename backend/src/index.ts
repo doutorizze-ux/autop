@@ -56,6 +56,17 @@ io.on('connection', (socket) => {
     }
 });
 
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(204);
+    }
+    next();
+});
+
 app.use(cors());
 app.use(express.json({ limit: '12mb' }));
 app.use('/media/whatsapp', express.static(path.join(__dirname, '../data/whatsapp-media'), {
@@ -94,6 +105,9 @@ if (fs.existsSync(frontendDistPath)) {
     });
 }
 
-server.listen(PORT, () => {
+import { bootstrapSuppliers } from './services/supplier-bootstrap';
+
+server.listen(PORT, async () => {
     console.log(`Server is running on port ${PORT}`);
+    await bootstrapSuppliers();
 });

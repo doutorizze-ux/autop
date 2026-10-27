@@ -1,0 +1,10 @@
+{
+  "name": "autopecas-hub-extension",
+  "private": true,
+  "version": "2.1.0",
+  "description": "Agente de busca da extensao. Este package.json existe apenas para ferramentas (Node/testes) tratarem os .js como ES modules. O Chrome ignora este arquivo ao carregar a extensao sem compactacao.",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/run-tests.mjs"
+  }
+}

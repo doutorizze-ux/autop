@@ -464,12 +464,26 @@ async function waitForLoginCompletion(page, previousUrl, loginUrl, supplier, str
 }
 
 function buildSearchQueries(productName) {
-    const baseQuery = safeString(productName);
+    const baseQuery = safeString(productName).trim();
     const queries = [baseQuery];
-    const wildcardQuery = baseQuery.replace(/\s+/g, '%');
-    if (wildcardQuery && wildcardQuery !== baseQuery && !queries.includes(wildcardQuery)) {
-        queries.push(wildcardQuery);
+
+    // Clean alphanumeric code (e.g. "PSL-560" -> "PSL560")
+    const cleanNoPunct = baseQuery.replace(/[-_.\s]/g, '');
+    if (cleanNoPunct && cleanNoPunct !== baseQuery && !queries.includes(cleanNoPunct)) {
+        queries.push(cleanNoPunct);
     }
+
+    // Letters + Numbers with hyphen (e.g. "PSL560" -> "PSL-560")
+    const withHyphen = baseQuery.replace(/^([A-Za-z]{2,5})(\d{2,6})$/, '$1-$2');
+    if (withHyphen !== baseQuery && !queries.includes(withHyphen)) {
+        queries.push(withHyphen);
+    }
+
+    const withSpace = baseQuery.replace(/^([A-Za-z]{2,5})(\d{2,6})$/, '$1 $2');
+    if (withSpace !== baseQuery && !queries.includes(withSpace)) {
+        queries.push(withSpace);
+    }
+
     const tokens = baseQuery
         .split(/\s+/)
         .map((token) => token.trim())
@@ -481,12 +495,16 @@ function buildSearchQueries(productName) {
         }
     }
 
-    return queries.slice(0, 2);
+    return queries.slice(0, 3);
 }
 
 async function clickFirstVisible(page, selectors, options = {}) {
     const target = await waitForAnyVisible(page, selectors, options.timeout);
-    await target.locator.click({ force: true });
+    try {
+        await target.locator.click({ force: true });
+    } catch (_) {
+        await target.locator.dispatchEvent('click').catch(() => {});
+    }
     return target.selector;
 }
 
@@ -516,8 +534,17 @@ async function dismissTransientUi(page) {
         'button:has-text("Agora nao")',
         'button:has-text("Permitir Cookies")',
         'button:has-text("Fechar")',
+        'button:has-text("OK")',
+        'button:has-text("Ok")',
+        'button:has-text("Entendi")',
+        'button:has-text("ENTENDI E FECHAR")',
+        'button.swal2-confirm',
+        'button.swal2-close',
+        '.swal2-actions button',
         '[aria-label="Close"]',
         '.modal button.close',
+        '.close-modal',
+        'button.close',
     ];
 
     for (const selector of dismissSelectors) {
@@ -893,7 +920,8 @@ function resolveAuthenticatedUrl(strategy = {}, supplier, loginUrl) {
         return safeString(strategy.authenticatedUrl(supplier, loginUrl));
     }
 
-    return safeString(strategy.authenticatedUrl || supplier.searchUrl || supplier.url || loginUrl);
+    const cleanSearchUrl = supplier.searchUrl && !supplier.searchUrl.includes('{query}') ? supplier.searchUrl : null;
+    return safeString(strategy.authenticatedUrl || cleanSearchUrl || supplier.url || loginUrl);
 }
 
 async function ensureLoggedIn(page, loginUrl, supplier, strategy = {}, options = {}) {
@@ -930,7 +958,8 @@ async function ensureLoggedIn(page, loginUrl, supplier, strategy = {}, options =
 }
 
 async function resetForNextSearch(page, supplier) {
-    const targetUrl = supplier.searchUrl || supplier.url;
+    const cleanSearchUrl = supplier.searchUrl && !supplier.searchUrl.includes('{query}') ? supplier.searchUrl : null;
+    const targetUrl = cleanSearchUrl || supplier.url;
     await page.goto(targetUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
     await page.waitForTimeout(1500);
 }
@@ -1234,13 +1263,14 @@ async function scrapeProductUnsafe(supplier, productName, options = {}) {
         let didLoginThisRun = false;
 
         if (supplier.needsLogin) {
+            const explicitSuccess = buildSelectorList(strategy.loginSuccessSelector);
+            const checkSelectors = explicitSuccess.length
+                ? explicitSuccess
+                : buildSelectorList(supplier.searchBarSelector, strategy.searchSelector);
+
             const alreadyLogged = await isAnySelectorVisible(
                 page,
-                buildSelectorList(
-                    strategy.loginSuccessSelector,
-                    supplier.searchBarSelector,
-                    strategy.searchSelector
-                ),
+                checkSelectors,
                 3000
             );
 
@@ -1310,7 +1340,10 @@ async function scrapeProductUnsafe(supplier, productName, options = {}) {
             console.error(`[DEBUG] Buscando por: ${query}`);
 
             if (supplier.searchUrl) {
-                await page.goto(supplier.searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+                const targetSearchUrl = supplier.searchUrl.includes('{query}')
+                    ? supplier.searchUrl.replace(/\{query\}/gi, encodeURIComponent(query))
+                    : supplier.searchUrl;
+                await page.goto(targetSearchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
                 await page.waitForTimeout(200);
             }
 
@@ -1364,7 +1397,40 @@ async function scrapeProductUnsafe(supplier, productName, options = {}) {
             finalItems = buildBrowserPayload(items, supplier);
 
             if (!finalItems.length && hasVisibleItemsWithoutPrice(items)) {
-                throw new Error('Produto localizado, mas o portal nao exibiu preco. Sessao/login pode estar invalido para este fornecedor.');
+                if (supplier.needsLogin && (supplier.password || supplier.loginCredential) && !didLoginThisRun) {
+                    console.error(`[WARN] ${supplier.name} exibiu itens sem preco. Sessao expirou! Tentando re-login automatico imediato...`);
+                    await page.goto(loginUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+                    await page.waitForTimeout(1500);
+                    await dismissTransientUi(page);
+                    const preLoginUrl = page.url();
+                    await runGenericLogin(page, supplier, strategy);
+                    didLoginThisRun = true;
+                    await waitForLoginCompletion(page, preLoginUrl, loginUrl, supplier, strategy, {
+                        ignoreSessionDataHint: true,
+                    });
+                    await persistSession(context, supplier, true);
+
+                    if (strategy.performSearch) {
+                        await strategy.performSearch({ page, query, supplier, dismissTransientUi });
+                    } else if (supplier.searchUrl) {
+                        const targetSearchUrl = supplier.searchUrl.includes('{query}')
+                            ? supplier.searchUrl.replace(/{query}/gi, encodeURIComponent(query))
+                            : `${supplier.searchUrl.replace(/\/+$/, '')}/${encodeURIComponent(query)}`;
+                        await page.goto(targetSearchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+                    }
+
+                    if (strategy.extractItems) {
+                        items = await strategy.extractItems({ page, supplier, query, dismissTransientUi });
+                    }
+                    if (!items.length) {
+                        items = await extractWithConfiguredSelectors(page, supplier, strategy);
+                    }
+                    finalItems = buildBrowserPayload(items, supplier);
+                }
+
+                if (!finalItems.length) {
+                    throw new Error('Produto localizado, mas o portal nao exibiu preco. Sessao/login pode estar invalido para este fornecedor.');
+                }
             }
 
             if (finalItems.length > 0) {

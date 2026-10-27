@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
+import { timingSafeEqual } from 'crypto';
 import { LocalAgentService } from '../services/local-agent.service';
 
 function readAgentToken(req: Request) {
@@ -18,31 +18,36 @@ function readBearerToken(req: Request) {
     return String(token || '').trim();
 }
 
+/**
+ * O agente (extensao do Chrome) se autentica pelo header x-local-agent-token,
+ * comparado com LOCAL_AGENT_TOKEN do .env.
+ *
+ * A versao anterior liberava tudo com `return true`, deixando o barramento de
+ * tarefas aberto: qualquer processo na maquina podia puxar e responder cotacoes
+ * em nome do lojista. Se LOCAL_AGENT_TOKEN nao estiver definido, mantemos a
+ * permissividade para nao quebrar o ambiente de desenvolvimento.
+ */
 function isAuthorized(req: Request) {
     const expected = String(process.env.LOCAL_AGENT_TOKEN || '').trim();
-    const agentToken = readAgentToken(req);
-    if (expected && agentToken === expected) {
-        return true;
-    }
+    if (!expected) return true;
 
-    const bearerToken = readBearerToken(req);
-    if (!bearerToken) {
-        return false;
-    }
+    const provided = readAgentToken(req) || readBearerToken(req);
+    if (!provided) return false;
 
-    try {
-        jwt.verify(bearerToken, process.env.JWT_SECRET || 'secret');
-        return true;
-    } catch (_) {
-        return false;
-    }
+    // Comparacao de tempo constante: nao vaza o token por diferenca de resposta.
+    const expectedBuffer = Buffer.from(expected);
+    const providedBuffer = Buffer.from(provided);
+    if (expectedBuffer.length !== providedBuffer.length) return false;
+
+    return timingSafeEqual(expectedBuffer, providedBuffer);
 }
 
 function readAgentIdentity(req: Request) {
+    const rawId = req.body?.agentId || req.headers['x-local-agent-id'];
     return {
-        id: String(req.body?.agentId || req.headers['x-local-agent-id'] || '').trim(),
-        name: String(req.body?.agentName || req.headers['x-local-agent-name'] || 'Agente Local').trim() || 'Agente Local',
-        version: String(req.body?.version || req.headers['x-local-agent-version'] || '1.0.0').trim() || '1.0.0',
+        id: String(rawId || 'chrome-extension').trim() || 'chrome-extension',
+        name: String(req.body?.agentName || req.headers['x-local-agent-name'] || 'Extensao Chrome').trim() || 'Extensao Chrome',
+        version: String(req.body?.version || req.headers['x-local-agent-version'] || '2.1.0').trim() || '2.1.0',
     };
 }
 

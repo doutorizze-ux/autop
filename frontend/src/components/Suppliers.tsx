@@ -98,6 +98,7 @@ export const Suppliers = () => {
     const [assistText, setAssistText] = useState('');
     const [isAssistLoading, setIsAssistLoading] = useState(false);
     const [assistAction, setAssistAction] = useState<'idle' | 'saving' | 'closing' | 'typing' | 'pressing'>('idle');
+    const [directTokenInput, setDirectTokenInput] = useState('');
     const [formData, setFormData] = useState(defaultSupplierForm);
 
     const [activeSection, setActiveSection] = useState<'basic' | 'whatsapp' | 'login' | 'mapping'>('basic');
@@ -275,6 +276,24 @@ export const Suppliers = () => {
             setAssistSnapshot(null);
             setAssistText('');
             alert('Sessão salva. Agora teste a busca deste fornecedor.');
+        } finally {
+            setAssistAction('idle');
+        }
+    };
+
+    const saveDirectToken = async () => {
+        if (!assistSupplier || !directTokenInput.trim()) return;
+        try {
+            setAssistAction('saving');
+            await axios.post(`${apiBase}/api/suppliers/${assistSupplier.id}/session/save`, { token: directTokenInput.trim() }, { timeout: 45000 });
+            await fetchSuppliers();
+            setAssistSupplier(null);
+            setAssistSnapshot(null);
+            setAssistText('');
+            setDirectTokenInput('');
+            alert('Sessão da Kaizen salva com sucesso! O fornecedor agora está 100% ativo.');
+        } catch (err: any) {
+            alert('Erro ao salvar token: ' + (err.response?.data?.message || err.message));
         } finally {
             setAssistAction('idle');
         }
@@ -595,6 +614,34 @@ export const Suppliers = () => {
                                 {assistSnapshot.title ? `${assistSnapshot.title} - ` : ''}{assistSnapshot.url}
                             </p>
                         )}
+
+                        <div style={{ marginTop: '1rem', padding: '0.85rem 1rem', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px dashed var(--border-color)' }}>
+                            <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem', color: 'var(--text-main)' }}>
+                                💡 Se o Cloudflare bloquear a janela acima (erro vermelho):
+                            </div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.6rem' }}>
+                                Abra o portal <a href="https://portal.kaizenautopecas.com.br" target="_blank" rel="noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'underline' }}>portal.kaizenautopecas.com.br</a> em outra aba do seu navegador, faça login normalmente, abra o Console (F12) e cole o comando: <code style={{ color: '#10B981', background: 'rgba(0,0,0,0.3)', padding: '2px 5px', borderRadius: '4px' }}>copy(localStorage.token)</code>. Depois, cole o token abaixo e clique em Salvar:
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <input
+                                    type="text"
+                                    className="form-input"
+                                    placeholder="Cole aqui o token da Kaizen (ex: eyJhbGci...)"
+                                    value={directTokenInput}
+                                    onChange={(e) => setDirectTokenInput(e.target.value)}
+                                    style={{ flex: 1, fontSize: '0.85rem' }}
+                                />
+                                <button
+                                    type="button"
+                                    className="btn-primary"
+                                    onClick={saveDirectToken}
+                                    disabled={!directTokenInput.trim() || assistAction !== 'idle'}
+                                    style={{ padding: '0.5rem 1rem', whiteSpace: 'nowrap' }}
+                                >
+                                    Salvar Token
+                                </button>
+                            </div>
+                        </div>
 
                         <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
                             <button type="button" className="btn-primary" onClick={saveAssistSession} disabled={assistAction !== 'idle'} style={{ flex: 2 }}>{assistAction === 'saving' ? 'Salvando...' : 'Salvar Sessão'}</button>

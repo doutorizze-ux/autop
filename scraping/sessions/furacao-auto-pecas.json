@@ -1,0 +1,109 @@
+{
+  "cookies": [
+    {
+      "name": "SERVERID",
+      "value": "sav-externo-19c-1",
+      "domain": "vendas.furacao.com.br",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_ga",
+      "value": "GA1.1.2128623817.1792004630",
+      "domain": ".furacao.com.br",
+      "path": "/",
+      "expires": 1826564630.326016,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "SAVFW_LIC",
+      "value": "NFNLUkFIMkY4QUtYUUk0UVJVSEpLRjExUUxMN1dJWDM7MTI1NDM1",
+      "domain": "vendas.furacao.com.br",
+      "path": "/",
+      "expires": 1826564722.531057,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "XSRF-TOKEN",
+      "value": "eyJpdiI6IjZjYUw2M3p5ejc5bFwvNllGbjdZbXN3PT0iLCJ2YWx1ZSI6ImZpaUIxZWdCTmNiT1JNOUZSSHRHbzh1RXBRSUVnTjJnc1hybmlWVStFSmdjbG55UVA5andLeXVcLys5cmNMYng1UFNGOUNjelc4TVhpanZcLzZhNTRXNkE9PSIsIm1hYyI6ImVjOGEyNTMzNDRjZGFkMTIwNDM3ZWIzYmVhYjY1MmEwYmRkY2NlN2M4NjlhNmUyMTM4NTQxMzU4NDExMTIxNzAifQ%3D%3D",
+      "domain": "vendas.furacao.com.br",
+      "path": "/",
+      "expires": 1792530146.154275,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "laravel_session",
+      "value": "eyJpdiI6IlY4OVVCXC9QS3RuaWdhM0xLN1FlNUdRPT0iLCJ2YWx1ZSI6IjIxRVNvVU5vRnJaQWphZFBXUTJOeUQxQzFSamd6cjdCVHFkMmNOWHB5eWl6TDlMT2FCS05wZzk0cm1KT25oakJqWmFtdTJMXC9RSFhpaDJUN0Vwem9sdz09IiwibWFjIjoiYzlmMTEzYTUxMGE2MjRjNjFkYTc1ZTcyZWI1YWRhYjc3YTgxNWYwYzY1ZGNkMGFhM2QwMTYwY2I4ZDllN2YyOSJ9",
+      "domain": "vendas.furacao.com.br",
+      "path": "/",
+      "expires": 1792530146.154393,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "FWIDEXT",
+      "value": "8-f75d91b8975ee622743a1134b70984edbb730747e63c89167863419-0",
+      "domain": "vendas.furacao.com.br",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_ga_9T6V4TXRPR",
+      "value": "GS2.1.s1792522941$o6$g1$t1792522947$j54$l0$h0",
+      "domain": ".furacao.com.br",
+      "path": "/",
+      "expires": 1827082947.426977,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://vendas.furacao.com.br",
+      "localStorage": [
+        {
+          "name": "cacheprodutos",
+          "value": ""
+        },
+        {
+          "name": "cart_perfil",
+          "value": "Cliente"
+        },
+        {
+          "name": "cart_vend_codigo",
+          "value": "125435"
+        },
+        {
+          "name": "cacheclientes",
+          "value": ""
+        },
+        {
+          "name": "cart_vend_id",
+          "value": "125435"
+        },
+        {
+          "name": "cart_cli_cnpj",
+          "value": "33299637000180"
+        },
+        {
+          "name": "filtro_perfil",
+          "value": "c"
+        }
+      ]
+    }
+  ]
+}

@@ -5,10 +5,11 @@ const kaizen = require('./kaizen');
 const rmp = require('./rmp');
 const sav = require('./sav');
 const sky = require('./sky');
-
 const dpk = require('./dpk');
+const rolemar = require('./rolemar');
+const vespor = require('./vespor');
 
-const suppliers = [comdip, kki, kaizen, rmp, sav, sky, dpk];
+const suppliers = [comdip, kki, kaizen, rmp, sav, sky, dpk, rolemar, vespor];
 
 function buildSupplierHaystack(supplierInput) {
     if (typeof supplierInput === 'string') {

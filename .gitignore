@@ -3,9 +3,10 @@ dist
 .env
 *.db
 *.db-journal
-sessions
+/sessions
 backend/sessions
 backend/data/whatsapp-sessions/
+backend/data/whatsapp-identity-map.json
 scraping/node_modules
 frontend/dist
 .DS_Store
@@ -19,6 +20,7 @@ local-agent/cloud-agent.config.json
 dist-agent/
 backups/
 local-agent/browser-profiles/
+backend/data/browser-profiles/
 scraping/tmp-*/
 scraping/tmp-*.png
 scraping/tmp-*.jpg

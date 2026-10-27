@@ -4,7 +4,14 @@ import { PrismaClient } from '@prisma/client';
 import { LocalAgentService } from './local-agent.service';
 
 const prisma = new PrismaClient();
-const { chromium } = require(path.resolve(__dirname, '../../../scraping/node_modules/playwright'));
+let chromium: any = null;
+try {
+    chromium = require(path.resolve(__dirname, '../../../scraping/node_modules/playwright')).chromium;
+} catch (_) {
+    try {
+        chromium = require('playwright').chromium;
+    } catch (_) {}
+}
 
 type AssistSession = {
     supplierId: string;
@@ -91,6 +98,7 @@ export class SupplierSessionService {
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
+                '--disable-blink-features=AutomationControlled',
                 '--window-size=1280,900',
             ],
         };
@@ -105,14 +113,6 @@ export class SupplierSessionService {
             console.error(`[Login Assistido] Chrome real indisponivel, usando Chromium: ${error instanceof Error ? error.message : error}`);
             context = await chromium.launchPersistentContext(profilePath, browserOptions);
         }
-
-        await context.addInitScript(() => {
-            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-            Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en-US', 'en'] });
-            Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
-            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-            (window as any).chrome = (window as any).chrome || { runtime: {} };
-        });
 
         const page = context.pages()[0] || await context.newPage();
         await page.goto(supplier.loginUrl || supplier.url, { waitUntil: 'domcontentloaded' }).catch(() => {});
@@ -204,8 +204,70 @@ export class SupplierSessionService {
         return this.snapshot(supplierId);
     }
 
-    static async save(supplierId: string) {
+    static async save(supplierId: string, directPayload?: { token?: string; uf?: string }) {
         const supplier = await getSupplierOrFail(supplierId);
+
+        if (directPayload?.token) {
+            let token = directPayload.token.trim();
+            let uf = (directPayload.uf || 'GO').trim();
+            const lsItems: Array<{ name: string; value: string }> = [];
+
+            if (token.startsWith('{')) {
+                try {
+                    const parsed = JSON.parse(token);
+                    const flattened = { ...(parsed.local || {}), ...(parsed.session || {}), ...parsed };
+                    delete flattened.local;
+                    delete flattened.session;
+
+                    for (const [key, val] of Object.entries(flattened)) {
+                        const strVal = typeof val === 'object' ? JSON.stringify(val) : String(val);
+                        lsItems.push({ name: key, value: strVal });
+                        if (/token/i.test(key) && strVal.length > 20) {
+                            token = strVal.replace(/^["']|["']$/g, '');
+                        }
+                        if (/uf/i.test(key) && strVal.length <= 4) {
+                            uf = strVal.replace(/^["']|["']$/g, '');
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            if (!lsItems.some(i => i.name === 'token')) {
+                lsItems.push({ name: 'token', value: token });
+            }
+            if (!lsItems.some(i => i.name === 'uf')) {
+                lsItems.push({ name: 'uf', value: uf });
+            }
+
+            const storageState = {
+                cookies: [],
+                origins: [
+                    {
+                        origin: 'https://portal.kaizenautopecas.com.br',
+                        localStorage: lsItems,
+                    },
+                ],
+            };
+
+            await (prisma.supplier as any).update({
+                where: { id: supplierId },
+                data: { sessionData: JSON.stringify(storageState) },
+            });
+
+            const fileName = String(supplier.name || '')
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-|-$/g, '');
+            const sessionDir = path.resolve(__dirname, '../../../scraping/sessions');
+            ensureDirectory(sessionDir);
+            const sessionPath = path.join(sessionDir, `${fileName}.json`);
+            fs.writeFileSync(sessionPath, JSON.stringify(storageState, null, 2));
+            console.log(`[Login Assistido] Token direto salvo em: ${sessionPath}`);
+
+            return { saved: true, direct: true };
+        }
 
         if (shouldUseLocalAgent()) {
             const result = await LocalAgentService.dispatchSessionTask(supplier, 'save') as any;
@@ -240,6 +302,22 @@ export class SupplierSessionService {
                 sessionData: JSON.stringify(storageState),
             },
         });
+
+        try {
+            const fileName = String(supplier.name || '')
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-|-$/g, '');
+            const sessionDir = path.resolve(__dirname, '../../../scraping/sessions');
+            ensureDirectory(sessionDir);
+            const sessionPath = path.join(sessionDir, `${fileName}.json`);
+            fs.writeFileSync(sessionPath, JSON.stringify(storageState, null, 2));
+            console.log(`[Login Assistido] Sessao salva em arquivo: ${sessionPath}`);
+        } catch (e: any) {
+            console.warn(`[Login Assistido] Nao foi possivel salvar arquivo de sessao: ${e.message}`);
+        }
 
         return {
             saved: true,

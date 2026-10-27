@@ -96,68 +96,49 @@ async function waitForSearchRender(page, previousSignature = '') {
 }
 
 async function runBranchSearch(page, query, dismissTransientUi) {
-    const input = await pickSearchInput(page, query);
-    if (!input) {
-        return false;
+    console.log('[SKY DEBUG] runBranchSearch called with query:', query, 'url:', page.url());
+    if (typeof dismissTransientUi === 'function') {
+        await dismissTransientUi().catch(() => {});
     }
+    try {
+        const swalBtn = page.locator('button.swal2-confirm, button.swal2-close, .swal2-actions button, button:has-text("OK")').first();
+        if (await swalBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+            await swalBtn.click({ force: true }).catch(() => {});
+            await page.waitForTimeout(500);
+        }
+    } catch (_) {}
 
-    await page.locator('#inpPeca').fill('').catch(() => {});
-    await page.locator('#inpCodigo').fill('').catch(() => {});
-    await page.locator('#inpCodigoBarras').fill('').catch(() => {});
-    await input.click({ force: true }).catch(() => {});
-    await input.fill('').catch(() => {});
-    await input.fill(String(query || '')).catch(() => {});
-    await page.waitForTimeout(200);
+    const inp = page.locator('#inpCodigo').first();
+    await inp.click({ force: true });
+    await inp.fill(String(query || ''));
+    await inp.dispatchEvent('input');
+    await inp.dispatchEvent('change');
 
-    const previousSignature = await page.locator('#tb_produto').first().innerHTML().catch(() => '');
-    const clicked = await clickVisibleSearchButton(page);
-    if (!clicked) {
-        await input.press('Enter').catch(() => {});
+    const btn = page.locator('#btnBuscar').first();
+    console.log('[SKY DEBUG] Clicking #btnBuscar...');
+    await btn.click({ force: true });
+    await page.waitForTimeout(4000);
+    const count = await page.locator('.bx_produto').count();
+    console.log('[SKY DEBUG] .bx_produto found right after click:', count);
+
+    if (typeof dismissTransientUi === 'function') {
+        await dismissTransientUi().catch(() => {});
     }
-
-    await page.waitForLoadState('domcontentloaded').catch(() => {});
-    await waitForSearchRender(page, previousSignature);
-    await dismissTransientUi();
     return true;
 }
 
 async function resolveBranchSelect(page) {
-    const selects = page.locator('select');
-    const count = await selects.count().catch(() => 0);
-    let fallback = null;
-
-    for (let index = 0; index < count; index += 1) {
-        const current = selects.nth(index);
-        const isVisible = await current.isVisible().catch(() => false);
-        const isEnabled = await current.isEnabled().catch(() => true);
-        if (!isVisible || !isEnabled) continue;
-
-        const options = await current.locator('option').evaluateAll((nodes) =>
+    const branchLocator = page.locator('#bx_loja select, select#inpLoja, .fright select').first();
+    if (await branchLocator.isVisible().catch(() => false)) {
+        const options = await branchLocator.locator('option').evaluateAll((nodes) =>
             nodes.map((node) => ({
                 value: String(node.value || '').trim(),
                 label: String(node.textContent || '').trim(),
             }))
         ).catch(() => []);
-
-        const meaningfulOptions = options.filter((option) => option.label);
-        if (meaningfulOptions.length < 2) continue;
-
-        const joined = normalizeLabel(meaningfulOptions.map((option) => option.label).join(' '));
-        if (
-            joined.includes('embrepar')
-            || joined.includes('fortlub')
-            || joined.includes('aeroviario')
-            || joined.includes('perimetral')
-        ) {
-            return { locator: current, options: meaningfulOptions };
-        }
-
-        if (!fallback) {
-            fallback = { locator: current, options: meaningfulOptions };
-        }
+        return { locator: branchLocator, options: options.filter(o => o.label) };
     }
-
-    return fallback;
+    return null;
 }
 
 async function getSelectedBranchLabel(selectLocator) {
@@ -177,34 +158,41 @@ async function extractBranchResults(page, providerName) {
         };
 
         const parseProductCards = () => {
-            const cards = Array.from(document.querySelectorAll('#tb_produto .bx_produto, .bx_produto, .produto, .resultado, .item, tr, li'));
+            const cards = Array.from(document.querySelectorAll('#tb_produto .bx_produto, .bx_produto'));
+            console.log('[SKY BROWSER] parseProductCards found:', cards.length);
             return cards.map((card) => {
-                const text = clean(card.textContent);
-                const price =
-                    clean(card.querySelector('.valor .preco_final')?.textContent || '')
-                    || clean(card.querySelector('.preco_final')?.textContent || '')
-                    || clean(card.querySelector('.preco')?.textContent || '')
-                    || firstPrice(text);
-                if (!price) return null;
+                const rawText = String(card.innerText || '');
+                const cleanText = clean(rawText);
+                const priceMatch = rawText.match(/R\$\s*([0-9.,]+)/);
+                if (!priceMatch) return null;
+                const price = clean(priceMatch[1]);
 
-                const fabCode = clean(card.querySelector('.codfab strong')?.textContent || '');
-                const nnCode = clean(card.querySelector('.codnn')?.textContent || '').replace(/^N\/N:\s*/i, '');
-                const auxCode = clean(card.querySelector('.codaux')?.textContent || '').replace(/^C[oó]d\.\s*Aux:\s*/i, '');
-                const stockText = clean(card.querySelector('.lkDisp')?.textContent || '');
-                const stock = ((stockText.match(/([0-9]+)/) || [])[1] || '0').trim();
-                const product = clean(card.querySelector('.nome')?.textContent || '');
-                const brand = clean(card.querySelector('.fornecedor')?.textContent || '');
-                const linkNode = card.querySelector('.lkAplicacao[href], .lkSimilar[href], a[href]');
+                const fabCodeMatch = rawText.match(/C[oó]d\.?\s*F[aá]b\.?:\s*([^\s\t\n]+)/i);
+                const nnCodeMatch = rawText.match(/N\/N:\s*([^\s\t\n]+)/i);
+                const auxCodeMatch = rawText.match(/C[oó]d\.?\s*Aux:\s*([^\s\t\n]+)/i);
+                const codigo = (fabCodeMatch ? fabCodeMatch[1] : (nnCodeMatch ? nnCodeMatch[1] : '')) || '';
+
+                const stockMatch = rawText.match(/Estoque:\s*([0-9]+)/i);
+                const isIndisponivel = /indisponivel|fora de estoque/i.test(rawText);
+                const stock = stockMatch ? stockMatch[1] : (isIndisponivel ? '0' : '1');
+
+                const lines = rawText.split('\n').map(clean).filter(Boolean);
+                const titleLine = lines[0] || '';
+                const parts = titleLine.split('-');
+                const nome = clean(parts[0] || titleLine);
+                const marca = clean(parts[1] || (lines.find(l => /MANN|WEGA|FRAM|TECFIL/i.test(l)) || ''));
+
+                const linkNode = card.querySelector('a[href]');
 
                 return {
                     provider: providerName,
-                    nome: product || text,
+                    nome: `${nome} ${marca} ${codigo}`.trim(),
                     preco: `R$ ${price}`,
-                    codigo: fabCode || nnCode || auxCode,
-                    marca: brand,
+                    codigo,
+                    marca,
                     estoque: stock,
-                    estoqueTexto: stockText,
-                    link: linkNode ? linkNode.href : '',
+                    estoqueTexto: `Estoque: ${stock}`,
+                    link: linkNode ? linkNode.href : window.location.href,
                 };
             }).filter(Boolean);
         };
@@ -365,8 +353,15 @@ module.exports = {
             ...branchSelect.options.filter((option) => option.label !== selectedLabel),
         ];
 
+        const providerName = supplier.name;
+        const currentItems = await extractBranchResults(page, providerName);
+        if (currentItems.length > 0) {
+            return currentItems;
+        }
+
         const results = [];
         const visited = new Set();
+        if (selectedLabel) visited.add(selectedLabel);
 
         for (const option of orderedOptions) {
             const optionValue = String(option.value || '').trim();
@@ -375,8 +370,7 @@ module.exports = {
             if (!optionLabel || visited.has(dedupeKey)) continue;
             visited.add(dedupeKey);
 
-            const isCurrent = optionLabel === selectedLabel || optionValue === '';
-            if (!isCurrent && optionValue) {
+            if (optionValue) {
                 await branchSelect.locator.selectOption(optionValue).catch(() => {});
                 await page.waitForLoadState('domcontentloaded').catch(() => {});
                 await page.waitForTimeout(1500);
@@ -384,8 +378,8 @@ module.exports = {
                 await runBranchSearch(page, query, dismissTransientUi);
             }
 
-            const providerName = `${supplier.name} - ${optionLabel}`;
-            const branchItems = await extractBranchResults(page, providerName);
+            const branchProviderName = supplier.name;
+            const branchItems = await extractBranchResults(page, branchProviderName);
             results.push(...branchItems);
         }
 

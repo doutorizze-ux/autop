@@ -5,7 +5,12 @@ import { LocalAgentService } from './local-agent.service';
 
 const prisma = new PrismaClient();
 const enginePath = path.resolve(__dirname, '../../../scraping/engine.js');
-const { scrapeProduct } = require(enginePath);
+let scrapeProduct: any = null;
+try {
+    scrapeProduct = require(enginePath).scrapeProduct;
+} catch (e: any) {
+    console.warn(`[Scraper Warning] Engine legado nao inicializado: ${e.message}`);
+}
 
 type CacheEntry = {
     expiresAt: number;
@@ -335,6 +340,39 @@ function buildNoOfferResult(supplier: any, productName: string, message = 'Forne
     };
 }
 
+/**
+ * Unifica os apelidos de campo que cada motor de busca usa.
+ * O motor legado (Playwright) emite { product, price, code, brand, stock }.
+ * Um agente externo pode emitir { nome, preco, codigo, marca, estoque }.
+ * Sem esta normalizacao, `item.price` fica undefined, `parsePriceNumber` devolve
+ * 0 e o item e DESCARTADO EM SILENCIO mais abaixo.
+ */
+function normalizeIncomingItem(item: any) {
+    if (!item || typeof item !== 'object') return null;
+
+    const pick = (...values: unknown[]) => {
+        for (const value of values) {
+            if (value !== undefined && value !== null && String(value).trim() !== '') {
+                return value;
+            }
+        }
+        return undefined;
+    };
+
+    return {
+        ...item,
+        provider: pick(item.provider, item.fornecedor),
+        product: pick(item.product, item.nome, item.name, item.descricao, item.descricaoProduto, item.titulo),
+        price: pick(item.price, item.preco, item.precoVenda, item.valor, item.precoFinal),
+        code: pick(item.code, item.codigo, item.codigoFabricante, item.codigoProduto, item.sku, item.referencia),
+        brand: pick(item.brand, item.marca, item.fabricante),
+        application: pick(item.application, item.aplicacao),
+        stock: pick(item.stock, item.estoque, item.saldoEstoque, item.saldo, item.quantidade),
+        stockText: pick(item.stockText, item.estoqueTexto, item.estoque, item.disponibilidade),
+        available: item.available !== undefined ? item.available : item.disponivel,
+    };
+}
+
 function normalizeSupplierResults(data: any, supplier: any, productName: string) {
     if (!Array.isArray(data) || data.length === 0) {
         return [];
@@ -342,7 +380,10 @@ function normalizeSupplierResults(data: any, supplier: any, productName: string)
 
     const bestByIdentity = new Map<string, any>();
 
-    for (const item of data) {
+    for (const rawItem of data) {
+        const item = normalizeIncomingItem(rawItem);
+        if (!item) continue;
+
         const provider = String(item?.provider || supplier.name || '').trim() || supplier.name;
         const numericPrice = parsePriceNumber(item?.price);
         if (!numericPrice) continue;
@@ -387,6 +428,9 @@ function normalizeSupplierResults(data: any, supplier: any, productName: string)
 
 export async function runSupplierSearch(supplier: any, productName: string) {
     try {
+        if (!scrapeProduct) {
+            return buildNoOfferResult(supplier, productName, 'Engine legado nao disponivel. Utilize a Extensao do Chrome ou Agente Local.');
+        }
         const data = await scrapeProduct(supplier, productName);
 
         if (Array.isArray(data) && data.length > 0) {
@@ -506,7 +550,7 @@ async function executeSupplierSearch(supplier: any, productName: string) {
     const localAgentAvailable = localAgentMode && LocalAgentService.hasActiveAgentsForSupplier(supplier);
     // Estes portais bloqueiam ou esvaziam a pagina quando acessados pelo IP do VPS.
     const storeNetworkRequired = requiresStoreNetworkForSearch(supplier);
-    const shouldUseLocalAgent = localAgentMode && (requireLocalAgent || storeNetworkRequired);
+    const shouldUseLocalAgent = localAgentMode && localAgentAvailable && (requireLocalAgent || storeNetworkRequired);
 
     if (shouldUseLocalAgent) {
         try {
@@ -517,7 +561,7 @@ async function executeSupplierSearch(supplier: any, productName: string) {
             return await LocalAgentService.dispatchSearchTask(supplier, productName);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            if (requireLocalAgent || storeNetworkRequired || !shouldFallbackOnLocalAgentFailure()) {
+            if (requireLocalAgent || !shouldFallbackOnLocalAgentFailure()) {
                 throw error;
             }
 

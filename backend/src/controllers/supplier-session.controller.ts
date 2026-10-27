@@ -35,7 +35,7 @@ export const pressSupplierSession = async (req: Request, res: Response) => {
 };
 
 export const saveSupplierSession = async (req: Request, res: Response) => {
-    await handle(res, () => SupplierSessionService.save(req.params.id));
+    await handle(res, () => SupplierSessionService.save(req.params.id, req.body));
 };
 
 export const stopSupplierSession = async (req: Request, res: Response) => {

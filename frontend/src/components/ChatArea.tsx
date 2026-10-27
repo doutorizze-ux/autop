@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import { ArrowLeft, Bot, Download, ExternalLink, FileText, Image as ImageIcon, Loader2, Mic, Paperclip, Search, Send, User, Users2, Video } from 'lucide-react';
+import { ArrowLeft, Bot, Check, Copy, Download, ExternalLink, FileText, Image as ImageIcon, Loader2, Mic, Paperclip, Phone, PhoneCall, Search, Send, User, Users2, Video } from 'lucide-react';
 import { API_URL } from '../services/api';
 import { socket } from '../services/socket';
 
@@ -353,10 +353,34 @@ export const ChatArea = ({ channelKey = defaultWhatsappChannelKey, channelLabel 
   const [showClientListOnMobile, setShowClientListOnMobile] = useState(() => window.innerWidth <= 768);
   const [isSuggestingAi, setIsSuggestingAi] = useState(false);
   const [handoffAlert, setHandoffAlert] = useState('');
+  const [showCallMenu, setShowCallMenu] = useState(false);
+  const [copiedPhone, setCopiedPhone] = useState(false);
+  const callMenuRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const hasAttemptedPhoneSyncRef = useRef(false);
   const selectedClientStorageKey =
     channelKey === defaultWhatsappChannelKey ? 'selected_attendance_client_id' : `selected_attendance_client_id:${channelKey}`;
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (callMenuRef.current && !callMenuRef.current.contains(event.target as Node)) {
+        setShowCallMenu(false);
+      }
+    };
+    if (showCallMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showCallMenu]);
+
+  const handleCopyPhone = (digits: string) => {
+    if (!digits) return;
+    navigator.clipboard.writeText(digits);
+    setCopiedPhone(true);
+    setTimeout(() => setCopiedPhone(false), 2000);
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -686,6 +710,72 @@ export const ChatArea = ({ channelKey = defaultWhatsappChannelKey, channelLabel 
             </div>
 
             <div className="chat-header-actions">
+              {(() => {
+                const rawDigits = String(selectedClient.phone || selectedClient.whatsappJid || '').replace(/\D/g, '');
+                if (!rawDigits || rawDigits.length < 8) return null;
+                const waDigits = rawDigits.startsWith('55') ? rawDigits : `55${rawDigits}`;
+
+                return (
+                  <div className="call-action-wrapper" ref={callMenuRef}>
+                    <button
+                      type="button"
+                      className="call-header-btn"
+                      onClick={() => setShowCallMenu((prev) => !prev)}
+                      title="Fazer ligação ou chamar cliente"
+                    >
+                      <PhoneCall size={16} />
+                      <span>Ligar</span>
+                    </button>
+
+                    {showCallMenu && (
+                      <div className="call-dropdown-menu">
+                        <div className="call-dropdown-header">
+                          <span className="call-dropdown-title">Opções de Ligação</span>
+                          <span className="call-dropdown-subtitle">{formatDigitsAsPhone(rawDigits)}</span>
+                        </div>
+                        <a
+                          href={`tel:${rawDigits}`}
+                          className="call-dropdown-item"
+                          onClick={() => setShowCallMenu(false)}
+                        >
+                          <div className="call-item-icon phone-icon"><Phone size={16} /></div>
+                          <div className="call-item-content">
+                            <strong>Ligar via Telefone / Celular</strong>
+                            <small>Abre discador, celular ou softphone</small>
+                          </div>
+                        </a>
+                        <a
+                          href={`https://web.whatsapp.com/send?phone=${waDigits}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="call-dropdown-item"
+                          onClick={() => setShowCallMenu(false)}
+                        >
+                          <div className="call-item-icon wa-icon"><Video size={16} /></div>
+                          <div className="call-item-content">
+                            <strong>Abrir no WhatsApp Web / Desktop</strong>
+                            <small>Para chamada de voz/vídeo no WhatsApp</small>
+                          </div>
+                        </a>
+                        <button
+                          type="button"
+                          className="call-dropdown-item btn-item"
+                          onClick={() => handleCopyPhone(rawDigits)}
+                        >
+                          <div className="call-item-icon copy-icon">
+                            {copiedPhone ? <Check size={16} color="#10b981" /> : <Copy size={16} />}
+                          </div>
+                          <div className="call-item-content">
+                            <strong>{copiedPhone ? 'Copiado para área de transferência!' : 'Copiar número'}</strong>
+                            <small>{rawDigits}</small>
+                          </div>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {!isQuoteCategoryLead(selectedClient) && !getResolvedClientPhone(selectedClient) && (
                 <button type="button" className="fix-phone-btn" onClick={handleFixSelectedPhone}>
                   Corrigir telefone
@@ -984,6 +1074,130 @@ export const ChatArea = ({ channelKey = defaultWhatsappChannelKey, channelLabel 
           display: flex;
           align-items: center;
           gap: 0.55rem;
+        }
+
+        .call-action-wrapper {
+          position: relative;
+        }
+
+        .call-header-btn {
+          min-height: 38px;
+          padding: 0 0.95rem;
+          border: 1px solid #10b981;
+          border-radius: 12px;
+          color: #fff;
+          background: #10b981;
+          cursor: pointer;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.45rem;
+          box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+          transition: background 0.15s ease, transform 0.1s ease;
+        }
+
+        .call-header-btn:hover {
+          background: #059669;
+          transform: translateY(-1px);
+        }
+
+        .call-dropdown-menu {
+          position: absolute;
+          top: calc(100% + 8px);
+          right: 0;
+          width: 290px;
+          background: #fff;
+          border: 1px solid var(--border-color);
+          border-radius: 14px;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+          z-index: 1000;
+          padding: 0.5rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.35rem;
+        }
+
+        .call-dropdown-header {
+          padding: 0.5rem 0.6rem 0.4rem;
+          border-bottom: 1px solid var(--border-color);
+          display: flex;
+          flex-direction: column;
+        }
+
+        .call-dropdown-title {
+          font-size: 0.75rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          color: var(--text-muted);
+        }
+
+        .call-dropdown-subtitle {
+          font-size: 0.95rem;
+          font-weight: 800;
+          color: var(--text-main);
+        }
+
+        .call-dropdown-item {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 0.65rem 0.6rem;
+          border-radius: 10px;
+          text-decoration: none;
+          color: var(--text-main);
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          width: 100%;
+          text-align: left;
+          transition: background 0.15s;
+        }
+
+        .call-dropdown-item:hover {
+          background: #f1f5f9;
+        }
+
+        .call-item-icon {
+          width: 34px;
+          height: 34px;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .phone-icon {
+          background: #e0f2fe;
+          color: #0284c7;
+        }
+
+        .wa-icon {
+          background: #dcfce7;
+          color: #16a34a;
+        }
+
+        .copy-icon {
+          background: #f3f4f6;
+          color: #4b5563;
+        }
+
+        .call-item-content {
+          display: flex;
+          flex-direction: column;
+          min-width: 0;
+        }
+
+        .call-item-content strong {
+          font-size: 0.85rem;
+          line-height: 1.2;
+        }
+
+        .call-item-content small {
+          font-size: 0.72rem;
+          color: var(--text-muted);
+          line-height: 1.2;
         }
 
         .fix-phone-btn,

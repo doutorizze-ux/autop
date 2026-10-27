@@ -113,7 +113,25 @@ function inferQuoteCategory(query: string, description?: string) {
 
 function findCatalogMatchForQuoteItem(query: string) {
     try {
-        return CatalogService.search(query, 5)[0] || null;
+        const cleanQuery = String(query || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (!cleanQuery) return null;
+
+        const matches = CatalogService.search(query, 5);
+        if (!matches || !matches.length) return null;
+
+        const exactCode = matches.find((m) => {
+            const cleanCode = String(m.code || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+            return cleanCode === cleanQuery;
+        });
+        if (exactCode) return exactCode;
+
+        const exactDesc = matches.find((m) => {
+            const cleanDesc = String(m.description || '').trim().toLowerCase();
+            return cleanDesc.includes(query.toLowerCase().trim());
+        });
+        if (exactDesc && query.trim().length >= 5) return exactDesc;
+
+        return null;
     } catch {
         return null;
     }

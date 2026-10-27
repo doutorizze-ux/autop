@@ -304,6 +304,12 @@ const sortSupplierResults = (results: QuoteResult[], query: string) => {
     });
 };
 
+const matchesProviderName = (entryProvider: string, targetProvider: string): boolean => {
+    if (!entryProvider || !targetProvider) return false;
+    const a = entryProvider.trim().toLowerCase();
+    const b = targetProvider.trim().toLowerCase();
+    return a === b || a.startsWith(`${b} -`) || b.startsWith(`${a} -`) || a.includes(b) || b.includes(a);
+};
 const getProviderResultsForVariant = (
     results: QuoteResult[],
     provider: string,
@@ -313,7 +319,7 @@ const getProviderResultsForVariant = (
     sortSupplierResults(
         results.filter(
             (entry) =>
-                entry.provider === provider &&
+                matchesProviderName(entry.provider, provider) &&
                 !entry.error &&
                 (!!entry.whatsappStatus || !selectedVariantKey || buildVariantGroupKey(entry) === selectedVariantKey)
         ),
@@ -752,7 +758,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
             const providerNames = Array.from(new Set([...suppliers, ...sourceResults.map((entry) => entry.provider).filter(Boolean)]));
 
             providerNames.forEach((provider) => {
-                const providerResults = sourceResults.filter((entry) => entry.provider === provider && !entry.error && !entry.whatsappStatus);
+                const providerResults = sourceResults.filter((entry) => matchesProviderName(entry.provider, provider) && !entry.error && !entry.whatsappStatus);
                 groupsByQuerySupplier[buildVariantSelectionKey(item.query, provider)] = buildVariantGroups(providerResults, item.query);
             });
         });

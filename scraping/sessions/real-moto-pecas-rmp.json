@@ -1,0 +1,441 @@
+{
+  "cookies": [
+    {
+      "name": "mage-banners-cache-storage",
+      "value": "{}",
+      "domain": "loja.rmp.com.br",
+      "path": "/customer/account/login",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "user_allowed_save_cookie",
+      "value": "%7B%221%22%3A1%7D",
+      "domain": ".loja.rmp.com.br",
+      "path": "/",
+      "expires": 1823588829,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_gcl_au",
+      "value": "1.1.1987903448.1792009630",
+      "domain": ".rmp.com.br",
+      "path": "/",
+      "expires": 1799785629,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_ga",
+      "value": "GA1.4.1742429439.1792009630",
+      "domain": ".loja.rmp.com.br",
+      "path": "/",
+      "expires": 1827082904.800382,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_ga",
+      "value": "GA1.1.1742429439.1792009630",
+      "domain": ".rmp.com.br",
+      "path": "/",
+      "expires": 1826569630.29202,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "MUID",
+      "value": "1CCA02EAD1E760EF13A01518D0A4614F",
+      "domain": ".bing.com",
+      "path": "/",
+      "expires": 1825705631.526497,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "MR",
+      "value": "0",
+      "domain": ".c.bing.com",
+      "path": "/",
+      "expires": 1792614431.526603,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "SRM_B",
+      "value": "1CCA02EAD1E760EF13A01518D0A4614F",
+      "domain": ".c.bing.com",
+      "path": "/",
+      "expires": 1825705631.526637,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "MUID",
+      "value": "1CCA02EAD1E760EF13A01518D0A4614F",
+      "domain": ".clarity.ms",
+      "path": "/",
+      "expires": 1825705630.665769,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "MR",
+      "value": "0",
+      "domain": ".c.clarity.ms",
+      "path": "/",
+      "expires": 1792614430.665828,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "cd_atual",
+      "value": "10%20-%20RMP-GOY%20-%20Cidade%3A%20GOIANIA%2FGO",
+      "domain": "loja.rmp.com.br",
+      "path": "/",
+      "expires": 1795114905.022227,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "prazo",
+      "value": "%7B%22media_dias%22%3A%22-1%22%2C%22tipo%22%3A%22%22%7D",
+      "domain": "loja.rmp.com.br",
+      "path": "/",
+      "expires": 1795114905.022345,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "pgto",
+      "value": "%7B%22prazo_medio%22%3A-1%2C%22tipo_prazo%22%3A4%2C%22num_parcelas%22%3A0%2C%22dias_parcelas%22%3A%22PRAZO%20DA%20PRACA%22%2C%22desc_enc%22%3A%22%22%2C%22valor_min%22%3A0%2C%22valor_max%22%3A999999%2C%22codigo%22%3A2511%7D",
+      "domain": "loja.rmp.com.br",
+      "path": "/",
+      "expires": 1795114905.022465,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "ep_session_id",
+      "value": "ep-sess-1792013862-gVA8cdL0",
+      "domain": "www.rmp.com.br",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "form_key",
+      "value": "CqwmAcaqVoTIHcMS",
+      "domain": "loja.rmp.com.br",
+      "path": "/",
+      "expires": 1792609287,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "mage-cache-storage",
+      "value": "{}",
+      "domain": "loja.rmp.com.br",
+      "path": "/",
+      "expires": 1792566087,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "mage-cache-storage-section-invalidation",
+      "value": "{}",
+      "domain": "loja.rmp.com.br",
+      "path": "/",
+      "expires": 1792566087,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "mage-messages",
+      "value": "",
+      "domain": "loja.rmp.com.br",
+      "path": "/",
+      "expires": 1792566104,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Strict"
+    },
+    {
+      "name": "recently_viewed_product",
+      "value": "{}",
+      "domain": "loja.rmp.com.br",
+      "path": "/",
+      "expires": 1792566087,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "recently_viewed_product_previous",
+      "value": "{}",
+      "domain": "loja.rmp.com.br",
+      "path": "/",
+      "expires": 1792566087,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "recently_compared_product",
+      "value": "{}",
+      "domain": "loja.rmp.com.br",
+      "path": "/",
+      "expires": 1792566087,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "recently_compared_product_previous",
+      "value": "{}",
+      "domain": "loja.rmp.com.br",
+      "path": "/",
+      "expires": 1792566087,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "product_data_storage",
+      "value": "{}",
+      "domain": "loja.rmp.com.br",
+      "path": "/",
+      "expires": 1792566087,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "CLID",
+      "value": "242ec293bb7040509839ec36dc48da68.20261014.20271020",
+      "domain": "www.clarity.ms",
+      "path": "/",
+      "expires": 1824058888.730671,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "_gid",
+      "value": "GA1.4.981647205.1792522889",
+      "domain": ".loja.rmp.com.br",
+      "path": "/",
+      "expires": 1792609304,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_dc_gtm_UA-192854074-2",
+      "value": "1",
+      "domain": ".loja.rmp.com.br",
+      "path": "/",
+      "expires": 1792522948,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "SM",
+      "value": "T",
+      "domain": ".c.clarity.ms",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "_clck",
+      "value": "1pwnsng%5E2%5Egag%5E0%5E2478",
+      "domain": ".rmp.com.br",
+      "path": "/",
+      "expires": 1824058892,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_clsk",
+      "value": "1oumi2u%5E1792522893523%5E1%5E1%5Es.clarity.ms%2Fcollect",
+      "domain": ".rmp.com.br",
+      "path": "/",
+      "expires": 1792609293,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "form_key",
+      "value": "CqwmAcaqVoTIHcMS",
+      "domain": ".loja.rmp.com.br",
+      "path": "/",
+      "expires": 1792566111.135704,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "mage-cache-sessid",
+      "value": "true",
+      "domain": "loja.rmp.com.br",
+      "path": "/",
+      "expires": 1792566101,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "mage-banners-cache-storage",
+      "value": "{}",
+      "domain": "loja.rmp.com.br",
+      "path": "/",
+      "expires": 1792566101,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "private_content_version",
+      "value": "b9e1b7b0df5956eb75a3d2858db14940",
+      "domain": "loja.rmp.com.br",
+      "path": "/",
+      "expires": 1827082905.277379,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "PHPSESSID",
+      "value": "18d4960156d6545efb8d7b175de9530e",
+      "domain": ".loja.rmp.com.br",
+      "path": "/",
+      "expires": 1792566112.05776,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_ga_Y54R97G9BK",
+      "value": "GS2.1.s1792522889$o4$g1$t1792522911$j38$l0$h0",
+      "domain": ".rmp.com.br",
+      "path": "/",
+      "expires": 1827082911.094489,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "X-Magento-Vary",
+      "value": "ce7c3252d781a0dd0fbc795a28e6612cca98cb412ab7084d72cbf61cf5134ceb",
+      "domain": "loja.rmp.com.br",
+      "path": "/",
+      "expires": 1792566111.135799,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "section_data_ids",
+      "value": "{%22messages%22:1792523994%2C%22customer%22:1792523996%2C%22compare-products%22:1792522994%2C%22last-ordered-items%22:1792522994%2C%22requisition%22:1792522994%2C%22cart%22:1792522998%2C%22directory-data%22:1792522994%2C%22captcha%22:1792522994%2C%22wishlist%22:1792522994%2C%22company%22:1792523994%2C%22company_authorization%22:1792522994%2C%22customer-companies%22:1792522994%2C%22negotiable_quote%22:1792522994%2C%22purchase_order%22:1792522994%2C%22instant-purchase%22:1792522994%2C%22loggedAsCustomer%22:1792522994%2C%22multiplewishlist%22:1792522994%2C%22persistent%22:1792522994%2C%22review%22:1792522994%2C%22payments%22:1792522994%2C%22gtm-checkout%22:1792522994%2C%22recently_viewed_product%22:1792522994%2C%22recently_compared_product%22:1792522994%2C%22product_data_storage%22:1792522994%2C%22paypal-billing-agreement%22:1792522994%2C%22paypal-buyer-country%22:1792522994}",
+      "domain": "loja.rmp.com.br",
+      "path": "/",
+      "expires": 1792566101,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://loja.rmp.com.br",
+      "localStorage": [
+        {
+          "name": "mage-cache-storage",
+          "value": "{\"compare-products\":{\"count\":0,\"countCaption\":\"0 itens\",\"listUrl\":\"https://loja.rmp.com.br/catalog/product_compare/index/\",\"items\":[],\"websiteId\":\"1\",\"data_id\":1792522994},\"last-ordered-items\":{\"items\":[{\"id\":\"30831108\",\"name\":\"BIELETA DE SUSPENSAO DIANTEIRA - N92027 - NAKATA\",\"url\":\"https://loja.rmp.com.br/bieleta-de-suspensao-dianteira-n92027-nakata.html\",\"is_saleable\":true,\"product_id\":\"149207\"},{\"id\":\"30831117\",\"name\":\"CORREIA POLY-V ELASTICA S/FER - 4PK696EE - DAYCO\",\"url\":\"https://loja.rmp.com.br/correia-poly-v-elastica-s-fer-4pk696ee-dayco.html\",\"is_saleable\":true,\"product_id\":\"506599\"},{\"id\":\"30831114\",\"name\":\"SUPORTE INFERIOR DO MOTOR / CAMBIO - 3160 - SAMPEL\",\"url\":\"https://loja.rmp.com.br/coxim-do-cambio-traseiro-3160-sampel.html\",\"is_saleable\":true,\"product_id\":\"66938\"},{\"id\":\"30831105\",\"name\":\"FILTRO DE OLEO BLINDADO - OC1226 - METAL LEVE\",\"url\":\"https://loja.rmp.com.br/filtro-de-oleo-blindado-oc1226-metal-leve.html\",\"is_saleable\":true,\"product_id\":\"427582\"},{\"id\":\"30831111\",\"name\":\"KIT DO AMORTECEDOR-SUSPENSAO DIANTEIRA-SUPORTE, ROLAMENTO INA, BATENTE E COIFA-SK358S-SAMPEL\",\"url\":\"https://loja.rmp.com.br/kit-de-amortecedor-dianteiro-esquerdo-batente-coifa-coxim-rolamento-sk358s-sampel.html\",\"is_saleable\":true,\"product_id\":\"179426\"}],\"data_id\":1792522994},\"requisition\":{\"items\":[],\"max_allowed_requisition_lists\":999,\"is_enabled\":true,\"data_id\":1792522994},\"directory-data\":{\"BR\":{\"name\":\"Brasil\",\"regions\":{\"1454\":{\"code\":\"AC\",\"name\":\"Acre\"},\"1457\":{\"code\":\"AL\",\"name\":\"Alagoas\"},\"1460\":{\"code\":\"AP\",\"name\":\"Amapá\"},\"1463\":{\"code\":\"AM\",\"name\":\"Amazonas\"},\"1466\":{\"code\":\"BA\",\"name\":\"Bahia\"},\"1469\":{\"code\":\"CE\",\"name\":\"Ceará\"},\"1472\":{\"code\":\"ES\",\"name\":\"Espírito Santo\"},\"1475\":{\"code\":\"GO\",\"name\":\"Goiás\"},\"1478\":{\"code\":\"MA\",\"name\":\"Maranhão\"},\"1481\":{\"code\":\"MT\",\"name\":\"Mato Grosso\"},\"1484\":{\"code\":\"MS\",\"name\":\"Mato Grosso do Sul\"},\"1487\":{\"code\":\"MG\",\"name\":\"Minas Gerais\"},\"1490\":{\"code\":\"PA\",\"name\":\"Pará\"},\"1493\":{\"code\":\"PB\",\"name\":\"Paraíba\"},\"1496\":{\"code\":\"PR\",\"name\":\"Paraná\"},\"1499\":{\"code\":\"PE\",\"name\":\"Pernambuco\"},\"1502\":{\"code\":\"PI\",\"name\":\"Piauí\"},\"1505\":{\"code\":\"RJ\",\"name\":\"Rio de Janeiro\"},\"1508\":{\"code\":\"RN\",\"name\":\"Rio Grande do Norte\"},\"1511\":{\"code\":\"RS\",\"name\":\"Rio Grande do Sul\"},\"1514\":{\"code\":\"RO\",\"name\":\"Rondônia\"},\"1517\":{\"code\":\"RR\",\"name\":\"Roraima\"},\"1520\":{\"code\":\"SC\",\"name\":\"Santa Catarina\"},\"1523\":{\"code\":\"SP\",\"name\":\"São Paulo\"},\"1526\":{\"code\":\"SE\",\"name\":\"Sergipe\"},\"1529\":{\"code\":\"TO\",\"name\":\"Tocantins\"},\"1532\":{\"code\":\"DF\",\"name\":\"Distrito Federal\"}}},\"data_id\":1792522994},\"captcha\":{\"sales_rule_coupon_request\":{\"isRequired\":false,\"timestamp\":1792522994},\"payment_processing_request\":{\"isRequired\":false,\"timestamp\":1792522994},\"user_login\":{\"isRequired\":false,\"timestamp\":1792522994},\"data_id\":1792522994},\"wishlist\":{\"counter\":null,\"items\":[],\"websiteId\":\"1\",\"storeId\":\"1\",\"data_id\":1792522994},\"company_authorization\":{\"resources\":{\"Magento_Company::users_view\":false,\"Magento_Sales::view_orders\":false,\"Magento_Sales::all\":false,\"Magento_NegotiableQuote::all\":false,\"Magento_PurchaseOrder::view_purchase_orders\":false},\"data_id\":1792522994},\"customer-companies\":{\"data_id\":1792522994},\"negotiable_quote\":{\"is_enabled\":false,\"data_id\":1792522994},\"purchase_order\":{\"isEnabled\":false,\"data_id\":1792522994},\"instant-purchase\":{\"available\":false,\"data_id\":1792522994},\"loggedAsCustomer\":{\"data_id\":1792522994},\"multiplewishlist\":{\"can_create\":true,\"short_list\":[{\"id\":\"20758\",\"name\":\"Lista de Favoritos\"}],\"data_id\":1792522994},\"persistent\":{\"data_id\":1792522994},\"review\":{\"nickname\":\"\",\"title\":\"\",\"detail\":\"\",\"data_id\":1792522994},\"payments\":{\"sdkParams\":{\"paypal\":[],\"applepay\":[],\"googlepay\":[]},\"data_id\":1792522994},\"gtm-checkout\":{\"gtm_events\":[],\"data_id\":1792522994},\"recently_viewed_product\":{\"count\":0,\"items\":[],\"data_id\":1792522994},\"recently_compared_product\":{\"count\":0,\"items\":[],\"data_id\":1792522994},\"product_data_storage\":{\"data_id\":1792522994},\"paypal-billing-agreement\":{\"data_id\":1792522994},\"paypal-buyer-country\":{\"code\":\"BR\",\"data_id\":1792522994},\"cart\":{\"summary_count\":0,\"subtotalAmount\":\"0.0000\",\"subtotal\":\"<span class=\\\"price\\\">R$ 0,00</span>\",\"possible_onepage_checkout\":true,\"items\":[],\"extra_actions\":\"\",\"isGuestCheckoutAllowed\":true,\"website_id\":\"1\",\"storeId\":\"1\",\"cart_empty_message\":\"\",\"subtotal_incl_tax\":\"<span class=\\\"price\\\">R$ 0,00</span>\",\"subtotal_excl_tax\":\"<span class=\\\"price\\\">R$ 0,00</span>\",\"gtm\":[],\"gtm_events\":[],\"data_id\":1792522998},\"messages\":{\"messages\":[],\"data_id\":1792523003},\"company\":{\"is_checkout_allowed\":true,\"is_company_blocked\":false,\"is_login_allowed\":true,\"is_enabled\":true,\"has_customer_company\":false,\"is_storefront_registration_allowed\":false,\"is_company_admin\":false,\"data_id\":1792523003},\"customer\":{\"fullname\":\"OFICINA DO JOAOZINHO E RENAN CENTRO AUTOMOTIVO 0058 LTDA\",\"firstname\":\"OFICINA DO JOAOZINHO E RENAN\",\"websiteId\":\"1\",\"gtm\":{\"customerLoggedIn\":1,\"customerId\":\"93344\",\"customerGroupId\":\"8\",\"customerGroupCode\":\"PEçAS\",\"id\":\"93344\"},\"gtm_events\":[],\"data_id\":1792523003}}"
+        },
+        {
+          "name": "product_data_storage",
+          "value": "{}"
+        },
+        {
+          "name": "mage-banners-cache-timeout",
+          "value": "\"2026-10-20T19:02:11.705Z\""
+        },
+        {
+          "name": "recently_compared_product_previous",
+          "value": "{}"
+        },
+        {
+          "name": "mage-banners-storeId",
+          "value": "default"
+        },
+        {
+          "name": "mage-banners-cartDataId",
+          "value": "1792017775"
+        },
+        {
+          "name": "_gcl_ls",
+          "value": "{\"schema\":\"gcl\",\"version\":1,\"gcl_ctr\":{\"value\":{\"value\":0,\"timeouts\":0,\"errors\":0,\"eopCount\":0,\"creationTimeMs\":1792009629983},\"expires\":1799785629983},\"gsid_dc\":{\"value\":{\"joinId\":\"kY_1lXGWYW7kCQIKj0m9M-oQmiXqLKum7g\",\"lastJoinedTimeMs\":1792522903709},\"expires\":1792523203709}}"
+        },
+        {
+          "name": "mage-banners-cache-storage",
+          "value": "{\"data\":{\"items\":{\"salesrule\":[],\"catalogrule\":[],\"fixed\":{\"454\":{\"id\":\"454\",\"content\":\"<div data-content-type=\\\"html\\\" data-appearance=\\\"default\\\" data-element=\\\"main\\\" data-decoded=\\\"true\\\"><div class=\\\"widget block block-static-block\\\">\\n    </div>\\n</div>\",\"types\":[\"content\"]},\"512\":{\"id\":\"512\",\"content\":\"<style>#html-body [data-pb-style=LS9KG5E]{justify-content:flex-start;display:flex;flex-direction:column;background-position:left top;background-size:cover;background-repeat:no-repeat;background-attachment:scroll}#html-body [data-pb-style=RTF02PT]{min-height:150px}#html-body [data-pb-style=QIABNP9]{background-position:left top;background-size:cover;background-repeat:no-repeat}#html-body [data-pb-style=LBKSOT3]{background-color:transparent}#html-body [data-pb-style=LE1681H]{background-position:left top;background-size:cover;background-repeat:no-repeat}#html-body [data-pb-style=FXCUN7D]{background-color:transparent}</style><div data-content-type=\\\"row\\\" data-appearance=\\\"contained\\\" data-element=\\\"main\\\"><div data-enable-parallax=\\\"0\\\" data-parallax-speed=\\\"0.5\\\" data-background-images=\\\"{}\\\" data-background-type=\\\"image\\\" data-video-loop=\\\"true\\\" data-video-play-only-visible=\\\"true\\\" data-video-lazy-load=\\\"true\\\" data-video-fallback-src=\\\"\\\" data-element=\\\"inner\\\" data-pb-style=\\\"LS9KG5E\\\"><div class=\\\"pagebuilder-slider\\\" data-content-type=\\\"slider\\\" data-appearance=\\\"default\\\" data-autoplay=\\\"false\\\" data-autoplay-speed=\\\"4000\\\" data-fade=\\\"false\\\" data-infinite-loop=\\\"false\\\" data-show-arrows=\\\"false\\\" data-show-dots=\\\"true\\\" data-element=\\\"main\\\" data-pb-style=\\\"RTF02PT\\\"><div data-content-type=\\\"slide\\\" data-slide-name=\\\"\\\" data-appearance=\\\"poster\\\" data-show-button=\\\"never\\\" data-show-overlay=\\\"never\\\" data-element=\\\"main\\\"><a href=\\\"https://loja.rmp.com.br/\\\" target=\\\"\\\" data-link-type=\\\"default\\\" title=\\\"\\\" data-element=\\\"link\\\"><div class=\\\"pagebuilder-slide-wrapper background-image-6ad7baf2dae6b\\\" data-background-images='{\\\\\\\"desktop_image\\\\\\\":\\\\\\\"https://loja.rmp.com.br/media/wysiwyg/09-01_DESK_-_Acelere_RMP_1.png\\\\\\\",\\\\\\\"mobile_image\\\\\\\":\\\\\\\"https://loja.rmp.com.br/media/wysiwyg/09-01_MOBILE_-_Acelere_RMP_1.png\\\\\\\"}' data-background-type=\\\"image\\\" data-video-loop=\\\"true\\\" data-video-play-only-visible=\\\"true\\\" data-video-lazy-load=\\\"true\\\" data-video-fallback-src=\\\"\\\" data-element=\\\"wrapper\\\" data-pb-style=\\\"QIABNP9\\\"><div class=\\\"pagebuilder-overlay pagebuilder-poster-overlay\\\" data-overlay-color=\\\"\\\" aria-label=\\\"\\\" title=\\\"\\\" data-element=\\\"overlay\\\" data-pb-style=\\\"LBKSOT3\\\"><div class=\\\"pagebuilder-poster-content\\\"><div data-element=\\\"content\\\"></div></div></div></div><style type=\\\"text/css\\\">.background-image-6ad7baf2dae6b {background-image: url(https://loja.rmp.com.br/media/wysiwyg/09-01_DESK_-_Acelere_RMP_1.png);}@media only screen and (max-width: 768px) and (min-width: 481px) {.background-image-6ad7baf2dae6b {background-image: url(https://loja.rmp.com.br/media/wysiwyg/09-01_MOBILE_-_Acelere_RMP_1.png);}}@media only screen and (max-width: 480px) {.background-image-6ad7baf2dae6b {background-image: url(https://loja.rmp.com.br/media/wysiwyg/09-01_MOBILE_-_Acelere_RMP_1.png);}}</style></a></div><div data-content-type=\\\"slide\\\" data-slide-name=\\\"\\\" data-appearance=\\\"poster\\\" data-show-button=\\\"never\\\" data-show-overlay=\\\"never\\\" data-element=\\\"main\\\"><a href=\\\"https://loja.rmp.com.br/campanhas-64b0326c38fa0/#texas\\\" target=\\\"\\\" data-link-type=\\\"default\\\" title=\\\"\\\" data-element=\\\"link\\\"><div class=\\\"pagebuilder-slide-wrapper background-image-6ad7baf2e1326\\\" data-background-images='{\\\\\\\"desktop_image\\\\\\\":\\\\\\\"https://loja.rmp.com.br/media/wysiwyg/Rumo_ao_Texas_RMP_-_Banner_Homepage_Desk_4.png\\\\\\\",\\\\\\\"mobile_image\\\\\\\":\\\\\\\"https://loja.rmp.com.br/media/wysiwyg/Rumo_ao_Texas_RMP_-_Banner_Homepage_Mobile_4.png\\\\\\\"}' data-background-type=\\\"image\\\" data-video-loop=\\\"true\\\" data-video-play-only-visible=\\\"true\\\" data-video-lazy-load=\\\"true\\\" data-video-fallback-src=\\\"\\\" data-element=\\\"wrapper\\\" data-pb-style=\\\"LE1681H\\\"><div class=\\\"pagebuilder-overlay pagebuilder-poster-overlay\\\" data-overlay-color=\\\"\\\" aria-label=\\\"\\\" title=\\\"\\\" data-element=\\\"overlay\\\" data-pb-style=\\\"FXCUN7D\\\"><div class=\\\"pagebuilder-poster-content\\\"><div data-element=\\\"content\\\"></div></div></div></div><style type=\\\"text/css\\\">.background-image-6ad7baf2e1326 {background-image: url(https://loja.rmp.com.br/media/wysiwyg/Rumo_ao_Texas_RMP_-_Banner_Homepage_Desk_4.png);}@media only screen and (max-width: 768px) and (min-width: 481px) {.background-image-6ad7baf2e1326 {background-image: url(https://loja.rmp.com.br/media/wysiwyg/Rumo_ao_Texas_RMP_-_Banner_Homepage_Mobile_4.png);}}@media only screen and (max-width: 480px) {.background-image-6ad7baf2e1326 {background-image: url(https://loja.rmp.com.br/media/wysiwyg/Rumo_ao_Texas_RMP_-_Banner_Homepage_Mobile_4.png);}}</style></a></div></div></div></div>\",\"types\":[\"content\"]},\"515\":{\"id\":\"515\",\"content\":\"<style>#html-body [data-pb-style=YB0H01B]{justify-content:flex-start;display:flex;flex-direction:column;background-position:left top;background-size:cover;background-repeat:no-repeat;background-attachment:scroll}#html-body [data-pb-style=GE5TVVI]{min-height:150px}#html-body [data-pb-style=COQYX1V]{background-position:left top;background-size:cover;background-repeat:no-repeat}#html-body [data-pb-style=DAGX6SG]{background-color:transparent}#html-body [data-pb-style=DA284JB]{background-position:left top;background-size:cover;background-repeat:no-repeat}#html-body [data-pb-style=AT2NTRO]{background-color:transparent}</style><div data-content-type=\\\"row\\\" data-appearance=\\\"contained\\\" data-element=\\\"main\\\"><div data-enable-parallax=\\\"0\\\" data-parallax-speed=\\\"0.5\\\" data-background-images=\\\"{}\\\" data-background-type=\\\"image\\\" data-video-loop=\\\"true\\\" data-video-play-only-visible=\\\"true\\\" data-video-lazy-load=\\\"true\\\" data-video-fallback-src=\\\"\\\" data-element=\\\"inner\\\" data-pb-style=\\\"YB0H01B\\\"><div class=\\\"pagebuilder-slider\\\" data-content-type=\\\"slider\\\" data-appearance=\\\"default\\\" data-autoplay=\\\"false\\\" data-autoplay-speed=\\\"4000\\\" data-fade=\\\"false\\\" data-infinite-loop=\\\"false\\\" data-show-arrows=\\\"false\\\" data-show-dots=\\\"true\\\" data-element=\\\"main\\\" data-pb-style=\\\"GE5TVVI\\\"><div data-content-type=\\\"slide\\\" data-slide-name=\\\"\\\" data-appearance=\\\"poster\\\" data-show-button=\\\"never\\\" data-show-overlay=\\\"never\\\" data-element=\\\"main\\\"><a href=\\\"https://loja.disape.com.br/\\\" target=\\\"\\\" data-link-type=\\\"default\\\" title=\\\"\\\" data-element=\\\"link\\\"><div class=\\\"pagebuilder-slide-wrapper background-image-6ad7baf2e151a\\\" data-background-images='{\\\\\\\"desktop_image\\\\\\\":\\\\\\\"https://loja.rmp.com.br/media/wysiwyg/09-01_DESK_-_Acelere_Disape_1.png\\\\\\\",\\\\\\\"mobile_image\\\\\\\":\\\\\\\"https://loja.rmp.com.br/media/wysiwyg/09-01_MOBILE_-_Acelere_Disape_1.png\\\\\\\"}' data-background-type=\\\"image\\\" data-video-loop=\\\"true\\\" data-video-play-only-visible=\\\"true\\\" data-video-lazy-load=\\\"true\\\" data-video-fallback-src=\\\"\\\" data-element=\\\"wrapper\\\" data-pb-style=\\\"COQYX1V\\\"><div class=\\\"pagebuilder-overlay pagebuilder-poster-overlay\\\" data-overlay-color=\\\"\\\" aria-label=\\\"\\\" title=\\\"\\\" data-element=\\\"overlay\\\" data-pb-style=\\\"DAGX6SG\\\"><div class=\\\"pagebuilder-poster-content\\\"><div data-element=\\\"content\\\"></div></div></div></div><style type=\\\"text/css\\\">.background-image-6ad7baf2e151a {background-image: url(https://loja.rmp.com.br/media/wysiwyg/09-01_DESK_-_Acelere_Disape_1.png);}@media only screen and (max-width: 768px) and (min-width: 481px) {.background-image-6ad7baf2e151a {background-image: url(https://loja.rmp.com.br/media/wysiwyg/09-01_MOBILE_-_Acelere_Disape_1.png);}}@media only screen and (max-width: 480px) {.background-image-6ad7baf2e151a {background-image: url(https://loja.rmp.com.br/media/wysiwyg/09-01_MOBILE_-_Acelere_Disape_1.png);}}</style></a></div><div data-content-type=\\\"slide\\\" data-slide-name=\\\"\\\" data-appearance=\\\"poster\\\" data-show-button=\\\"never\\\" data-show-overlay=\\\"never\\\" data-element=\\\"main\\\"><div data-element=\\\"empty_link\\\"><div class=\\\"pagebuilder-slide-wrapper\\\" data-background-images=\\\"{}\\\" data-background-type=\\\"image\\\" data-video-loop=\\\"true\\\" data-video-play-only-visible=\\\"true\\\" data-video-lazy-load=\\\"true\\\" data-video-fallback-src=\\\"\\\" data-element=\\\"wrapper\\\" data-pb-style=\\\"DA284JB\\\"><div class=\\\"pagebuilder-overlay pagebuilder-poster-overlay\\\" data-overlay-color=\\\"\\\" aria-label=\\\"\\\" title=\\\"\\\" data-element=\\\"overlay\\\" data-pb-style=\\\"AT2NTRO\\\"><div class=\\\"pagebuilder-poster-content\\\"><div data-element=\\\"content\\\"></div></div></div></div></div></div></div></div></div>\",\"types\":[\"content\"]},\"518\":{\"id\":\"518\",\"content\":\"<style>#html-body [data-pb-style=HM27AF6]{justify-content:flex-start;display:flex;flex-direction:column;background-position:left top;background-size:cover;background-repeat:no-repeat;background-attachment:scroll}#html-body [data-pb-style=JCPS6CO]{min-height:150px}#html-body [data-pb-style=GDLJ0SX]{background-position:left top;background-size:cover;background-repeat:no-repeat}#html-body [data-pb-style=CGKOYET]{background-color:transparent}#html-body [data-pb-style=B1Q6OUQ]{background-position:left top;background-size:cover;background-repeat:no-repeat}#html-body [data-pb-style=GQHN4PQ]{background-color:transparent}</style><div data-content-type=\\\"row\\\" data-appearance=\\\"contained\\\" data-element=\\\"main\\\"><div data-enable-parallax=\\\"0\\\" data-parallax-speed=\\\"0.5\\\" data-background-images=\\\"{}\\\" data-background-type=\\\"image\\\" data-video-loop=\\\"true\\\" data-video-play-only-visible=\\\"true\\\" data-video-lazy-load=\\\"true\\\" data-video-fallback-src=\\\"\\\" data-element=\\\"inner\\\" data-pb-style=\\\"HM27AF6\\\"><div class=\\\"pagebuilder-slider\\\" data-content-type=\\\"slider\\\" data-appearance=\\\"default\\\" data-autoplay=\\\"false\\\" data-autoplay-speed=\\\"4000\\\" data-fade=\\\"false\\\" data-infinite-loop=\\\"false\\\" data-show-arrows=\\\"false\\\" data-show-dots=\\\"true\\\" data-element=\\\"main\\\" data-pb-style=\\\"JCPS6CO\\\"><div data-content-type=\\\"slide\\\" data-slide-name=\\\"\\\" data-appearance=\\\"poster\\\" data-show-button=\\\"never\\\" data-show-overlay=\\\"never\\\" data-element=\\\"main\\\"><a href=\\\"https://loja.realduasrodas.com.br/\\\" target=\\\"\\\" data-link-type=\\\"default\\\" title=\\\"\\\" data-element=\\\"link\\\"><div class=\\\"pagebuilder-slide-wrapper background-image-6ad7baf2e1732\\\" data-background-images='{\\\\\\\"desktop_image\\\\\\\":\\\\\\\"https://loja.rmp.com.br/media/wysiwyg/09-01_MOBILE_-_Acelere_R2R_1.png\\\\\\\",\\\\\\\"mobile_image\\\\\\\":\\\\\\\"https://loja.rmp.com.br/media/wysiwyg/09-01_DESK_-_Acelere_R2R_1.png\\\\\\\"}' data-background-type=\\\"image\\\" data-video-loop=\\\"true\\\" data-video-play-only-visible=\\\"true\\\" data-video-lazy-load=\\\"true\\\" data-video-fallback-src=\\\"\\\" data-element=\\\"wrapper\\\" data-pb-style=\\\"GDLJ0SX\\\"><div class=\\\"pagebuilder-overlay pagebuilder-poster-overlay\\\" data-overlay-color=\\\"\\\" aria-label=\\\"\\\" title=\\\"\\\" data-element=\\\"overlay\\\" data-pb-style=\\\"CGKOYET\\\"><div class=\\\"pagebuilder-poster-content\\\"><div data-element=\\\"content\\\"></div></div></div></div><style type=\\\"text/css\\\">.background-image-6ad7baf2e1732 {background-image: url(https://loja.rmp.com.br/media/wysiwyg/09-01_MOBILE_-_Acelere_R2R_1.png);}@media only screen and (max-width: 768px) and (min-width: 481px) {.background-image-6ad7baf2e1732 {background-image: url(https://loja.rmp.com.br/media/wysiwyg/09-01_DESK_-_Acelere_R2R_1.png);}}@media only screen and (max-width: 480px) {.background-image-6ad7baf2e1732 {background-image: url(https://loja.rmp.com.br/media/wysiwyg/09-01_DESK_-_Acelere_R2R_1.png);}}</style></a></div><div data-content-type=\\\"slide\\\" data-slide-name=\\\"\\\" data-appearance=\\\"poster\\\" data-show-button=\\\"never\\\" data-show-overlay=\\\"never\\\" data-element=\\\"main\\\"><a href=\\\"https://loja.realduasrodas.com.br/campanhas-gerais/#comprouganhou\\\" target=\\\"\\\" data-link-type=\\\"default\\\" title=\\\"\\\" data-element=\\\"link\\\"><div class=\\\"pagebuilder-slide-wrapper background-image-6ad7baf2e1783\\\" data-background-images='{\\\\\\\"desktop_image\\\\\\\":\\\\\\\"https://loja.rmp.com.br/media/wysiwyg/08-28_DESK_-_Comprou_Ganhou_R2R_2.png\\\\\\\",\\\\\\\"mobile_image\\\\\\\":\\\\\\\"https://loja.rmp.com.br/media/wysiwyg/08-28_MOBILE_-_Comprou_Ganhou_R2R_2.png\\\\\\\"}' data-background-type=\\\"image\\\" data-video-loop=\\\"true\\\" data-video-play-only-visible=\\\"true\\\" data-video-lazy-load=\\\"true\\\" data-video-fallback-src=\\\"\\\" data-element=\\\"wrapper\\\" data-pb-style=\\\"B1Q6OUQ\\\"><div class=\\\"pagebuilder-overlay pagebuilder-poster-overlay\\\" data-overlay-color=\\\"\\\" aria-label=\\\"\\\" title=\\\"\\\" data-element=\\\"overlay\\\" data-pb-style=\\\"GQHN4PQ\\\"><div class=\\\"pagebuilder-poster-content\\\"><div data-element=\\\"content\\\"></div></div></div></div><style type=\\\"text/css\\\">.background-image-6ad7baf2e1783 {background-image: url(https://loja.rmp.com.br/media/wysiwyg/08-28_DESK_-_Comprou_Ganhou_R2R_2.png);}@media only screen and (max-width: 768px) and (min-width: 481px) {.background-image-6ad7baf2e1783 {background-image: url(https://loja.rmp.com.br/media/wysiwyg/08-28_MOBILE_-_Comprou_Ganhou_R2R_2.png);}}@media only screen and (max-width: 480px) {.background-image-6ad7baf2e1783 {background-image: url(https://loja.rmp.com.br/media/wysiwyg/08-28_MOBILE_-_Comprou_Ganhou_R2R_2.png);}}</style></a></div></div></div></div>\",\"types\":[\"content\"]}}},\"store_id\":\"1\"}}"
+        },
+        {
+          "name": "mage-customer-login",
+          "value": "1"
+        },
+        {
+          "name": "recently_viewed_product",
+          "value": "{}"
+        },
+        {
+          "name": "mage-cache-storage-section-invalidation",
+          "value": "{}"
+        },
+        {
+          "name": "recently_viewed_product_previous",
+          "value": "{}"
+        },
+        {
+          "name": "mage-cache-timeout",
+          "value": "\"2026-10-21T07:01:41.063Z\""
+        },
+        {
+          "name": "recently_compared_product",
+          "value": "{}"
+        },
+        {
+          "name": "zoomMemory",
+          "value": "100"
+        }
+      ]
+    }
+  ]
+}
