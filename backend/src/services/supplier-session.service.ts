@@ -62,11 +62,11 @@ async function getSupplierOrFail(supplierId: string) {
 }
 
 function shouldUseLocalAgent() {
-    return process.env.LOCAL_AGENT_MODE !== 'disabled' && LocalAgentService.hasActiveAgents();
+    return process.env.LOCAL_AGENT_MODE === 'enabled' && LocalAgentService.hasActiveAgents();
 }
 
 function isLocalAgentModeEnabled() {
-    return process.env.LOCAL_AGENT_MODE !== 'disabled';
+    return false;
 }
 
 export class SupplierSessionService {
@@ -77,9 +77,7 @@ export class SupplierSessionService {
             return LocalAgentService.dispatchSessionTask(supplier, 'start') as Promise<any>;
         }
 
-        if (isLocalAgentModeEnabled()) {
-            throw new Error('Nao foi possivel iniciar o Login Assistido no servidor porque nao ha agente local online para este fornecedor. Inicie o agente da loja e tente novamente.');
-        }
+        
 
         await closeExisting(supplierId);
 
@@ -87,7 +85,7 @@ export class SupplierSessionService {
         ensureDirectory(profilePath);
 
         const browserOptions = {
-            headless: process.env.LOGIN_ASSIST_HEADLESS === 'true',
+            headless: process.env.LOGIN_ASSIST_HEADLESS === 'false' ? false : true,
             viewport: { width: 1280, height: 900 },
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             locale: 'pt-BR',
@@ -127,9 +125,7 @@ export class SupplierSessionService {
             return LocalAgentService.dispatchSessionTask(supplier, 'snapshot') as Promise<any>;
         }
 
-        if (isLocalAgentModeEnabled()) {
-            throw new Error('Nao foi possivel consultar a sessao no servidor porque nao ha agente local online.');
-        }
+        
 
         const session = sessions.get(supplierId);
         if (!session) {
@@ -150,9 +146,7 @@ export class SupplierSessionService {
             return LocalAgentService.dispatchSessionTask(supplier, 'click', { x, y }) as Promise<any>;
         }
 
-        if (isLocalAgentModeEnabled()) {
-            throw new Error('Nao foi possivel clicar na sessao no servidor porque nao ha agente local online.');
-        }
+        
 
         const session = sessions.get(supplierId);
         if (!session) {
@@ -170,9 +164,7 @@ export class SupplierSessionService {
             return LocalAgentService.dispatchSessionTask(supplier, 'type', { text }) as Promise<any>;
         }
 
-        if (isLocalAgentModeEnabled()) {
-            throw new Error('Nao foi possivel digitar na sessao no servidor porque nao ha agente local online.');
-        }
+        
 
         const session = sessions.get(supplierId);
         if (!session) {
@@ -190,9 +182,7 @@ export class SupplierSessionService {
             return LocalAgentService.dispatchSessionTask(supplier, 'press', { key }) as Promise<any>;
         }
 
-        if (isLocalAgentModeEnabled()) {
-            throw new Error('Nao foi possivel enviar a tecla na sessao no servidor porque nao ha agente local online.');
-        }
+        
 
         const session = sessions.get(supplierId);
         if (!session) {
@@ -286,9 +276,7 @@ export class SupplierSessionService {
             };
         }
 
-        if (isLocalAgentModeEnabled()) {
-            throw new Error('Nao foi possivel salvar a sessao no servidor porque nao ha agente local online.');
-        }
+        
 
         const session = sessions.get(supplierId);
         if (!session) {
