@@ -57,16 +57,19 @@ module.exports = {
     ],
     preferStrategySelectors: true,
 
+    buildSearchUrl: (query) => `https://rolemarmaster.com/produtos?busca=${encodeURIComponent(query)}`,
     performSearch: async ({ page, query }) => {
-        const input = page.locator('#header-form-search input, input[placeholder*="PESQUISE" i]').first();
-        await input.waitFor({ state: 'visible', timeout: 15000 });
-        await input.click();
-        await input.fill(query);
-        await input.press('Enter');
-        await page.waitForTimeout(3500);
+        const searchUrl = `https://rolemarmaster.com/produtos?busca=${encodeURIComponent(query)}`;
+        await page.goto(searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+        await page.waitForTimeout(2500);
+        await Promise.race([
+            page.locator('.product-info').first().waitFor({ state: 'visible', timeout: 8000 }).catch(() => null),
+            page.locator('.ant-empty, :has-text("Nenhum produto")').first().waitFor({ state: 'visible', timeout: 8000 }).catch(() => null),
+        ]);
+        await page.waitForTimeout(1000);
     },
 
-    extractItems: async ({ page, supplier }) => {
+    extractItems: async ({ page, supplier, query }) => {
         const items = await page.evaluate(() => {
             const containers = document.querySelectorAll('.product-info');
             const results = [];
@@ -112,7 +115,7 @@ module.exports = {
             return results;
         });
 
-        return items.map((item) => ({
+        const mapped = items.map((item) => ({
             provider: supplier.name,
             nome: item.nome,
             preco: item.preco,
@@ -123,6 +126,26 @@ module.exports = {
             estoqueTexto: item.estoqueTexto,
             link: item.link || PORTAL_URL,
         })).filter((item) => safeString(item.nome) && safeString(item.preco));
+
+        if (query && mapped.length > 0) {
+            const cleanQ = String(query).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+            // Sort exact code matches to the top
+            mapped.sort((a, b) => {
+                const aCode = String(a.codigo || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                const bCode = String(b.codigo || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                const aExact = aCode === cleanQ;
+                const bExact = bCode === cleanQ;
+                if (aExact && !bExact) return -1;
+                if (!aExact && bExact) return 1;
+                const aMatch = aCode.includes(cleanQ) || cleanQ.includes(aCode);
+                const bMatch = bCode.includes(cleanQ) || cleanQ.includes(bCode);
+                if (aMatch && !bMatch) return -1;
+                if (!aMatch && bMatch) return 1;
+                return 0;
+            });
+        }
+
+        return mapped;
     },
     baseUrl: PORTAL_URL,
 };

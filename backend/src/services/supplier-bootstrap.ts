@@ -151,7 +151,7 @@ const defaultSuppliers = [
         loginSubmitSelector: 'button:has-text("Entrar")',
         loginCredential: '33299637000180',
         password: 'Re539597@',
-        searchUrl: '',
+        searchUrl: 'https://rolemarmaster.com/produtos?busca={query}',
         searchBarSelector: '#header-form-search input',
         itemContainerSelector: '.product-info, .ant-spin-container',
         websiteSearchEnabled: true,
@@ -174,10 +174,39 @@ const defaultSuppliers = [
     },
 ];
 
+function getSupplierCanonicalKey(name: string, url: string): string {
+    const s = `${name || ''} ${url || ''}`.toLowerCase();
+    if (s.includes('dpk')) return 'dpk';
+    if (s.includes('autonorte') || s.includes('auto norte') || s.includes('kki')) return 'kki';
+    if (s.includes('rmp') || s.includes('real moto')) return 'rmp';
+    if (s.includes('comdip')) return 'comdip';
+    if (s.includes('sky')) return 'sky';
+    if (s.includes('furacao') || s.includes('furacão')) return 'furacao';
+    if (s.includes('kaizen')) return 'kaizen';
+    if (s.includes('rolemar')) return 'rolemar';
+    if (s.includes('vespor')) return 'vespor';
+    return s.trim();
+}
+
 export async function bootstrapSuppliers() {
     try {
         const sessionsDir = path.resolve(__dirname, '../../../scraping/sessions');
 
+        // 1. Elimina duplicados no banco de dados (ex: 'Real Moto Peças' e 'Real Moto Peças (RMP)')
+        const allInDb = await prisma.supplier.findMany();
+        const seenKeys = new Map<string, string>();
+        for (const sup of allInDb) {
+            const cKey = getSupplierCanonicalKey(sup.name, sup.url);
+            if (seenKeys.has(cKey)) {
+                console.log(`[Bootstrap] Deletando fornecedor duplicado no banco: ${sup.name} (${sup.id})`);
+                await prisma.supplier.delete({ where: { id: sup.id } }).catch(() => {});
+            } else {
+                seenKeys.set(cKey, sup.id);
+            }
+        }
+
+        // 2. Sincroniza e atualiza os 9 fornecedores oficiais
+        const refreshedDb = await prisma.supplier.findMany();
         for (const item of defaultSuppliers) {
             const { sessionSlug, ...supplierData } = item;
             let sessionJson: string | null = null;
@@ -191,18 +220,12 @@ export async function bootstrapSuppliers() {
                 }
             }
 
-            const existing = await prisma.supplier.findFirst({
-                where: {
-                    OR: [
-                        { name: { contains: item.name } },
-                        { url: { contains: item.url } }
-                    ]
-                }
-            });
+            const itemKey = getSupplierCanonicalKey(item.name, item.url);
+            const existing = refreshedDb.find((s) => getSupplierCanonicalKey(s.name, s.url) === itemKey);
 
             if (existing) {
-                // Update credentials and session if missing or needs update
                 const updateData: any = {
+                    name: item.name,
                     loginCredential: existing.loginCredential || supplierData.loginCredential,
                     password: existing.password || supplierData.password,
                     searchUrl: supplierData.searchUrl,
