@@ -1226,9 +1226,23 @@ function getBrowser() {
 }
 
 async function scrapeProductUnsafe(supplier, productName, options = {}) {
+    const strategy = resolveStrategy(supplier);
+
+    if (typeof strategy.directSearch === 'function') {
+        try {
+            console.error(`[DEBUG] Executando directSearch nativo para: ${supplier.name}`);
+            const directResults = await strategy.directSearch({ supplier, query: productName });
+            if (Array.isArray(directResults) && directResults.length > 0) {
+                console.error(`[DEBUG] directSearch retornou ${directResults.length} itens para ${supplier.name}`);
+                return directResults;
+            }
+        } catch (directErr) {
+            console.error(`[WARN] directSearch falhou para ${supplier.name}: ${directErr.message}. Continuando com Playwright...`);
+        }
+    }
+
     const externalContext = options.reuseContext || null;
     const browser = externalContext ? null : await getBrowser();
-    const strategy = resolveStrategy(supplier);
 
     let context;
     let hasPreloadedSession = false;

@@ -9,9 +9,116 @@ function normalizeAscii(value) {
         .replace(/[^\x20-\x7E]/g, ' ');
 }
 
+let cachedToken = null;
+let tokenExpiresAt = 0;
+
+async function getDpkToken(user, pass) {
+    if (cachedToken && Date.now() < tokenExpiresAt - 60000) {
+        return cachedToken;
+    }
+
+    const res = await fetch('https://api.dpk.com.br/api-auth/api/connect/token', {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/json',
+            'origin': 'https://www.dpk.com.br',
+            'referer': 'https://www.dpk.com.br/',
+            'x-api-key': 'Zo7MoqWOQyaHdMJj053tB2Mx9IDJMKR97Y7d2T9a',
+            'x-portal': 'DPK'
+        },
+        body: JSON.stringify({
+            userPrincipalName: user || 'atendimento@centroautomotivo0058.com',
+            password: pass || 'Re539597@'
+        })
+    });
+
+    if (!res.ok) {
+        throw new Error(`Falha no login DPK: HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    cachedToken = data.accessToken;
+    try {
+        const payload = JSON.parse(Buffer.from(cachedToken.split('.')[1], 'base64').toString());
+        tokenExpiresAt = (payload.exp || 0) * 1000;
+    } catch (_) {
+        tokenExpiresAt = Date.now() + 3600000;
+    }
+
+    return cachedToken;
+}
+
+async function directSearch({ supplier, query }) {
+    const token = await getDpkToken(supplier?.loginCredential, supplier?.password);
+    const authHeader = 'Bearer ' + token;
+    const storeCode = '4'; // Goiania warehouse
+
+    const searchRes = await fetch(`https://api.dpk.com.br/api-product/api/productSearch?Query=${encodeURIComponent(query)}&StoreCode=${storeCode}`, {
+        headers: {
+            'accept': 'application/json',
+            'authorization': authHeader,
+            'origin': 'https://www.dpk.com.br',
+            'referer': 'https://www.dpk.com.br/',
+            'x-api-key': 'Zo7MoqWOQyaHdMJj053tB2Mx9IDJMKR97Y7d2T9a',
+            'x-portal': 'DPK'
+        }
+    });
+
+    if (!searchRes.ok) {
+        throw new Error(`Busca DPK falhou: HTTP ${searchRes.status}`);
+    }
+
+    const searchData = await searchRes.json();
+    const products = Array.isArray(searchData?.products) ? searchData.products : [];
+    if (!products.length) {
+        return [];
+    }
+
+    const itemQuery = products.map(p => 'Item=' + p.sapCode).join('&');
+    const priceRes = await fetch(`https://api.dpk.com.br/dpk-price/api/price/dpk?StoreCode=${storeCode}&${itemQuery}`, {
+        headers: {
+            'accept': 'application/json',
+            'authorization': authHeader,
+            'origin': 'https://www.dpk.com.br',
+            'referer': 'https://www.dpk.com.br/',
+            'x-api-key': 'Zo7MoqWOQyaHdMJj053tB2Mx9IDJMKR97Y7d2T9a',
+            'x-portal': 'DPK'
+        }
+    });
+
+    const prices = priceRes.ok ? await priceRes.json() : [];
+    const priceMap = new Map();
+    if (Array.isArray(prices)) {
+        for (const item of prices) {
+            priceMap.set(String(item.id), item);
+        }
+    }
+
+    return products.map(p => {
+        const priceInfo = priceMap.get(String(p.sapCode)) || {};
+        const price = Number(priceInfo.price || 0);
+        const stock = Number(priceInfo.stock || 0);
+
+        return {
+            provider: 'DPK',
+            product: p.description,
+            price: price > 0 ? price : 0,
+            available: stock > 0,
+            link: `https://www.dpk.com.br/#/produtos/${p.id}/${encodeURIComponent((p.description || '').replace(/\s+/g, '-'))}`,
+            code: p.code,
+            brand: p.manufacturer || '',
+            application: '',
+            stock: stock,
+            stockText: stock > 0 ? `${stock}un. no estoque` : 'Sem estoque',
+            variantKey: `${p.description || ''}`.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+        };
+    }).filter(p => p.price > 0);
+}
+
 module.exports = {
     key: 'dpk',
     matches: (supplierName) => supplierName.toLowerCase().includes('dpk'),
+    directSearch,
     authenticatedUrl: 'https://www.dpk.com.br/#/',
     userSelector: ['input[type="email"]', 'input[formcontrolname="userPrincipalName"]', 'input[formcontrolname="email"]', 'input[name="login"]'],
     passSelector: ['input[type="password"]', 'input[formcontrolname="password"]', 'input[formcontrolname="senha"]'],
