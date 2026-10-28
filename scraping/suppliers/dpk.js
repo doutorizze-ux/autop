@@ -12,15 +12,41 @@ function normalizeAscii(value) {
 module.exports = {
     key: 'dpk',
     matches: (supplierName) => supplierName.toLowerCase().includes('dpk'),
+    authenticatedUrl: 'https://www.dpk.com.br/#/',
     userSelector: ['input[type="email"]', 'input[formcontrolname="userPrincipalName"]', 'input[formcontrolname="email"]', 'input[name="login"]'],
     passSelector: ['input[type="password"]', 'input[formcontrolname="password"]', 'input[formcontrolname="senha"]'],
+    submitSelector: ['button:has-text("Entrar")', 'button[type="submit"]'],
     loginSuccessSelector: [
-        'text="Depósito GOIANIA"',
-        'text="Depósito"',
-        'button:has-text("Sair")',
-        'a[href*="logout"]',
-        '.user-info'
+        'text=Depósito',
+        'text=GOIANIA',
+        'text=Financeiro',
+        'input[formcontrolname="searchTerm"]',
+        'mat-icon:has-text("shopping_cart")',
+        '.product-list__row'
     ],
+    fillLogin: async ({ page, supplier, fillVisibleLocator, dismissTransientUi }) => {
+        await dismissTransientUi();
+        const user = supplier?.loginCredential || 'atendimento@centroautomotivo0058.com';
+        const pass = supplier?.password || 'Re539597@';
+
+        const emailInput = page.locator('input[type="email"], input[formcontrolname="userPrincipalName"]').first();
+        await emailInput.waitFor({ state: 'visible', timeout: 15000 });
+        await fillVisibleLocator(emailInput, user);
+
+        const passInput = page.locator('input[type="password"], input[formcontrolname="password"]').first();
+        await passInput.waitFor({ state: 'visible', timeout: 15000 });
+        await fillVisibleLocator(passInput, pass);
+
+        const submitBtn = page.locator('button:has-text("Entrar")').first();
+        await page.waitForTimeout(500);
+        await submitBtn.click();
+
+        await Promise.race([
+            page.waitForURL((url) => !url.href.includes('login'), { timeout: 15000 }).catch(() => null),
+            page.locator('text=Financeiro, text=Depósito, input[formcontrolname="searchTerm"]').first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => null),
+        ]);
+        await page.waitForTimeout(3000);
+    },
     searchSelector: [
         'input[formcontrolname="searchTerm"]',
         'input[placeholder*="código ou descrição" i]',

@@ -1040,7 +1040,7 @@ async function createContext(browser, supplier, strategy = {}) {
         context = await browser.newContext(contextOptions);
     }
 
-    if (selectedSessionState) {
+    if (!contextOptions.storageState && selectedSessionState) {
         await applySessionStateToContext(context, selectedSessionState);
     }
 
