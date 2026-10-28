@@ -15,10 +15,10 @@ module.exports = {
     userSelector: ['input[type="email"]', 'input[formcontrolname="userPrincipalName"]', 'input[formcontrolname="email"]', 'input[name="login"]'],
     passSelector: ['input[type="password"]', 'input[formcontrolname="password"]', 'input[formcontrolname="senha"]'],
     loginSuccessSelector: [
+        'text="Depósito GOIANIA"',
         'text="Depósito"',
-        'text="Meus pedidos"',
-        'a[href*="logout"]',
         'button:has-text("Sair")',
+        'a[href*="logout"]',
         '.user-info'
     ],
     searchSelector: [
@@ -47,7 +47,30 @@ module.exports = {
             }
         } catch (_) {}
     },
-    performSearch: async ({ page, query }) => {
+    performSearch: async ({ page, query, supplier }) => {
+        try {
+            const cookieBtn = page.locator('button:has-text("ENTENDI E FECHAR"), button:has-text("Entendi e fechar")').first();
+            if (await cookieBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+                await cookieBtn.click().catch(() => {});
+            }
+        } catch (_) {}
+
+        // Auto-cura: se a pagina caiu no login, preenche credenciais e loga imediatamente
+        const emailInput = page.locator('input[type="email"], input[formcontrolname="userPrincipalName"]').first();
+        if (await emailInput.isVisible({ timeout: 1500 }).catch(() => false)) {
+            console.log('[DPK] Na tela de login. Efetuando login automatico...');
+            await emailInput.fill(supplier?.loginCredential || 'atendimento@centroautomotivo0058.com');
+            const passInput = page.locator('input[type="password"], input[formcontrolname="password"]').first();
+            await passInput.fill(supplier?.password || 'Re539597@');
+            const submitBtn = page.locator('button:has-text("Entrar")').first();
+            await submitBtn.click();
+            await page.waitForTimeout(4000);
+        }
+
+        const targetSearchUrl = `https://www.dpk.com.br/#/busca-produto?termo=${encodeURIComponent(query)}`;
+        await page.goto(targetSearchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+        await page.waitForTimeout(3000);
+
         try {
             const cookieBtn = page.locator('button:has-text("ENTENDI E FECHAR"), button:has-text("Entendi e fechar")').first();
             if (await cookieBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
@@ -56,26 +79,14 @@ module.exports = {
         } catch (_) {}
 
         let searchInput = page.locator('input[formcontrolname="searchTerm"], input[placeholder*="código ou descrição" i], input[placeholder*="codigo ou descricao" i]').first();
-        let inputVisible = await searchInput.isVisible({ timeout: 2000 }).catch(() => false);
-
-        if (!inputVisible) {
-            await page.goto('https://www.dpk.com.br/#/', { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
-            await page.waitForTimeout(1500);
-            try {
-                const cookieBtn = page.locator('button:has-text("ENTENDI E FECHAR"), button:has-text("Entendi e fechar")').first();
-                if (await cookieBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-                    await cookieBtn.click().catch(() => {});
-                }
-            } catch (_) {}
-            searchInput = page.locator('input[formcontrolname="searchTerm"], input[placeholder*="código ou descrição" i], input[placeholder*="codigo ou descricao" i]').first();
-        }
-
-        await searchInput.fill(query).catch(() => {});
-        const searchBtn = page.locator('button:has-text("Buscar"), button.btn-buscar').first();
-        if (await searchBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-            await searchBtn.click().catch(() => {});
-        } else {
-            await page.keyboard.press('Enter').catch(() => {});
+        if (await searchInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await searchInput.fill(query).catch(() => {});
+            const searchBtn = page.locator('button:has-text("Buscar"), button.btn-buscar').first();
+            if (await searchBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+                await searchBtn.click().catch(() => {});
+            } else {
+                await page.keyboard.press('Enter').catch(() => {});
+            }
         }
 
         await page.waitForTimeout(2500);
@@ -115,7 +126,7 @@ module.exports = {
             };
 
             const cards = Array.from(document.querySelectorAll(
-                '.column-view-card, .column-view, div.cardsAlinhamento > mat-card.produto-card, mat-card.produto-card, mat-card, .product-item, .card-produto, .grid-produto'
+                'article.product-list__row, .product-list__row, .column-view-card, .column-view, div.cardsAlinhamento > mat-card.produto-card, mat-card.produto-card, mat-card, .product-item, .card-produto, .grid-produto'
             ));
             const items = [];
 
@@ -124,29 +135,31 @@ module.exports = {
                 if (!text) continue;
 
                 const product =
-                    findText(card, ['h2.mat-h4', 'h2', '.mat-h4', '.product-name', '.product-title', '.descricao-produto', 'a[href*="#/produtos/"]'])
+                    findText(card, ['.product-list__name', 'h2.mat-h4', 'h2', '.mat-h4', '.product-name', '.product-title', '.descricao-produto', 'a[href*="#/produtos/"]'])
                     || normalize(text.split('R$')[0].split('Fabricante:')[0]);
                 const priceText =
-                    findText(card, ['span.cor-preco', 'div.preco span.cor-preco', '.preco .cor-preco', '.price', '.preco', '.valor'])
+                    findText(card, ['.product-list__price strong', '.product-list__price', 'span.cor-preco', 'div.preco span.cor-preco', '.preco .cor-preco', '.price', '.preco', '.valor'])
                     || ((text.match(/R\$\s*[0-9.,]+/) || [])[0] || '');
 
                 if (!product) continue;
 
-                const stockText = findText(card, ['div.estoque', '.estoque']);
-                const brandNode = Array.from(card.querySelectorAll('div.informacoes p strong, p strong, strong')).find((node) => {
+                const stockText = findText(card, ['.product-list__availability strong', '.product-list__availability', 'div.estoque', '.estoque']);
+                const brandNode = Array.from(card.querySelectorAll('.product-list__manufacturer strong, div.informacoes p strong, p strong, strong')).find((node) => {
                     const parentText = normalizeKey(node.parentElement?.textContent || '');
                     return /fabricante/.test(parentText) && !/cod/.test(parentText);
                 });
-                const factoryCodeNode = Array.from(card.querySelectorAll('div.fab strong, div.informacoes strong, strong')).find((node) => {
+                const factoryCodeNode = Array.from(card.querySelectorAll('.product-list__codes strong, div.fab strong, div.informacoes strong, strong')).find((node) => {
                     const parentText = normalizeKey(node.parentElement?.textContent || '');
-                    return /cod\.?\s*(?:de|do)?\s*fabrica/.test(parentText);
+                    return /cod\.?\s*(?:de|do)?\s*fabrica/.test(parentText) || /cod/.test(parentText);
                 });
 
                 const brand =
-                    findMatch(text, [/Fabricante:\s*(.+?)\s*C[o\u00f3]d/i])
+                    findText(card, ['.product-list__manufacturer strong'])
+                    || findMatch(text, [/Fabricante:\s*(.+?)\s*C[o\u00f3]d/i])
                     || normalize(brandNode?.textContent || '');
                 const code =
-                    findMatch(text, [
+                    findText(card, ['.product-list__codes span strong', '.product-list__codes strong'])
+                    || findMatch(text, [
                         /C[o\u00f3]d\.?\s*(?:de|do)?\s*F[a\u00e1]brica:\s*([A-Z0-9./_-]+)/i,
                         /C[o\u00f3]d\.?\s*do\s*Produto:\s*([A-Z0-9./_-]+)/i,
                         /SKU:\s*([A-Z0-9./_-]+)/i,
@@ -154,13 +167,17 @@ module.exports = {
                     || normalize(factoryCodeNode?.textContent || '');
                 const stock = ((stockText.match(/([0-9]+)\s*un/i) || [])[1] || (text.match(/([0-9]+)\s*un\.?\s*no estoque/i) || [])[1] || '0').trim();
 
+                const linkEl = card.querySelector('a[href*="#/produtos/"]');
+                const link = linkEl ? linkEl.href : window.location.href;
+
                 items.push({
                     nome: product,
                     preco: priceText,
                     codigo: code,
                     marca: brand,
                     estoque: stock,
-                    link: window.location.href,
+                    estoqueTexto: stockText || `${stock} un`,
+                    link,
                 });
             }
 

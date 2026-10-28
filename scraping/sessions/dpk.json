@@ -2,33 +2,43 @@
   "cookies": [
     {
       "name": "_ga",
-      "value": "GA1.1.413813264.1793106702",
+      "value": "GA1.1.1510386788.1793187471",
       "domain": ".dpk.com.br",
       "path": "/",
-      "expires": 1827666701.527082,
-      "httpOnly": false,
-      "secure": false,
-      "sameSite": "Lax"
-    },
-    {
-      "name": "_ga_XF990F9NQ6",
-      "value": "GS2.1.s1793106701$o1$g0$t1793106701$j60$l0$h0",
-      "domain": ".dpk.com.br",
-      "path": "/",
-      "expires": 1827666701.537111,
+      "expires": 1827747471.022614,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"
     },
     {
       "name": "__cf_bm",
-      "value": "82MYGHC0aQh3.OnEo3onrMCOCZ9nlw_jtW_Dv4W_7Ao-1793106811.1413593-1.0.1.1-SkXOMnGFKY8582MLq2GYUWoIZTCVnOtJYWQRHPUTWMDnltoKwym7fBVY9Xma9Oa96hYvSQ702fAmWCTL7tGe0D7vyErtUEAuJDmafUIu9LbgODnRqTN1tClkCmuyTRX5",
+      "value": "Ps6CGLMpDViwqfp1HgbeRURBi4SBmG25vO30PN8uTNI-1793187582.9018261-1.0.1.1-LLlJlQQTYanlSFjHIdrE4F5mnSDnpnJ9k376pAiM_S7BfBqTvGBz2Luw_x3HCcGm9ECUR5lEIiFeLv7Ilv0VsBVG7zhfsHRjtOlj_gZPPA3v0MXVIYmRz4yMVim5c3Sb",
       "domain": ".institucional.dpk.com.br",
       "path": "/",
-      "expires": 1793108505.236848,
+      "expires": 1793189275.138905,
       "httpOnly": true,
       "secure": true,
       "sameSite": "None"
+    },
+    {
+      "name": "_ga_XF990F9NQ6",
+      "value": "GS2.1.s1793187471$o1$g1$t1793187624$j60$l0$h0",
+      "domain": ".dpk.com.br",
+      "path": "/",
+      "expires": 1827747624.08368,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "aceiteUsuario",
+      "value": "true",
+      "domain": "www.dpk.com.br",
+      "path": "/",
+      "expires": 1827747624.110416,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
     }
   ],
   "origins": [
@@ -37,7 +47,7 @@
       "localStorage": [
         {
           "name": "predictiveData",
-          "value": "{\"data\":{\"b04077becb2ab5f24dadcd2e3c3a8fb5\":{\"9fd326e60c6ab9fcd6d4da2b9b35810f\":[\"e50f19759f74466f1686e3a62ca032ae\",\"6f26f1a134a039c8935f8dbf06c206a0\"]},\"9cf75687a799824f5365af2331d6fd86\":\"874f03b2a16b9dff1460c7ec092f3764\",\"98ebe05e44b21aae01a537980810f84a\":\"e9723dc746c4a9d62a903c791893fc99\",\"fecd144ef58a0b0a9b17d0f59a6003b4\":{},\"0f1d1f2d10d8eb8c1c2d74f4c6bae778\":\"f57e7edc655b8d4f4c83d9be9889435f\",\"220e133760ea9d85df30c46b411697cd\":\"unknown\",\"0e8d0ba27ac1ca899344d7e4c477348c\":{\"3644cd7e1b3b7f82288aa374b99ae7b5\":\"9349156cf75ba3cf2c24b35b90c3f28b\",\"edcb4ac79ce00987c7f81e895da81a1e\":\"d8e82c21fc56e8e80c379a17afaa4642\",\"2fcf37c0f6e4ecd6e9748c1f5fb324e2\":\"f477a180afa433bf50a2cc3acb2bac9c\"},\"26469a2d55f4428d23504a45d29da086\":\"f57e7edc655b8d4f4c83d9be9889435f\",\"02a5efd743bebacb11083c1a68979791\":{},\"b290ef0a1128a849359764ccb88b2eba\":{},\"46481a7393c7617c4c839a18363295d9\":\"f57e7edc655b8d4f4c83d9be9889435f\",\"2154f9c4892be8f85eef248c2a1fc999\":86400000,\"65a994e9e86218b29b5ff2a59e2b4a4d\":\"2026-10-26 20:31:07\",\"321c62cd5be7101f973174da12e5569b\":\"f57e7edc655b8d4f4c83d9be9889435f\",\"4e9a60de114bbb8d6f4cd238792f0ef7\":\"17755599564689bbe0eda40.61959875\",\"6d3041d1f5f2bda7d69fccc41fc7bce7\":\"f57e7edc655b8d4f4c83d9be9889435f\",\"684808134d36d2285db748666c1b6c8a\":\"f57e7edc655b8d4f4c83d9be9889435f\"},\"_expires\":1793193106146}"
+          "value": "{\"data\":{\"b04077becb2ab5f24dadcd2e3c3a8fb5\":{\"9fd326e60c6ab9fcd6d4da2b9b35810f\":[\"e50f19759f74466f1686e3a62ca032ae\",\"6f26f1a134a039c8935f8dbf06c206a0\"]},\"9cf75687a799824f5365af2331d6fd86\":\"874f03b2a16b9dff1460c7ec092f3764\",\"98ebe05e44b21aae01a537980810f84a\":\"e9723dc746c4a9d62a903c791893fc99\",\"fecd144ef58a0b0a9b17d0f59a6003b4\":{},\"0f1d1f2d10d8eb8c1c2d74f4c6bae778\":\"f57e7edc655b8d4f4c83d9be9889435f\",\"220e133760ea9d85df30c46b411697cd\":\"unknown\",\"0e8d0ba27ac1ca899344d7e4c477348c\":{\"3644cd7e1b3b7f82288aa374b99ae7b5\":\"9349156cf75ba3cf2c24b35b90c3f28b\",\"edcb4ac79ce00987c7f81e895da81a1e\":\"d8e82c21fc56e8e80c379a17afaa4642\",\"2fcf37c0f6e4ecd6e9748c1f5fb324e2\":\"f477a180afa433bf50a2cc3acb2bac9c\"},\"26469a2d55f4428d23504a45d29da086\":\"f57e7edc655b8d4f4c83d9be9889435f\",\"02a5efd743bebacb11083c1a68979791\":{},\"b290ef0a1128a849359764ccb88b2eba\":{},\"46481a7393c7617c4c839a18363295d9\":\"f57e7edc655b8d4f4c83d9be9889435f\",\"2154f9c4892be8f85eef248c2a1fc999\":86400000,\"65a994e9e86218b29b5ff2a59e2b4a4d\":\"2026-10-27 22:31:40\",\"321c62cd5be7101f973174da12e5569b\":\"f57e7edc655b8d4f4c83d9be9889435f\",\"4e9a60de114bbb8d6f4cd238792f0ef7\":\"17755599564689bbe0eda40.61959875\",\"6d3041d1f5f2bda7d69fccc41fc7bce7\":\"f57e7edc655b8d4f4c83d9be9889435f\",\"684808134d36d2285db748666c1b6c8a\":\"f57e7edc655b8d4f4c83d9be9889435f\"},\"_expires\":1793273875994}"
         },
         {
           "name": "selected.cnpj",
@@ -45,11 +55,11 @@
         },
         {
           "name": "ins-wp-active-tab",
-          "value": "{\"data\":\"0.1uovuzh83cl\",\"_expires\":1793193105000}"
+          "value": "{\"data\":\"0.42vv67bl1o8\",\"_expires\":1793273875000}"
         },
         {
           "name": "ins-user-segments",
-          "value": "{\"data\":{\"135\":269,\"166\":332,\"181\":362,\"194\":388,\"255\":510,\"258\":516,\"312\":623,\"314\":628,\"318\":635,\"320\":640,\"324\":648,\"326\":651},\"_expires\":1793110305000}"
+          "value": "{\"data\":{\"135\":269,\"166\":332,\"181\":362,\"194\":388,\"255\":510,\"258\":516,\"312\":624,\"314\":627,\"318\":636,\"320\":639,\"324\":648,\"326\":652},\"_expires\":1793191075000}"
         },
         {
           "name": "stored.notification",
@@ -57,7 +67,7 @@
         },
         {
           "name": "unification-remigrate-key",
-          "value": "{\"data\":\"\",\"_expires\":1824642705000}"
+          "value": "{\"data\":\"\",\"_expires\":1824723475000}"
         },
         {
           "name": "customer.warehouse",
@@ -69,7 +79,7 @@
         },
         {
           "name": "insUserPermissionGranted",
-          "value": "{\"data\":{\"state\":false},\"_expires\":1824642707000}"
+          "value": "{\"data\":{\"state\":false},\"_expires\":1824723477000}"
         },
         {
           "name": "selected.warehouse",
@@ -77,15 +87,15 @@
         },
         {
           "name": "unificationUserDataHash",
-          "value": "{\"data\":1270358800,\"_expires\":1824642706000}"
+          "value": "{\"data\":1116192187,\"_expires\":1824723476000}"
         },
         {
           "name": "spUID",
-          "value": "{\"data\":\"17755599564689bbe0eda40.61959875\",\"_expires\":1824642706000}"
+          "value": "{\"data\":\"17755599564689bbe0eda40.61959875\",\"_expires\":1824723476000}"
         },
         {
           "name": "ins-contact-field",
-          "value": "{\"data\":true,\"_expires\":1824642706000}"
+          "value": "{\"data\":true,\"_expires\":1824723476000}"
         },
         {
           "name": "customer.isMasterUser",
@@ -93,7 +103,7 @@
         },
         {
           "name": "ins-gaSSId",
-          "value": "{\"data\":{\"id\":\"yttnjxw1-4sjv-669o-7qrk-4ae8kgg9hw6g_1793106705\"},\"_expires\":1793108505000}"
+          "value": "{\"data\":{\"id\":\"yycy14mi-dgt2-4vt6-2ukn-9z4b2qn8blht_1793187475\"},\"_expires\":1793189275000}"
         },
         {
           "name": "customerAddress",
@@ -101,7 +111,7 @@
         },
         {
           "name": "insCustomAttributes",
-          "value": "{\"data\":{},\"_expires\":1824642706000}"
+          "value": "{\"data\":{},\"_expires\":1824723476000}"
         },
         {
           "name": "customer.identify",
@@ -117,23 +127,23 @@
         },
         {
           "name": "ins-default-attributes",
-          "value": "{\"data\":{\"last_abandoned_cart_amount\":0,\"last_visited_category_url\":\"https://www.dpk.com.br/#/\",\"last_visited_product_img\":\"https://web-image.useinsider.com/dpaschoaldpk/webPushDefaultImage/xY6F8JjQ4mK1Aj35LkPV1778268416.png\",\"last_visited_product_url\":\"https://www.dpk.com.br/#/\",\"last_abandoned_product_img\":\"https://web-image.useinsider.com/dpaschoaldpk/webPushDefaultImage/xY6F8JjQ4mK1Aj35LkPV1778268416.png\",\"last_abandoned_product_url\":\"https://www.dpk.com.br/#/\"},\"_expires\":1824642705000}"
+          "value": "{\"data\":{\"last_abandoned_cart_amount\":0,\"last_visited_category_url\":\"https://www.dpk.com.br/#/\",\"last_visited_product_img\":\"https://web-image.useinsider.com/dpaschoaldpk/webPushDefaultImage/xY6F8JjQ4mK1Aj35LkPV1778268416.png\",\"last_visited_product_url\":\"https://www.dpk.com.br/#/\",\"last_abandoned_product_img\":\"https://web-image.useinsider.com/dpaschoaldpk/webPushDefaultImage/xY6F8JjQ4mK1Aj35LkPV1778268416.png\",\"last_abandoned_product_url\":\"https://www.dpk.com.br/#/\"},\"_expires\":1824723475000}"
         },
         {
           "name": "ins-userDateV",
-          "value": "{\"data\":[1793106705],\"_expires\":1824642705000}"
+          "value": "{\"data\":[1793187475],\"_expires\":1824723475000}"
         },
         {
           "name": "ins-partner-name",
-          "value": "{\"data\":\"dpaschoaldpk\",\"_expires\":1793193105000}"
-        },
-        {
-          "name": "token.refresh",
-          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJvaWQiOiIyMzQ0NSIsImN1c3RvbWVyX2RvY3VtZW50IjoiMzMyOTk2MzcwMDAxODAiLCJjdXN0b21lcl9pZCI6IjI0NTg3IiwiYWNjb3VudF9pZCI6IjI0MjYyIiwicHJlZmVycmVkX3VzZXJuYW1lIjoiYXRlbmRpbWVudG9AY2VudHJvYXV0b21vdGl2bzAwNTguY29tIiwibmFtZSI6ImNlbnRyb2F1dG9tb3Rpdm8wMDU4LmNvbSIsInBvcnRhbCI6IkRQSyIsInRva2VuX3B1cnBvc2UiOiJyZWZyZXNoX3Rva2VuIiwibmJmIjoxNzkzMTA2ODA5LCJleHAiOjE3OTMxNTAwMDksImlhdCI6MTc5MzEwNjgwOSwiaXNzIjoiaHR0cDovL2FwaS1hdXRoOjgwODAiLCJhdWQiOiJodHRwOi8vYXBpLWF1dGg6ODA4MCJ9.vC2O9LBPlHVqhAOG0rDqF1RGNe-UsIjVgbnvzQFIO4A"
+          "value": "{\"data\":\"dpaschoaldpk\",\"_expires\":1793273875000}"
         },
         {
           "name": "ins-loggedinUser",
-          "value": "{\"data\":1,\"_expires\":1824642705000}"
+          "value": "{\"data\":1,\"_expires\":1824723475000}"
+        },
+        {
+          "name": "token.refresh",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJvaWQiOiIyMzQ0NSIsImN1c3RvbWVyX2RvY3VtZW50IjoiMzMyOTk2MzcwMDAxODAiLCJjdXN0b21lcl9pZCI6IjI0NTg3IiwiYWNjb3VudF9pZCI6IjI0MjYyIiwicHJlZmVycmVkX3VzZXJuYW1lIjoiYXRlbmRpbWVudG9AY2VudHJvYXV0b21vdGl2bzAwNTguY29tIiwibmFtZSI6ImNlbnRyb2F1dG9tb3Rpdm8wMDU4LmNvbSIsInBvcnRhbCI6IkRQSyIsInRva2VuX3B1cnBvc2UiOiJyZWZyZXNoX3Rva2VuIiwibmJmIjoxNzkzMTg3NTgxLCJleHAiOjE3OTMyMzA3ODEsImlhdCI6MTc5MzE4NzU4MSwiaXNzIjoiaHR0cDovL2FwaS1hdXRoOjgwODAiLCJhdWQiOiJodHRwOi8vYXBpLWF1dGg6ODA4MCJ9.br1x_4Yh_-kJWjMdj7ZAazAlLsVNQAoZzmYL3qb1J2E"
         },
         {
           "name": "stored.customer",
@@ -141,93 +151,53 @@
         },
         {
           "name": "token.access",
-          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJvaWQiOiIyMzQ0NSIsImN1c3RvbWVyX2RvY3VtZW50IjoiMzMyOTk2MzcwMDAxODAiLCJjdXN0b21lcl9pZCI6IjI0NTg3IiwiYWNjb3VudF9pZCI6IjI0MjYyIiwicHJlZmVycmVkX3VzZXJuYW1lIjoiYXRlbmRpbWVudG9AY2VudHJvYXV0b21vdGl2bzAwNTguY29tIiwibmFtZSI6ImNlbnRyb2F1dG9tb3Rpdm8wMDU4LmNvbSIsInBvcnRhbCI6IkRQSyIsInJvbGUiOlsiQURNSU5JU1RSQVRJVkUiLCJDUkVESVRfTElNSVQiLCJGSU5BTkNJQUwiLCJXQVJSQU5UWSIsIk9SREVSUyIsIk1BS0VfUFVSQ0hBU0UiXSwidG9rZW5fcHVycG9zZSI6ImFjY2Vzc190b2tlbiIsIm5iZiI6MTc5MzEwNjgwOSwiZXhwIjoxNzkzMTEwNDA5LCJpYXQiOjE3OTMxMDY4MDksImlzcyI6Imh0dHA6Ly9hcGktYXV0aDo4MDgwIiwiYXVkIjoiaHR0cDovL2FwaS1hdXRoOjgwODAifQ.s_n9rXMycqWH5VH_vo_vIEpCWINDqV26Cd4xuxhaMjk"
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJvaWQiOiIyMzQ0NSIsImN1c3RvbWVyX2RvY3VtZW50IjoiMzMyOTk2MzcwMDAxODAiLCJjdXN0b21lcl9pZCI6IjI0NTg3IiwiYWNjb3VudF9pZCI6IjI0MjYyIiwicHJlZmVycmVkX3VzZXJuYW1lIjoiYXRlbmRpbWVudG9AY2VudHJvYXV0b21vdGl2bzAwNTguY29tIiwibmFtZSI6ImNlbnRyb2F1dG9tb3Rpdm8wMDU4LmNvbSIsInBvcnRhbCI6IkRQSyIsInJvbGUiOlsiQURNSU5JU1RSQVRJVkUiLCJDUkVESVRfTElNSVQiLCJGSU5BTkNJQUwiLCJXQVJSQU5UWSIsIk9SREVSUyIsIk1BS0VfUFVSQ0hBU0UiXSwidG9rZW5fcHVycG9zZSI6ImFjY2Vzc190b2tlbiIsIm5iZiI6MTc5MzE4NzU4MSwiZXhwIjoxNzkzMTkxMTgxLCJpYXQiOjE3OTMxODc1ODEsImlzcyI6Imh0dHA6Ly9hcGktYXV0aDo4MDgwIiwiYXVkIjoiaHR0cDovL2FwaS1hdXRoOjgwODAifQ.qeej_zia7dNg9mILJ--8CRY2bQyeRAL1IjzfMToEdG0"
         },
         {
           "name": "ins-wp-native-permission-impression",
-          "value": "{\"data\":true,\"_expires\":1824210706000}"
+          "value": "{\"data\":true,\"_expires\":1824291475000}"
         },
         {
           "name": "userLocation",
-          "value": "{\"data\":{\"geoId\":\"3462377\",\"city\":\"Goiânia\",\"region\":\"Goiás\",\"regionId\":\"GO\",\"country\":\"BR\",\"cName\":\"Brazil\",\"request\":\"5c0cfa183d944b2609fe955192b753f1\",\"latitude\":\"bff0c780ffa93b2d7444abb4be8d5d1c\",\"longitude\":\"8eb862a7a2b4519474e784b86774dd5a\"},\"_expires\":1793193106000}"
+          "value": "{\"data\":{\"geoId\":\"3462377\",\"city\":\"Goiânia\",\"region\":\"Goiás\",\"regionId\":\"GO\",\"country\":\"BR\",\"cName\":\"Brazil\",\"request\":\"5c0cfa183d944b2609fe955192b753f1\",\"latitude\":\"bff0c780ffa93b2d7444abb4be8d5d1c\",\"longitude\":\"8eb862a7a2b4519474e784b86774dd5a\"},\"_expires\":1793273876000}"
         },
         {
           "name": "ins-sourceUrl",
-          "value": "{\"data\":\"\",\"_expires\":1795698705000}"
+          "value": "{\"data\":\"\",\"_expires\":1795779475000}"
         },
         {
           "name": "ins-current-currency",
-          "value": "{\"data\":\"BRL\",\"_expires\":1793193105000}"
+          "value": "{\"data\":\"BRL\",\"_expires\":1793273875000}"
         },
         {
           "name": "ins-log-tracking-hit",
-          "value": "{\"data\":{\"sc\":1,\"ec\":0},\"_expires\":1793193106000}"
+          "value": "{\"data\":{\"sc\":1,\"ec\":0},\"_expires\":1793273876000}"
         },
         {
           "name": "ins-landingPage",
-          "value": "{\"data\":\"https://www.dpk.com.br/#/\",\"_expires\":1795698705000}"
+          "value": "{\"data\":\"https://www.dpk.com.br/#/\",\"_expires\":1795779475000}"
         },
         {
           "name": "ins-wp-request-sent",
-          "value": "{\"data\":true,\"_expires\":1793193106000}"
+          "value": "{\"data\":true,\"_expires\":1793273875000}"
         },
         {
           "name": "customer.portal",
           "value": "DPK"
         },
         {
+          "name": "ins-unified-by",
+          "value": "{\"data\":[\"em\",\"pn\"],\"_expires\":1824723476000}"
+        },
+        {
           "name": "stored.cart",
           "value": "[{\"id\":\"019c014b-0cab-7af5-b663-09c815f189ad\",\"idCustomerAccount\":23445,\"retailerId\":2,\"hubId\":14,\"portalId\":1,\"paymentId\":0,\"shippingCompanyId\":0,\"createdDate\":\"2026-01-27T18:10:21.612689\",\"modifiedDate\":null,\"closed\":false,\"customerIntegration\":false,\"cartItems\":[{\"id\":\"019c014b-0cab-7239-9792-996941754ab9\",\"cartId\":\"019c014b-0cab-7af5-b663-09c815f189ad\",\"productId\":3706369,\"productRetailerId\":6582915,\"quantity\":1,\"position\":1,\"code\":\"0580454132\",\"description\":\"BOMBA COMBUSTIVEL - ELETRICA GASOLINA 0580454132 BOSCH\",\"manufacturer\":\"BOSCH\",\"height\":0,\"length\":0,\"productWeight\":0,\"totalWeight\":0,\"total\":0,\"volume\":0,\"createdDate\":\"2026-01-27T18:10:21.612689\",\"modifiedDate\":null}]}]"
         },
         {
-          "name": "ins-unified-by",
-          "value": "{\"data\":[\"em\",\"pn\"],\"_expires\":1824642706000}"
-        },
-        {
           "name": "insUserInfoHash",
-          "value": "{\"data\":377266589,\"_expires\":1824642706000}"
+          "value": "{\"data\":377266589,\"_expires\":1824723476000}"
         }
       ]
     }
-  ],
-  "localStorage": {
-    "predictiveData": "{\"data\":{\"b04077becb2ab5f24dadcd2e3c3a8fb5\":{\"9fd326e60c6ab9fcd6d4da2b9b35810f\":[\"e50f19759f74466f1686e3a62ca032ae\",\"6f26f1a134a039c8935f8dbf06c206a0\"]},\"9cf75687a799824f5365af2331d6fd86\":\"874f03b2a16b9dff1460c7ec092f3764\",\"98ebe05e44b21aae01a537980810f84a\":\"e9723dc746c4a9d62a903c791893fc99\",\"fecd144ef58a0b0a9b17d0f59a6003b4\":{},\"0f1d1f2d10d8eb8c1c2d74f4c6bae778\":\"f57e7edc655b8d4f4c83d9be9889435f\",\"220e133760ea9d85df30c46b411697cd\":\"unknown\",\"0e8d0ba27ac1ca899344d7e4c477348c\":{\"3644cd7e1b3b7f82288aa374b99ae7b5\":\"9349156cf75ba3cf2c24b35b90c3f28b\",\"edcb4ac79ce00987c7f81e895da81a1e\":\"d8e82c21fc56e8e80c379a17afaa4642\",\"2fcf37c0f6e4ecd6e9748c1f5fb324e2\":\"f477a180afa433bf50a2cc3acb2bac9c\"},\"26469a2d55f4428d23504a45d29da086\":\"f57e7edc655b8d4f4c83d9be9889435f\",\"02a5efd743bebacb11083c1a68979791\":{},\"b290ef0a1128a849359764ccb88b2eba\":{},\"46481a7393c7617c4c839a18363295d9\":\"f57e7edc655b8d4f4c83d9be9889435f\",\"2154f9c4892be8f85eef248c2a1fc999\":86400000,\"65a994e9e86218b29b5ff2a59e2b4a4d\":\"2026-10-26 20:31:07\",\"321c62cd5be7101f973174da12e5569b\":\"f57e7edc655b8d4f4c83d9be9889435f\",\"4e9a60de114bbb8d6f4cd238792f0ef7\":\"17755599564689bbe0eda40.61959875\",\"6d3041d1f5f2bda7d69fccc41fc7bce7\":\"f57e7edc655b8d4f4c83d9be9889435f\",\"684808134d36d2285db748666c1b6c8a\":\"f57e7edc655b8d4f4c83d9be9889435f\"},\"_expires\":1793193106146}",
-    "selected.cnpj": "33299637000180",
-    "ins-wp-active-tab": "{\"data\":\"0.1uovuzh83cl\",\"_expires\":1793193105000}",
-    "ins-user-segments": "{\"data\":{\"135\":269,\"166\":332,\"181\":362,\"194\":388,\"255\":510,\"258\":516,\"312\":623,\"314\":628,\"318\":635,\"320\":640,\"324\":648,\"326\":651},\"_expires\":1793110305000}",
-    "stored.notification": "{\"count\":0,\"customerNotifications\":[]}",
-    "unification-remigrate-key": "{\"data\":\"\",\"_expires\":1824642705000}",
-    "customer.warehouse": "{\"id\":4,\"description\":\"GOIANIA\",\"retailerId\":2,\"warehouseType\":null,\"pdv\":7170,\"code\":0,\"document\":\"45987005017082\",\"zipCode\":74430030,\"priceId\":4}",
-    "stored.warehouse": "[{\"id\":4,\"description\":\"GOIANIA\",\"retailerId\":2,\"warehouseType\":null,\"pdv\":7170,\"code\":0,\"document\":\"45987005017082\",\"zipCode\":74430030,\"priceId\":4},{\"id\":7,\"description\":\"BH\",\"retailerId\":2,\"warehouseType\":null,\"pdv\":7176,\"code\":0,\"document\":\"45987005017678\",\"zipCode\":32372070,\"priceId\":7},{\"id\":9,\"description\":\"DF\",\"retailerId\":2,\"warehouseType\":null,\"pdv\":7185,\"code\":0,\"document\":\"45987005018569\",\"zipCode\":72135080,\"priceId\":9},{\"id\":24,\"description\":\"HUB CPS\",\"retailerId\":2,\"warehouseType\":null,\"pdv\":7282,\"code\":0,\"document\":\"45987005028289\",\"zipCode\":13051900,\"priceId\":24},{\"id\":33,\"description\":\"HUB ITAJAI\",\"retailerId\":2,\"warehouseType\":null,\"pdv\":7313,\"code\":0,\"document\":\"45987005031310\",\"zipCode\":88317001,\"priceId\":33},{\"id\":41,\"description\":\"HUB VIANA\",\"retailerId\":2,\"warehouseType\":null,\"pdv\":7311,\"code\":0,\"document\":\"45987005031158\",\"zipCode\":29135160,\"priceId\":41},{\"id\":13,\"description\":\"MS\",\"retailerId\":2,\"warehouseType\":null,\"pdv\":7220,\"code\":0,\"document\":\"45987005022086\",\"zipCode\":79022000,\"priceId\":13},{\"id\":21,\"description\":\"VIANA\",\"retailerId\":2,\"warehouseType\":null,\"pdv\":7265,\"code\":0,\"document\":\"45987005026588\",\"zipCode\":29161973,\"priceId\":21}]",
-    "insUserPermissionGranted": "{\"data\":{\"state\":false},\"_expires\":1824642707000}",
-    "selected.warehouse": "{\"id\":4,\"description\":\"GOIANIA\",\"retailerId\":2,\"warehouseType\":null,\"pdv\":7170,\"code\":0,\"document\":\"45987005017082\",\"zipCode\":74430030,\"priceId\":4}",
-    "unificationUserDataHash": "{\"data\":1270358800,\"_expires\":1824642706000}",
-    "spUID": "{\"data\":\"17755599564689bbe0eda40.61959875\",\"_expires\":1824642706000}",
-    "ins-contact-field": "{\"data\":true,\"_expires\":1824642706000}",
-    "customer.isMasterUser": "true",
-    "ins-gaSSId": "{\"data\":{\"id\":\"yttnjxw1-4sjv-669o-7qrk-4ae8kgg9hw6g_1793106705\"},\"_expires\":1793108505000}",
-    "customerAddress": "{\"id\":24849,\"street\":\"UNIVERSITARIA\",\"number\":\"1669\",\"complement\":\"AVENIDA\",\"neighborhood\":\"SET LESTE UNIVERSITARIO\",\"zipcode\":\"74610100\",\"uf\":\"Goiás\",\"city\":\"Goiânia\",\"codeCity\":5208707,\"idUf\":26,\"idCity\":977}",
-    "insCustomAttributes": "{\"data\":{},\"_expires\":1824642706000}",
-    "customer.identify": "atendimento@centroautomotivo0058.com",
-    "token.id": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJvaWQiOiIyMzQ0NSIsImN1c3RvbWVyX2RvY3VtZW50IjoiMzMyOTk2MzcwMDAxODAiLCJjdXN0b21lcl9pZCI6IjI0NTg3IiwiYWNjb3VudF9pZCI6IjI0MjYyIiwicHJlZmVycmVkX3VzZXJuYW1lIjoiYXRlbmRpbWVudG9AY2VudHJvYXV0b21vdGl2bzAwNTguY29tIiwibmFtZSI6ImNlbnRyb2F1dG9tb3Rpdm8wMDU4LmNvbSIsInBvcnRhbCI6IkRQSyIsInJvbGUiOlsiQURNSU5JU1RSQVRJVkUiLCJDUkVESVRfTElNSVQiLCJGSU5BTkNJQUwiLCJXQVJSQU5UWSIsIk9SREVSUyIsIk1BS0VfUFVSQ0hBU0UiXSwidG9rZW5fcHVycG9zZSI6ImlkX3Rva2VuIiwiaXNzIjoiaHR0cDovL2FwaS1hdXRoOjgwODAiLCJhdWQiOiJodHRwOi8vYXBpLWF1dGg6ODA4MCJ9.rXmSEpsZJhzH9USuzKzUSbBVxHzrXbtIf5OQzGP1LA4",
-    "customer.cnpj": "33299637000180",
-    "ins-default-attributes": "{\"data\":{\"last_abandoned_cart_amount\":0,\"last_visited_category_url\":\"https://www.dpk.com.br/#/\",\"last_visited_product_img\":\"https://web-image.useinsider.com/dpaschoaldpk/webPushDefaultImage/xY6F8JjQ4mK1Aj35LkPV1778268416.png\",\"last_visited_product_url\":\"https://www.dpk.com.br/#/\",\"last_abandoned_product_img\":\"https://web-image.useinsider.com/dpaschoaldpk/webPushDefaultImage/xY6F8JjQ4mK1Aj35LkPV1778268416.png\",\"last_abandoned_product_url\":\"https://www.dpk.com.br/#/\"},\"_expires\":1824642705000}",
-    "ins-userDateV": "{\"data\":[1793106705],\"_expires\":1824642705000}",
-    "ins-partner-name": "{\"data\":\"dpaschoaldpk\",\"_expires\":1793193105000}",
-    "token.refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJvaWQiOiIyMzQ0NSIsImN1c3RvbWVyX2RvY3VtZW50IjoiMzMyOTk2MzcwMDAxODAiLCJjdXN0b21lcl9pZCI6IjI0NTg3IiwiYWNjb3VudF9pZCI6IjI0MjYyIiwicHJlZmVycmVkX3VzZXJuYW1lIjoiYXRlbmRpbWVudG9AY2VudHJvYXV0b21vdGl2bzAwNTguY29tIiwibmFtZSI6ImNlbnRyb2F1dG9tb3Rpdm8wMDU4LmNvbSIsInBvcnRhbCI6IkRQSyIsInRva2VuX3B1cnBvc2UiOiJyZWZyZXNoX3Rva2VuIiwibmJmIjoxNzkzMTA2ODA5LCJleHAiOjE3OTMxNTAwMDksImlhdCI6MTc5MzEwNjgwOSwiaXNzIjoiaHR0cDovL2FwaS1hdXRoOjgwODAiLCJhdWQiOiJodHRwOi8vYXBpLWF1dGg6ODA4MCJ9.vC2O9LBPlHVqhAOG0rDqF1RGNe-UsIjVgbnvzQFIO4A",
-    "ins-loggedinUser": "{\"data\":1,\"_expires\":1824642705000}",
-    "stored.customer": "[{\"id\":24587,\"corporateName\":\"CENTRO AUTOMOTIVO 0058 LTDA\",\"fantasyName\":\"OFICINA DO JOAOZINHO E RENAN\",\"cnpj\":\"33299637000180\",\"ie\":\"103362630\",\"dateFoundation\":\"1989-06-23T00:00:00\",\"owner\":\"RENAN KURAMOTO DIAS\",\"landlinePhone\":\"6232029238\",\"cellPhone\":\"\",\"email\":\"atendimento@centroautomotivo0058.com\",\"corporateEmail\":\"centroautomotivo0058@hotmail.com\",\"integrateOnpremise\":true,\"allowShareData\":true,\"approvedCredit\":true,\"isMasterUser\":true,\"users\":[],\"idCustomerType\":171,\"idRepresentative\":null,\"customerType\":\"Revend. Varejista\",\"codeCustomerType\":\"Z6\",\"segment\":\"Revend. Varejista\",\"codeSegment\":\"FA\",\"tareCode\":null,\"tareDate\":null,\"suframaCode\":null,\"vdrCategory\":null,\"employeeFlag\":false,\"accountValidationDate\":\"2024-12-13T22:02:25.267\",\"customerAddresses\":[{\"id\":24849,\"street\":\"UNIVERSITARIA\",\"number\":\"1669\",\"complement\":\"AVENIDA\",\"neighborhood\":\"SET LESTE UNIVERSITARIO\",\"zipcode\":\"74610100\",\"uf\":\"Goiás\",\"city\":\"Goiânia\",\"codeCity\":5208707,\"idUf\":26,\"idCity\":977}],\"customerPortals\":[{\"id\":25230,\"idPortal\":1}],\"customerSegments\":[{\"id\":63757,\"idSegment\":1},{\"id\":63758,\"idSegment\":2},{\"id\":63759,\"idSegment\":3}],\"customerEconomicActivities\":[{\"id\":24583,\"typeEconomicActivity\":\"Main\",\"idEconomicActivity\":13,\"idEconomicActivityNavigation\":{\"id\":13,\"code\":4530703,\"type\":null,\"description\":\"Comercio a varejo de pecas e acessorios novos para veiculos automotores\\r\\n\",\"priority\":true,\"idPortal\":1}}],\"economicActivities\":[]}]",
-    "token.access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJvaWQiOiIyMzQ0NSIsImN1c3RvbWVyX2RvY3VtZW50IjoiMzMyOTk2MzcwMDAxODAiLCJjdXN0b21lcl9pZCI6IjI0NTg3IiwiYWNjb3VudF9pZCI6IjI0MjYyIiwicHJlZmVycmVkX3VzZXJuYW1lIjoiYXRlbmRpbWVudG9AY2VudHJvYXV0b21vdGl2bzAwNTguY29tIiwibmFtZSI6ImNlbnRyb2F1dG9tb3Rpdm8wMDU4LmNvbSIsInBvcnRhbCI6IkRQSyIsInJvbGUiOlsiQURNSU5JU1RSQVRJVkUiLCJDUkVESVRfTElNSVQiLCJGSU5BTkNJQUwiLCJXQVJSQU5UWSIsIk9SREVSUyIsIk1BS0VfUFVSQ0hBU0UiXSwidG9rZW5fcHVycG9zZSI6ImFjY2Vzc190b2tlbiIsIm5iZiI6MTc5MzEwNjgwOSwiZXhwIjoxNzkzMTEwNDA5LCJpYXQiOjE3OTMxMDY4MDksImlzcyI6Imh0dHA6Ly9hcGktYXV0aDo4MDgwIiwiYXVkIjoiaHR0cDovL2FwaS1hdXRoOjgwODAifQ.s_n9rXMycqWH5VH_vo_vIEpCWINDqV26Cd4xuxhaMjk",
-    "ins-wp-native-permission-impression": "{\"data\":true,\"_expires\":1824210706000}",
-    "userLocation": "{\"data\":{\"geoId\":\"3462377\",\"city\":\"Goiânia\",\"region\":\"Goiás\",\"regionId\":\"GO\",\"country\":\"BR\",\"cName\":\"Brazil\",\"request\":\"5c0cfa183d944b2609fe955192b753f1\",\"latitude\":\"bff0c780ffa93b2d7444abb4be8d5d1c\",\"longitude\":\"8eb862a7a2b4519474e784b86774dd5a\"},\"_expires\":1793193106000}",
-    "ins-sourceUrl": "{\"data\":\"\",\"_expires\":1795698705000}",
-    "ins-current-currency": "{\"data\":\"BRL\",\"_expires\":1793193105000}",
-    "ins-log-tracking-hit": "{\"data\":{\"sc\":1,\"ec\":0},\"_expires\":1793193106000}",
-    "ins-landingPage": "{\"data\":\"https://www.dpk.com.br/#/\",\"_expires\":1795698705000}",
-    "ins-wp-request-sent": "{\"data\":true,\"_expires\":1793193106000}",
-    "customer.portal": "DPK",
-    "stored.cart": "[{\"id\":\"019c014b-0cab-7af5-b663-09c815f189ad\",\"idCustomerAccount\":23445,\"retailerId\":2,\"hubId\":14,\"portalId\":1,\"paymentId\":0,\"shippingCompanyId\":0,\"createdDate\":\"2026-01-27T18:10:21.612689\",\"modifiedDate\":null,\"closed\":false,\"customerIntegration\":false,\"cartItems\":[{\"id\":\"019c014b-0cab-7239-9792-996941754ab9\",\"cartId\":\"019c014b-0cab-7af5-b663-09c815f189ad\",\"productId\":3706369,\"productRetailerId\":6582915,\"quantity\":1,\"position\":1,\"code\":\"0580454132\",\"description\":\"BOMBA COMBUSTIVEL - ELETRICA GASOLINA 0580454132 BOSCH\",\"manufacturer\":\"BOSCH\",\"height\":0,\"length\":0,\"productWeight\":0,\"totalWeight\":0,\"total\":0,\"volume\":0,\"createdDate\":\"2026-01-27T18:10:21.612689\",\"modifiedDate\":null}]}]",
-    "ins-unified-by": "{\"data\":[\"em\",\"pn\"],\"_expires\":1824642706000}",
-    "insUserInfoHash": "{\"data\":377266589,\"_expires\":1824642706000}"
-  }
+  ]
 }
