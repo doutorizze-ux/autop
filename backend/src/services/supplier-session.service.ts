@@ -113,6 +113,18 @@ export class SupplierSessionService {
         }
 
         const page = context.pages()[0] || await context.newPage();
+        await page.setExtraHTTPHeaders({
+            'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+            'Sec-Ch-Ua-Mobile': '?0',
+            'Sec-Ch-Ua-Platform': '"Windows"',
+            'Upgrade-Insecure-Requests': '1',
+        }).catch(() => {});
+        await page.addInitScript(() => {
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            // @ts-ignore
+            window.chrome = { runtime: {} };
+        }).catch(() => {});
         await page.goto(supplier.loginUrl || supplier.url, { waitUntil: 'domcontentloaded' }).catch(() => {});
         sessions.set(supplierId, { supplierId, context, page, profilePath });
 
