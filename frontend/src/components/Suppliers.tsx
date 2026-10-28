@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Globe, Lock, Trash2, ExternalLink, Play, Monitor, MessageCircle } from 'lucide-react';
+import { Plus, Globe, Lock, Trash2, ExternalLink, Play, Monitor, MessageCircle, Key, Copy, Check } from 'lucide-react';
 import { API_URL } from '../services/api';
 
 interface Supplier {
@@ -99,6 +99,10 @@ export const Suppliers = () => {
     const [isAssistLoading, setIsAssistLoading] = useState(false);
     const [assistAction, setAssistAction] = useState<'idle' | 'saving' | 'closing' | 'typing' | 'pressing'>('idle');
     const [directTokenInput, setDirectTokenInput] = useState('');
+    const [tokenModalSupplier, setTokenModalSupplier] = useState<Supplier | null>(null);
+    const [standaloneTokenInput, setStandaloneTokenInput] = useState('');
+    const [isSavingStandaloneToken, setIsSavingStandaloneToken] = useState(false);
+    const [commandCopied, setCommandCopied] = useState(false);
     const [formData, setFormData] = useState(defaultSupplierForm);
 
     const [activeSection, setActiveSection] = useState<'basic' | 'whatsapp' | 'login' | 'mapping'>('basic');
@@ -281,6 +285,39 @@ export const Suppliers = () => {
         }
     };
 
+    const openTokenModal = (supplier: Supplier) => {
+        setTokenModalSupplier(supplier);
+        setStandaloneTokenInput('');
+        setCommandCopied(false);
+    };
+
+    const closeTokenModal = () => {
+        setTokenModalSupplier(null);
+        setStandaloneTokenInput('');
+        setCommandCopied(false);
+    };
+
+    const copyTokenCommand = () => {
+        navigator.clipboard.writeText('copy(localStorage.token)');
+        setCommandCopied(true);
+        setTimeout(() => setCommandCopied(false), 2500);
+    };
+
+    const handleSaveStandaloneToken = async () => {
+        if (!tokenModalSupplier || !standaloneTokenInput.trim()) return;
+        try {
+            setIsSavingStandaloneToken(true);
+            await axios.post(`${apiBase}/api/suppliers/${tokenModalSupplier.id}/session/save`, { token: standaloneTokenInput.trim() }, { timeout: 45000 });
+            await fetchSuppliers();
+            alert(`Token de ${tokenModalSupplier.name} salvo com sucesso! Fornecedor pronto para cotar.`);
+            closeTokenModal();
+        } catch (e: any) {
+            alert('Falha ao salvar token: ' + (e.response?.data?.message || e.message));
+        } finally {
+            setIsSavingStandaloneToken(false);
+        }
+    };
+
     const saveDirectToken = async () => {
         if (!assistSupplier || !directTokenInput.trim()) return;
         try {
@@ -368,6 +405,22 @@ export const Suppliers = () => {
                                     >
                                         <Monitor size={14} />
                                         <span>Login Assistido</span>
+                                    </button>
+                                )}
+                                {s.name.toLowerCase().includes('kaizen') && (
+                                    <button
+                                        type="button"
+                                        className="test-link"
+                                        onClick={() => openTokenModal(s)}
+                                        style={{
+                                            background: 'rgba(16, 185, 129, 0.12)',
+                                            color: '#10B981',
+                                            borderColor: 'rgba(16, 185, 129, 0.4)',
+                                            fontWeight: 600,
+                                        }}
+                                    >
+                                        <Key size={14} />
+                                        <span>Renovar Token</span>
                                     </button>
                                 )}
                                 {s.url && (
@@ -646,6 +699,140 @@ export const Suppliers = () => {
                         <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
                             <button type="button" className="btn-primary" onClick={saveAssistSession} disabled={assistAction !== 'idle'} style={{ flex: 2 }}>{assistAction === 'saving' ? 'Salvando...' : 'Salvar Sessão'}</button>
                             <button type="button" className="btn-secondary" onClick={closeAssistSession} disabled={assistAction === 'saving'} style={{ flex: 1, padding: '0.85rem', background: 'var(--bg-color)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '6px', cursor: 'pointer' }}>{assistAction === 'closing' ? 'Fechando...' : 'Fechar'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {tokenModalSupplier && (
+                <div className="modal-overlay">
+                    <div className="modal-content auth-card" style={{ maxWidth: '640px', width: '92%', borderRadius: '12px', padding: '1.75rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                            <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981' }}>
+                                <Key size={22} />
+                            </div>
+                            <div>
+                                <h2 style={{ margin: 0, fontSize: '1.3rem' }}>Renovar Token - {tokenModalSupplier.name}</h2>
+                                <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                    Atualize o token de acesso para manter as cotações ativas
+                                </p>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+                            <div style={{ padding: '0.85rem 1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                                <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.25rem', color: 'var(--text-main)' }}>
+                                    1. Faça login no portal da Kaizen:
+                                </div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                    Abra <a href="https://portal.kaizenautopecas.com.br" target="_blank" rel="noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'underline', fontWeight: 600 }}>portal.kaizenautopecas.com.br</a> em uma nova aba e entre normalmente.
+                                </div>
+                            </div>
+
+                            <div style={{ padding: '0.85rem 1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                                <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.25rem', color: 'var(--text-main)' }}>
+                                    2. No portal, aperte F12 no teclado, vá na aba Console e execute:
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                                    <code style={{ flex: '1 1 200px', minWidth: 0, padding: '0.5rem 0.75rem', background: 'rgba(0,0,0,0.4)', borderRadius: '6px', color: '#10B981', fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                                        copy(localStorage.token)
+                                    </code>
+                                    <button
+                                        type="button"
+                                        onClick={copyTokenCommand}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.4rem',
+                                            padding: '0.5rem 0.85rem',
+                                            background: commandCopied ? '#10B981' : 'var(--bg-color)',
+                                            color: commandCopied ? '#fff' : 'var(--text-main)',
+                                            border: '1px solid var(--border-color)',
+                                            borderRadius: '6px',
+                                            cursor: 'pointer',
+                                            fontSize: '0.8rem',
+                                            fontWeight: 500,
+                                            transition: 'all 0.2s',
+                                            whiteSpace: 'nowrap'
+                                        }}
+                                    >
+                                        {commandCopied ? <Check size={14} /> : <Copy size={14} />}
+                                        <span>{commandCopied ? 'Copiado!' : 'Copiar comando'}</span>
+                                    </button>
+                                </div>
+                                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
+                                    Isso copia seu token atualizado automaticamente para a área de transferência.
+                                </div>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.4rem', color: 'var(--text-main)' }}>
+                                    3. Cole o token copiado no campo abaixo:
+                                </label>
+                                <textarea
+                                    className="form-input"
+                                    rows={4}
+                                    placeholder="Cole aqui o token (começando com eyJhbGci...)"
+                                    value={standaloneTokenInput}
+                                    onChange={(e) => setStandaloneTokenInput(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        fontSize: '0.85rem',
+                                        fontFamily: 'monospace',
+                                        resize: 'vertical',
+                                        background: 'rgba(0,0,0,0.25)',
+                                        borderColor: standaloneTokenInput.trim() ? '#10B981' : 'var(--border-color)',
+                                    }}
+                                />
+                                {standaloneTokenInput.trim() && (
+                                    <div style={{ color: '#10B981', fontSize: '0.8rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                        <Check size={14} /> Token detectado ({standaloneTokenInput.trim().length} caracteres)
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '1rem' }}>
+                            <button
+                                type="button"
+                                className="btn-primary"
+                                onClick={handleSaveStandaloneToken}
+                                disabled={isSavingStandaloneToken || !standaloneTokenInput.trim()}
+                                style={{
+                                    flex: 2,
+                                    background: '#10B981',
+                                    borderColor: '#10B981',
+                                    fontWeight: 600,
+                                    padding: '0.85rem',
+                                    fontSize: '0.95rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '0.5rem',
+                                    cursor: isSavingStandaloneToken || !standaloneTokenInput.trim() ? 'not-allowed' : 'pointer',
+                                    opacity: isSavingStandaloneToken || !standaloneTokenInput.trim() ? 0.6 : 1,
+                                }}
+                            >
+                                <Key size={16} />
+                                <span>{isSavingStandaloneToken ? 'Salvando...' : 'Salvar e Ativar Fornecedor'}</span>
+                            </button>
+                            <button
+                                type="button"
+                                className="btn-secondary"
+                                onClick={closeTokenModal}
+                                disabled={isSavingStandaloneToken}
+                                style={{
+                                    flex: 1,
+                                    padding: '0.85rem',
+                                    background: 'var(--bg-color)',
+                                    color: 'var(--text-main)',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                Cancelar
+                            </button>
                         </div>
                     </div>
                 </div>
