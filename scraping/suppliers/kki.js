@@ -48,19 +48,35 @@ module.exports = {
         await dismissTransientUi();
 
         const jaTenhoConta = page.locator('button:has-text("Já tenho conta"), button:has-text("Ja tenho conta")').first();
-        if (await jaTenhoConta.isVisible({ timeout: 3000 }).catch(() => false)) {
+        if (await jaTenhoConta.isVisible({ timeout: 2000 }).catch(() => false)) {
             await jaTenhoConta.dispatchEvent('click').catch(() => jaTenhoConta.click({ force: true })).catch(() => {});
-            await page.waitForTimeout(1000);
+            await page.waitForTimeout(600);
         }
 
         const emailField = page.locator('input[placeholder*="Digite seu e-mail" i], input[type="email"]').first();
         const passField = page.locator('input[placeholder*="Digite sua senha" i], input[type="password"]').first();
 
-        await emailField.fill(supplier.loginCredential || supplier.loginExtraValue || '');
-        await passField.fill(supplier.password || '');
+        await emailField.fill(supplier.loginCredential || supplier.loginExtraValue || 'atendimento@centroautomotivo0058.com');
+        await passField.fill(supplier.password || '71401');
     },
-    performSearch: async ({ page, query, fillVisibleLocator, dismissTransientUi }) => {
+    performSearch: async ({ page, query, fillVisibleLocator, dismissTransientUi, supplier }) => {
         await dismissTransientUi();
+
+        // If logged out (not on /compras or login inputs present), auto-authenticate
+        if (!page.url().includes('/compras') || page.url().includes('/login')) {
+            const emailField = page.locator('input[placeholder*="Digite seu e-mail" i], input[type="email"]').first();
+            const passField = page.locator('input[placeholder*="Digite sua senha" i], input[type="password"]').first();
+            const submitBtn = page.locator('button:has-text("Entrar")').first();
+
+            if (await emailField.isVisible({ timeout: 2500 }).catch(() => false)) {
+                await emailField.fill(supplier?.loginCredential || supplier?.loginExtraValue || 'atendimento@centroautomotivo0058.com');
+                await passField.fill(supplier?.password || '71401');
+                await submitBtn.click().catch(() => {});
+                await page.waitForURL((url) => url.href.includes('/compras'), { timeout: 15000 }).catch(() => {});
+                await page.waitForTimeout(1500);
+            }
+        }
+
         try {
             const atualizar = page.locator('button:has-text("Atualizar")').first();
             if (await atualizar.isVisible({ timeout: 1500 }).catch(() => false)) {
@@ -68,6 +84,12 @@ module.exports = {
                 await page.waitForTimeout(2000);
             }
         } catch (_) {}
+
+        if (!page.url().includes('/compras')) {
+            await page.goto('https://kki.autonorte.com.br/compras', { waitUntil: 'domcontentloaded' }).catch(() => {});
+            await page.waitForTimeout(1500);
+        }
+
         await page.waitForSelector('input:not([type="hidden"])', { timeout: 15000 }).catch(() => {});
         await page.waitForTimeout(1000);
 

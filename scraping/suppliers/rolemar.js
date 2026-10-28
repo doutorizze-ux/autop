@@ -57,11 +57,62 @@ module.exports = {
     ],
     preferStrategySelectors: true,
 
+    fillLogin: async ({ page, supplier, dismissTransientUi }) => {
+        if (dismissTransientUi) {
+            await dismissTransientUi().catch(() => {});
+        }
+        const cookieBtn = page.locator('button:has-text("Aceitar Cookies")').first();
+        if (await cookieBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
+            await cookieBtn.click().catch(() => {});
+            await page.waitForTimeout(500);
+        }
+        const user = supplier?.loginCredential || '33299637000180';
+        const pass = supplier?.password || 'Re539597@';
+
+        const userLoc = page.locator('input#usuario, input[name="usuario"]').first();
+        const passLoc = page.locator('input#senha, input[name="senha"]').first();
+        if (await userLoc.isVisible({ timeout: 4000 }).catch(() => false)) {
+            await userLoc.fill(user);
+        }
+        if (await passLoc.isVisible({ timeout: 4000 }).catch(() => false)) {
+            await passLoc.fill(pass);
+        }
+    },
+
     buildSearchUrl: (query) => `https://rolemarmaster.com/produtos?busca=${encodeURIComponent(query)}`,
-    performSearch: async ({ page, query }) => {
+    performSearch: async ({ page, query, supplier }) => {
         const searchUrl = `https://rolemarmaster.com/produtos?busca=${encodeURIComponent(query)}`;
         await page.goto(searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
         await page.waitForTimeout(2500);
+
+        // If redirected to login, perform auto-login
+        if (page.url().includes('login')) {
+            console.log('[rolemar] Redirected to login page, executing auto-login...');
+            const cookieBtn = page.locator('button:has-text("Aceitar Cookies")').first();
+            if (await cookieBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
+                await cookieBtn.click().catch(() => {});
+                await page.waitForTimeout(500);
+            }
+            const user = supplier?.loginCredential || '33299637000180';
+            const pass = supplier?.password || 'Re539597@';
+            const userLoc = page.locator('input#usuario, input[name="usuario"]').first();
+            const passLoc = page.locator('input#senha, input[name="senha"]').first();
+            const submitBtn = page.locator('button:has-text("Entrar")').first();
+
+            if (await userLoc.isVisible({ timeout: 3000 }).catch(() => false)) {
+                await userLoc.fill(user);
+                await passLoc.fill(pass);
+                await submitBtn.click().catch(() => {});
+                await Promise.race([
+                    page.waitForURL((url) => !url.href.includes('login'), { timeout: 15000 }).catch(() => null),
+                    page.locator('input[placeholder*="PESQUISE" i]').first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => null),
+                ]);
+                await page.waitForTimeout(2000);
+                await page.goto(searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+                await page.waitForTimeout(2500);
+            }
+        }
+
         await Promise.race([
             page.locator('.product-info').first().waitFor({ state: 'visible', timeout: 8000 }).catch(() => null),
             page.locator('.ant-empty, :has-text("Nenhum produto")').first().waitFor({ state: 'visible', timeout: 8000 }).catch(() => null),

@@ -1,61 +1,71 @@
 {
   "cookies": [
     {
+      "name": "rolemarmaster-com",
+      "value": "sejqgfhhs9i4vou106eausa2fr",
+      "domain": "rolemarmaster.com",
+      "path": "/",
+      "expires": 1793222539.644863,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
       "name": "_gcl_au",
-      "value": "1.1.1644033488.1792497976",
+      "value": "1.1.400662868.1793200934",
       "domain": ".rolemarmaster.com",
       "path": "/",
-      "expires": 1800273976,
+      "expires": 1800976934,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"
     },
     {
       "name": "CLID",
-      "value": "defa7b56ba8e4da182213836225d7ab5.20261020.20271020",
+      "value": "3b84b5c782a04baeadb677ea9ffeea70.20261028.20271028",
       "domain": "www.clarity.ms",
       "path": "/",
-      "expires": 1824033976.463794,
+      "expires": 1824736934.146083,
       "httpOnly": true,
       "secure": true,
       "sameSite": "None"
     },
     {
       "name": "_ga",
-      "value": "GA1.1.1377075824.1792497977",
+      "value": "GA1.1.1482143870.1793200934",
       "domain": ".rolemarmaster.com",
       "path": "/",
-      "expires": 1827083061.88916,
+      "expires": 1827760934.728967,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"
     },
     {
       "name": "_clck",
-      "value": "ftcizf%5E2%5Egag%5E0%5E2484",
+      "value": "1vsey3c%5E2%5Egao%5E0%5E2492",
       "domain": ".rolemarmaster.com",
       "path": "/",
-      "expires": 1824033977,
+      "expires": 1824736934,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"
     },
     {
       "name": "_fbp",
-      "value": "fb.1.1792497977234.622864308822376194.AQYAAQMC",
+      "value": "fb.1.1793200934246.114710078790876690.AQYAAQMC",
       "domain": ".rolemarmaster.com",
       "path": "/",
-      "expires": 1800299061,
+      "expires": 1800976934,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"
     },
     {
       "name": "MUID",
-      "value": "18D4AFD31E1068871415B82B1F0469FA",
+      "value": "34941D9E5E9164253101059E5F4765A0",
       "domain": ".bing.com",
       "path": "/",
-      "expires": 1826193978.500357,
+      "expires": 1826896936.371194,
       "httpOnly": false,
       "secure": true,
       "sameSite": "None"
@@ -65,17 +75,17 @@
       "value": "0",
       "domain": ".c.bing.com",
       "path": "/",
-      "expires": 1793102778.500458,
+      "expires": 1793805736.371271,
       "httpOnly": false,
       "secure": true,
       "sameSite": "None"
     },
     {
       "name": "SRM_B",
-      "value": "18D4AFD31E1068871415B82B1F0469FA",
+      "value": "34941D9E5E9164253101059E5F4765A0",
       "domain": ".c.bing.com",
       "path": "/",
-      "expires": 1826193978.500495,
+      "expires": 1826896936.371295,
       "httpOnly": false,
       "secure": true,
       "sameSite": "None"
@@ -92,10 +102,10 @@
     },
     {
       "name": "MUID",
-      "value": "18D4AFD31E1068871415B82B1F0469FA",
+      "value": "34941D9E5E9164253101059E5F4765A0",
       "domain": ".clarity.ms",
       "path": "/",
-      "expires": 1826193978.642812,
+      "expires": 1826896934.508412,
       "httpOnly": false,
       "secure": true,
       "sameSite": "None"
@@ -105,27 +115,57 @@
       "value": "0",
       "domain": ".c.clarity.ms",
       "path": "/",
-      "expires": 1793102778.642865,
+      "expires": 1793805734.508471,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "ANONCHK",
+      "value": "0",
+      "domain": ".c.clarity.ms",
+      "path": "/",
+      "expires": 1793201534.508498,
       "httpOnly": false,
       "secure": true,
       "sameSite": "None"
     },
     {
       "name": "IDE",
-      "value": "AHWqTUmFrl8T_9DttkikCsRMPFCQH_xUkYmeZw9A-xUNJE74oh2Ux3yXJXBGqxbJ",
+      "value": "AHWqTUkXuagv87LpuZFUI9u_N0NIG2Y4beqxX-a53mZFNvXBUcERECOZqJICmFed",
       "domain": ".doubleclick.net",
       "path": "/",
-      "expires": 1827057979.305503,
+      "expires": 1827760936.101678,
       "httpOnly": true,
       "secure": true,
       "sameSite": "None"
     },
     {
+      "name": "user-login",
+      "value": "%7B%22logado%22%3Atrue%2C%22acesso%22%3A%222026-10-28+12%3A24%3A05%22%2C%22dados%22%3A%7B%22idusuario_lojista%22%3A%2299721%22%2C%22idloja%22%3A%2235718%22%2C%22idperfil_userlojista%22%3A%22146644%22%2C%22cod_user_master_erp%22%3Anull%2C%22nome%22%3A%22RENAN+KURAMOTO+DIAS%22%2C%22email%22%3A%22atendimento%40centroautomotivo0058.com%22%2C%22login%22%3A%2233299637000180%22%2C%22senha%22%3A%220b9aa43a78b486176c5762c9a4329ddc%3AcV%22%2C%22chave%22%3A%22%22%2C%22ip%22%3A%22172.71.234.68%22%2C%22criado_em%22%3A%222026-09-09+09%3A30%3A39%22%2C%22ultimo_acesso%22%3A%222026-10-28+12%3A18%3A08%22%2C%22ativo%22%3A%221%22%2C%22autonomo%22%3A%220%22%2C%22forcar_alterar_senha%22%3A0%2C%22session_id_ativa%22%3A%22sejqgfhhs9i4vou106eausa2fr%22%2C%22data_ultima_senha%22%3A%222026-09-11+11%3A18%3A04%22%2C%22cod_emp%22%3A%2217%22%2C%22loja_preferencial%22%3A%2217%22%2C%22id_grupo_economico%22%3Anull%2C%22inadimplente%22%3Anull%2C%22parc_rolemar%22%3Anull%2C%22politica_clube%22%3A%221%22%2C%22recovery_code%22%3Anull%2C%22loja%22%3A%22CENTRO+AUTOMOTIVO+0058+LTDA%22%2C%22cod_erp%22%3A%2267245%22%2C%22endereco%22%3A%22AVENIDA+UNIVERSITARIA%2C+1669+-+SETOR+LESTE+UNIVERSITARIO%2C+GOIANIA+-+GO+CEP+74610100%22%2C%22telefone%22%3A%22556232029238%22%2C%22whatsapp%22%3A%225562982076797%22%2C%22contato%22%3A%22RENAN+KURAMOTO+DIAS%22%2C%22email_loja%22%3A%22atendimento%40centroautomotivo0058.com%22%2C%22margem_geral_venda%22%3Anull%2C%22status%22%3A%22Ativo%22%2C%22cnpj%22%3A%2233299637000180%22%2C%22logo%22%3Anull%2C%22orcamento_personalize%22%3A%221%22%2C%22orcamento_possui_whatsapp%22%3A%221%22%2C%22orcamento_contato%22%3A%225562982076797%22%2C%22numero%22%3Anull%2C%22bairro%22%3Anull%2C%22cidade%22%3Anull%2C%22estado%22%3Anull%2C%22cep%22%3Anull%2C%22orcamento_whatsapp%22%3Anull%2C%22orcamento_logo%22%3Anull%2C%22whatsapp_retira%22%3A%225562982076797%22%2C%22email_retira%22%3A%22centroautomotivo0058%40hotmial.com%22%2C%22chave_pix%22%3Anull%2C%22cod_altera%22%3Anull%2C%22cod_altera_expira_em%22%3Anull%2C%22perfil%22%3A%22Gerente%22%2C%22acesso_preco%22%3A%22Pre%5Cu00e7o+venda%22%2C%22acesso_catalogo%22%3A%221%22%2C%22acesso_carrinho%22%3A%221%22%2C%22acesso_prepedido%22%3A%221%22%2C%22acesso_pedido%22%3A%221%22%2C%22acesso_lancamento%22%3A%221%22%2C%22acesso_dadosloja%22%3A%221%22%2C%22acesso_perfil%22%3A%221%22%2C%22acesso_usuarios%22%3A%221%22%2C%22acesso_margens%22%3A%221%22%2C%22acesso_alterarsenha%22%3A%221%22%2C%22acesso_orcamentos%22%3A%221%22%2C%22acesso_carrinho_compras%22%3A%221%22%2C%22perfilativo%22%3A%221%22%2C%22acesso_pontos%22%3A%221%22%2C%22acesso_venda_mais%22%3A%220%22%2C%22acesso_grupo_economico%22%3A%220%22%2C%22primeiro_acesso%22%3A0%7D%2C%22session_id%22%3A%22sejqgfhhs9i4vou106eausa2fr%22%2C%22forcar_alterar_senha%22%3A0%7D",
+      "domain": ".rolemarmaster.com",
+      "path": "/",
+      "expires": 1795792938.386385,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_clsk",
+      "value": "eeqa40%5E1793200939145%5E2%5E1%5El.clarity.ms%2Fcollect",
+      "domain": ".rolemarmaster.com",
+      "path": "/",
+      "expires": 1793287339,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
       "name": "cw_conversation",
-      "value": "eyJhbGciOiJIUzI1NiJ9.eyJzb3VyY2VfaWQiOiI0MGU0MzhkMC1jMDk5LTQ5YzktYmUzNC05OGM5M2M1NjQ1NWYiLCJpbmJveF9pZCI6NCwiZXhwIjoxODA4MDUwMDc1LCJpYXQiOjE3OTI0OTgwNzV9.9TKlh1Pl5RoBuFvM9JYuLgNi5P4DEOYAQdcN5JX0J58",
+      "value": "eyJhbGciOiJIUzI1NiJ9.eyJzb3VyY2VfaWQiOiJhNGYzNjY5OC1lODZiLTQyMTQtODEyZi05NDY4ZmYwNjQyYTIiLCJpbmJveF9pZCI6NCwiZXhwIjoxODA4NzUzMDQ2LCJpYXQiOjE3OTMyMDEwNDZ9.TM3OHZhbQ9RCLajE6GD4Oj6PT3QjuZL9R-EXEZe92BU",
       "domain": "rolemarmaster.com",
       "path": "/",
-      "expires": 1824035275,
+      "expires": 1824736939,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"
@@ -135,77 +175,47 @@
       "value": "4c5e211a8a1abd7e9435f69743f5f338",
       "domain": "rolemarmaster.com",
       "path": "/",
-      "expires": 1824033982,
-      "httpOnly": false,
-      "secure": false,
-      "sameSite": "Lax"
-    },
-    {
-      "name": "rolemarmaster-com",
-      "value": "mqtjl59vst8ni0d94gg1139e4c",
-      "domain": "rolemarmaster.com",
-      "path": "/",
-      "expires": 1792544667.667033,
-      "httpOnly": false,
-      "secure": false,
-      "sameSite": "Lax"
-    },
-    {
-      "name": "user-login",
-      "value": "%7B%22logado%22%3Atrue%2C%22acesso%22%3A%222026-10-20+16%3A05%3A58%22%2C%22dados%22%3A%7B%22idusuario_lojista%22%3A%2299721%22%2C%22idloja%22%3A%2235718%22%2C%22idperfil_userlojista%22%3A%22146644%22%2C%22cod_user_master_erp%22%3Anull%2C%22nome%22%3A%22RENAN+KURAMOTO+DIAS%22%2C%22email%22%3A%22atendimento%40centroautomotivo0058.com%22%2C%22login%22%3A%2233299637000180%22%2C%22senha%22%3A%220b9aa43a78b486176c5762c9a4329ddc%3AcV%22%2C%22chave%22%3A%22%22%2C%22ip%22%3A%22172.64.222.27%22%2C%22criado_em%22%3A%222026-09-09+09%3A30%3A39%22%2C%22ultimo_acesso%22%3A%222026-10-20+15%3A59%3A42%22%2C%22ativo%22%3A%221%22%2C%22autonomo%22%3A%220%22%2C%22forcar_alterar_senha%22%3A0%2C%22session_id_ativa%22%3A%22mqtjl59vst8ni0d94gg1139e4c%22%2C%22data_ultima_senha%22%3A%222026-09-11+11%3A18%3A04%22%2C%22cod_emp%22%3A%2217%22%2C%22loja_preferencial%22%3A%2217%22%2C%22id_grupo_economico%22%3Anull%2C%22inadimplente%22%3Anull%2C%22parc_rolemar%22%3Anull%2C%22politica_clube%22%3A%221%22%2C%22recovery_code%22%3Anull%2C%22loja%22%3A%22CENTRO+AUTOMOTIVO+0058+LTDA%22%2C%22cod_erp%22%3A%2267245%22%2C%22endereco%22%3A%22AVENIDA+UNIVERSITARIA%2C+1669+-+SETOR+LESTE+UNIVERSITARIO%2C+GOIANIA+-+GO+CEP+74610100%22%2C%22telefone%22%3A%22556232029238%22%2C%22whatsapp%22%3A%225562982076797%22%2C%22contato%22%3A%22RENAN+KURAMOTO+DIAS%22%2C%22email_loja%22%3A%22atendimento%40centroautomotivo0058.com%22%2C%22margem_geral_venda%22%3Anull%2C%22status%22%3A%22Ativo%22%2C%22cnpj%22%3A%2233299637000180%22%2C%22logo%22%3Anull%2C%22orcamento_personalize%22%3A%221%22%2C%22orcamento_possui_whatsapp%22%3A%221%22%2C%22orcamento_contato%22%3A%225562982076797%22%2C%22numero%22%3Anull%2C%22bairro%22%3Anull%2C%22cidade%22%3Anull%2C%22estado%22%3Anull%2C%22cep%22%3Anull%2C%22orcamento_whatsapp%22%3Anull%2C%22orcamento_logo%22%3Anull%2C%22whatsapp_retira%22%3A%225562982076797%22%2C%22email_retira%22%3A%22centroautomotivo0058%40hotmial.com%22%2C%22chave_pix%22%3Anull%2C%22cod_altera%22%3Anull%2C%22cod_altera_expira_em%22%3Anull%2C%22perfil%22%3A%22Gerente%22%2C%22acesso_preco%22%3A%22Pre%5Cu00e7o+venda%22%2C%22acesso_catalogo%22%3A%221%22%2C%22acesso_carrinho%22%3A%221%22%2C%22acesso_prepedido%22%3A%221%22%2C%22acesso_pedido%22%3A%221%22%2C%22acesso_lancamento%22%3A%221%22%2C%22acesso_dadosloja%22%3A%221%22%2C%22acesso_perfil%22%3A%221%22%2C%22acesso_usuarios%22%3A%221%22%2C%22acesso_margens%22%3A%221%22%2C%22acesso_alterarsenha%22%3A%221%22%2C%22acesso_orcamentos%22%3A%221%22%2C%22acesso_carrinho_compras%22%3A%221%22%2C%22perfilativo%22%3A%221%22%2C%22acesso_pontos%22%3A%221%22%2C%22acesso_venda_mais%22%3A%220%22%2C%22acesso_grupo_economico%22%3A%220%22%2C%22primeiro_acesso%22%3A0%7D%2C%22session_id%22%3A%22mqtjl59vst8ni0d94gg1139e4c%22%2C%22forcar_alterar_senha%22%3A0%7D",
-      "domain": ".rolemarmaster.com",
-      "path": "/",
-      "expires": 1795115065.988264,
-      "httpOnly": false,
-      "secure": false,
-      "sameSite": "Lax"
-    },
-    {
-      "name": "_clsk",
-      "value": "135w1c6%5E1792523066752%5E3%5E1%5En.clarity.ms%2Fcollect",
-      "domain": ".rolemarmaster.com",
-      "path": "/",
-      "expires": 1792609466,
-      "httpOnly": false,
-      "secure": false,
-      "sameSite": "Lax"
-    },
-    {
-      "name": "_ga_762X8GNP06",
-      "value": "GS2.1.s1792523050$o2$g1$t1792523067$j43$l0$h0",
-      "domain": ".rolemarmaster.com",
-      "path": "/",
-      "expires": 1827083067.186401,
-      "httpOnly": false,
-      "secure": false,
-      "sameSite": "Lax"
-    },
-    {
-      "name": "_ga_XRZY1LVD41",
-      "value": "GS2.1.s1792523051$o2$g1$t1792523067$j44$l0$h11232124",
-      "domain": ".rolemarmaster.com",
-      "path": "/",
-      "expires": 1827083067.205344,
+      "expires": 1824736939,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"
     },
     {
       "name": "_ga_QP022CSKZ6",
-      "value": "GS2.1.s1792523051$o2$g1$t1792523067$j44$l0$h0",
+      "value": "GS2.1.s1793200934$o1$g1$t1793200939$j55$l0$h0",
       "domain": ".rolemarmaster.com",
       "path": "/",
-      "expires": 1827083067.227018,
+      "expires": 1827760939.51912,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_ga_XRZY1LVD41",
+      "value": "GS2.1.s1793200934$o1$g1$t1793200939$j55$l0$h1419934543",
+      "domain": ".rolemarmaster.com",
+      "path": "/",
+      "expires": 1827760939.524551,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"
     },
     {
       "name": "_ga_LFJ4BBFJSW",
-      "value": "GS2.1.s1792523050$o2$g1$t1792523067$j43$l0$h0",
+      "value": "GS2.1.s1793200934$o1$g1$t1793200939$j55$l0$h0",
       "domain": ".rolemarmaster.com",
       "path": "/",
-      "expires": 1827083067.246382,
+      "expires": 1827760939.532546,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_ga_762X8GNP06",
+      "value": "GS2.1.s1793200934$o1$g1$t1793200939$j55$l0$h0",
+      "domain": ".rolemarmaster.com",
+      "path": "/",
+      "expires": 1827760939.652279,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"
@@ -221,15 +231,36 @@
         },
         {
           "name": "_gcl_ls",
-          "value": "{\"schema\":\"gcl\",\"version\":1,\"gcl_ctr\":{\"value\":{\"value\":0,\"timeouts\":0,\"errors\":0,\"eopCount\":0,\"creationTimeMs\":1792497976282},\"expires\":1800273976282},\"gsid_dc\":{\"value\":{\"joinId\":\"CA621-KMdL3uHsbmF-JtUJ__APXpZZmcTA\",\"lastJoinedTimeMs\":1792523061025},\"expires\":1792523361025}}"
+          "value": "{\"schema\":\"gcl\",\"version\":1,\"gcl_ctr\":{\"value\":{\"value\":0,\"timeouts\":0,\"errors\":0,\"eopCount\":0,\"creationTimeMs\":1793200934059},\"expires\":1800976934059},\"gsid_dc\":{\"value\":{\"joinId\":\"bqW9XrbSumQIXUqXGXPQRDmM3q13R5iDDA\",\"lastJoinedTimeMs\":1793200934067},\"expires\":1793201234067}}"
         },
         {
           "name": "lastExternalReferrerTime",
-          "value": "1792523061408"
+          "value": "1793200934223"
         },
         {
           "name": "persist:root",
-          "value": "{\"auth\":\"{\\\"isAuthenticated\\\":true,\\\"logoff\\\":false,\\\"action\\\":\\\"AUTH_LOGIN\\\",\\\"userData\\\":{\\\"id\\\":99721,\\\"nome\\\":\\\"RENAN KURAMOTO DIAS\\\",\\\"cod_erp\\\":\\\"67245\\\",\\\"politica_clube\\\":1,\\\"primeiro_acesso\\\":0,\\\"ultimo_acesso\\\":\\\"2026-10-20 15:59:42\\\",\\\"forcar_nova_senha\\\":0,\\\"forcar_alterar_senha\\\":0,\\\"permissoes\\\":{\\\"preco\\\":\\\"Preço venda\\\",\\\"catalogo\\\":true,\\\"carrinho\\\":true,\\\"prepedido\\\":true,\\\"pedido\\\":true,\\\"lancamento\\\":true,\\\"dadosloja\\\":true,\\\"perfil\\\":true,\\\"usuarios\\\":true,\\\"margens\\\":true,\\\"alterarsenha\\\":true,\\\"orcamentos\\\":true,\\\"carrinho_compras\\\":true,\\\"acesso_pontos\\\":true,\\\"venda_mais\\\":false,\\\"acesso_grupo_economico\\\":false},\\\"loja\\\":{\\\"nome\\\":\\\"CENTRO AUTOMOTIVO 0058 LTDA\\\",\\\"cnpj\\\":\\\"33299637000180\\\",\\\"email\\\":\\\"atendimento@centroautomotivo0058.com\\\",\\\"whatsapp\\\":\\\"5562982076797\\\",\\\"endereco\\\":\\\"AVENIDA UNIVERSITARIA, 1669 - SETOR LESTE UNIVERSITARIO, GOIANIA - GO CEP 74610100\\\",\\\"margem\\\":0,\\\"logo\\\":\\\"common/uploads/loja/\\\",\\\"vendedor\\\":\\\"Rolemar vendas\\\",\\\"orcamento_personalize\\\":true,\\\"orcamento_possui_whatsapp\\\":true,\\\"orcamento_contato\\\":\\\"5562982076797\\\"},\\\"classificacao\\\":{\\\"perfil_compra\\\":\\\"gold\\\",\\\"meta\\\":10000,\\\"proximo_perfil\\\":\\\"black\\\",\\\"valor_venda\\\":7218.357998}}}\",\"cart\":\"{\\\"isLoading\\\":false,\\\"hasError\\\":false,\\\"error\\\":\\\"\\\",\\\"orcamentos\\\":[{\\\"id\\\":3512106,\\\"total\\\":\\\"0.00\\\",\\\"qtd_itens\\\":0,\\\"atual\\\":\\\"1\\\"}],\\\"compras\\\":[{\\\"id\\\":3606753,\\\"total\\\":\\\"0.00\\\",\\\"total_pontos\\\":0,\\\"qtd_itens\\\":0,\\\"atual\\\":\\\"1\\\"}],\\\"cartOrcamentoId\\\":3512106,\\\"cartCompraId\\\":3606753}\",\"general\":\"{\\\"cookiePolicy\\\":null,\\\"faqLikes\\\":[],\\\"meus_pontos\\\":0,\\\"config\\\":{\\\"whats_suporte\\\":\\\"43 33786060\\\",\\\"whats_vendedor\\\":\\\"554333786060\\\",\\\"cod_emp\\\":\\\"17\\\",\\\"cod_parc\\\":\\\"67245\\\",\\\"cod_vendedor\\\":\\\"\\\",\\\"autonomo\\\":\\\"N\\\",\\\"venda_mais\\\":\\\"N\\\",\\\"parc_rolemar\\\":\\\"N\\\",\\\"inadimplente\\\":\\\"N\\\",\\\"usa_widget\\\":\\\"S\\\",\\\"tipo_parceiro\\\":\\\"I\\\",\\\"destacarst\\\":[],\\\"desp_acessoria\\\":\\\"0.5\\\",\\\"conta_mestre\\\":\\\"S\\\"},\\\"mostra_grupo\\\":false}\",\"_persist\":\"{\\\"version\\\":-1,\\\"rehydrated\\\":true}\"}"
+          "value": "{\"auth\":\"{\\\"isAuthenticated\\\":true,\\\"logoff\\\":false,\\\"action\\\":\\\"AUTH_LOGIN\\\",\\\"userData\\\":{\\\"id\\\":99721,\\\"nome\\\":\\\"RENAN KURAMOTO DIAS\\\",\\\"cod_erp\\\":\\\"67245\\\",\\\"politica_clube\\\":1,\\\"primeiro_acesso\\\":0,\\\"ultimo_acesso\\\":\\\"2026-10-28 12:18:08\\\",\\\"forcar_nova_senha\\\":0,\\\"forcar_alterar_senha\\\":0,\\\"permissoes\\\":{\\\"preco\\\":\\\"Preço venda\\\",\\\"catalogo\\\":true,\\\"carrinho\\\":true,\\\"prepedido\\\":true,\\\"pedido\\\":true,\\\"lancamento\\\":true,\\\"dadosloja\\\":true,\\\"perfil\\\":true,\\\"usuarios\\\":true,\\\"margens\\\":true,\\\"alterarsenha\\\":true,\\\"orcamentos\\\":true,\\\"carrinho_compras\\\":true,\\\"acesso_pontos\\\":true,\\\"venda_mais\\\":false,\\\"grupo_economico\\\":true,\\\"acesso_grupo_economico\\\":false},\\\"loja\\\":{\\\"nome\\\":\\\"CENTRO AUTOMOTIVO 0058 LTDA\\\",\\\"cnpj\\\":\\\"33299637000180\\\",\\\"email\\\":\\\"atendimento@centroautomotivo0058.com\\\",\\\"whatsapp\\\":\\\"5562982076797\\\",\\\"endereco\\\":\\\"AVENIDA UNIVERSITARIA, 1669 - SETOR LESTE UNIVERSITARIO, GOIANIA - GO CEP 74610100\\\",\\\"margem\\\":0,\\\"logo\\\":\\\"common/uploads/loja/\\\",\\\"vendedor\\\":\\\"\\\",\\\"orcamento_personalize\\\":true,\\\"orcamento_possui_whatsapp\\\":true,\\\"orcamento_contato\\\":\\\"5562982076797\\\"},\\\"classificacao\\\":{\\\"perfil_compra\\\":\\\"gold\\\",\\\"meta\\\":10000,\\\"proximo_perfil\\\":\\\"black\\\",\\\"valor_venda\\\":5567.4}}}\",\"cart\":\"{\\\"isLoading\\\":false,\\\"hasError\\\":false,\\\"error\\\":\\\"\\\",\\\"orcamentos\\\":[{\\\"id\\\":3512106,\\\"total\\\":\\\"0.00\\\",\\\"qtd_itens\\\":0,\\\"atual\\\":\\\"1\\\"}],\\\"compras\\\":[{\\\"id\\\":3615048,\\\"total\\\":\\\"0.00\\\",\\\"total_pontos\\\":0,\\\"qtd_itens\\\":0,\\\"atual\\\":\\\"1\\\"}],\\\"cartOrcamentoId\\\":3512106,\\\"cartCompraId\\\":3615048}\",\"general\":\"{\\\"cookiePolicy\\\":null,\\\"faqLikes\\\":[],\\\"meus_pontos\\\":0,\\\"config\\\":{\\\"whats_suporte\\\":\\\"43 33786060\\\",\\\"whats_vendedor\\\":\\\"554333786060\\\",\\\"cod_emp\\\":\\\"17\\\",\\\"cod_parc\\\":\\\"67245\\\",\\\"cod_vendedor\\\":\\\"\\\",\\\"autonomo\\\":\\\"N\\\",\\\"venda_mais\\\":\\\"N\\\",\\\"parc_rolemar\\\":\\\"N\\\",\\\"inadimplente\\\":\\\"N\\\",\\\"usa_widget\\\":\\\"S\\\",\\\"tipo_parceiro\\\":\\\"I\\\",\\\"destacarst\\\":[],\\\"desp_acessoria\\\":\\\"0.5\\\",\\\"conta_mestre\\\":\\\"S\\\"},\\\"mostra_grupo\\\":false}\",\"_persist\":\"{\\\"version\\\":-1,\\\"rehydrated\\\":true}\"}"
+        }
+      ]
+    },
+    {
+      "origin": "https://chat.rolemar.com",
+      "localStorage": [
+        {
+          "name": "chatwoot_campaigns_c4P6QbLTuG5eECyrddVMzHZ2",
+          "value": "{\"data\":[],\"timestamp\":1793200939418}"
+        },
+        {
+          "name": "chatwoot_campaigns_c4P6QbLTuG5eECyrddVMzHZ2:ts",
+          "value": "1793200939418"
+        },
+        {
+          "name": "chatwoot_available_agents_c4P6QbLTuG5eECyrddVMzHZ2:ts",
+          "value": "1793200939442"
+        },
+        {
+          "name": "chatwoot_available_agents_c4P6QbLTuG5eECyrddVMzHZ2",
+          "value": "{\"data\":[{\"id\":1,\"name\":\"TI - Admin\",\"avatar_url\":\"\",\"availability_status\":\"offline\"},{\"id\":12,\"name\":\"Gi - AI Bot\",\"avatar_url\":\"\",\"availability_status\":\"offline\"},{\"id\":36,\"name\":\"AVA - IA Agent\",\"avatar_url\":\"\",\"availability_status\":\"offline\"}],\"timestamp\":1793200939442}"
         }
       ]
     }
