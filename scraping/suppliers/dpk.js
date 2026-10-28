@@ -74,27 +74,60 @@ async function directSearch({ supplier, query }) {
         return [];
     }
 
-    const itemQuery = products.map(p => 'Item=' + p.sapCode).join('&');
-    const priceRes = await fetch(`https://api.dpk.com.br/dpk-price/api/price/dpk?StoreCode=${storeCode}&${itemQuery}`, {
-        headers: {
-            'accept': 'application/json',
-            'authorization': authHeader,
-            'origin': 'https://www.dpk.com.br',
-            'referer': 'https://www.dpk.com.br/',
-            'x-api-key': 'Zo7MoqWOQyaHdMJj053tB2Mx9IDJMKR97Y7d2T9a',
-            'x-portal': 'DPK'
-        }
+    // Sort products: exact code matches first, then prefix matches
+    const cleanQ = String(query || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    products.sort((a, b) => {
+        const aCode = String(a.code || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        const bCode = String(b.code || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        if (aCode === cleanQ && bCode !== cleanQ) return -1;
+        if (aCode !== cleanQ && bCode === cleanQ) return 1;
+        const aStart = aCode.startsWith(cleanQ);
+        const bStart = bCode.startsWith(cleanQ);
+        if (aStart && !bStart) return -1;
+        if (!aStart && bStart) return 1;
+        return 0;
     });
 
-    const prices = priceRes.ok ? await priceRes.json() : [];
+    // DPK's SAP server times out if asked for more than 5 items at once.
+    // We take the top 6 most relevant items and query them in parallel chunks of 3.
+    const targetProducts = products.slice(0, 6);
+    const batches = [];
+    for (let i = 0; i < targetProducts.length; i += 3) {
+        batches.push(targetProducts.slice(i, i + 3));
+    }
+
+    const priceResponses = await Promise.all(
+        batches.map(async (batch) => {
+            const itemQuery = batch.map((p) => 'Item=' + p.sapCode).join('&');
+            try {
+                const res = await fetch(`https://api.dpk.com.br/dpk-price/api/price/dpk?StoreCode=${storeCode}&${itemQuery}`, {
+                    headers: {
+                        accept: 'application/json',
+                        authorization: authHeader,
+                        origin: 'https://www.dpk.com.br',
+                        referer: 'https://www.dpk.com.br/',
+                        'x-api-key': 'Zo7MoqWOQyaHdMJj053tB2Mx9IDJMKR97Y7d2T9a',
+                        'x-portal': 'DPK',
+                    },
+                    signal: AbortSignal.timeout(8000),
+                });
+                return res.ok ? await res.json() : [];
+            } catch (_) {
+                return [];
+            }
+        })
+    );
+
     const priceMap = new Map();
-    if (Array.isArray(prices)) {
-        for (const item of prices) {
-            priceMap.set(String(item.id), item);
+    for (const list of priceResponses) {
+        if (Array.isArray(list)) {
+            for (const item of list) {
+                priceMap.set(String(item.id), item);
+            }
         }
     }
 
-    return products.map(p => {
+    return targetProducts.map(p => {
         const priceInfo = priceMap.get(String(p.sapCode)) || {};
         const price = Number(priceInfo.price || 0);
         const stock = Number(priceInfo.stock || 0);
@@ -102,6 +135,7 @@ async function directSearch({ supplier, query }) {
         return {
             provider: 'DPK',
             product: p.description,
+            preco: price > 0 ? `R$ ${price.toFixed(2).replace('.', ',')}` : '',
             price: price > 0 ? price : 0,
             available: stock > 0,
             link: `https://www.dpk.com.br/#/produtos/${p.id}/${encodeURIComponent((p.description || '').replace(/\s+/g, '-'))}`,

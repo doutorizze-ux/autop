@@ -55,7 +55,7 @@ function shouldFallbackOnLocalAgentFailure() {
 
 function requiresStoreNetworkForSearch(supplier: any) {
     const supplierKey = normalizeVariantKey(`${supplier?.name || ''} ${supplier?.url || ''}`);
-    return supplierKey.includes('comdip') || supplierKey.includes('dpk');
+    return supplierKey.includes('comdip');
 }
 
 function clonePayload<T>(value: T): T {
