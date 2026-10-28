@@ -64,8 +64,45 @@ module.exports = {
     buildSearchUrl: (query) => {
         const value = String(query).trim();
         const looksLikeCode = /^[A-Za-z0-9-]{3,}$/.test(value) && !/\s/.test(value);
-        const codeParam = looksLikeCode ? `&code=${encodeURIComponent(value)}` : '';
-        return `https://loja.rmp.com.br/catalogsearch/result/?q=${encodeURIComponent(value)}${codeParam}`;
+        const codeParam = looksLikeCode ? '&code=' + encodeURIComponent(value) : '';
+        return 'https://loja.rmp.com.br/catalogsearch/result/?q=' + encodeURIComponent(value) + codeParam;
+    },
+    performSearch: async ({ page, query, supplier }) => {
+        const value = String(query).trim();
+        const looksLikeCode = /^[A-Za-z0-9-]{3,}$/.test(value) && !/\s/.test(value);
+        const codeParam = looksLikeCode ? '&code=' + encodeURIComponent(value) : '';
+        const searchUrl = 'https://loja.rmp.com.br/catalogsearch/result/?q=' + encodeURIComponent(value) + codeParam;
+
+        await page.goto(searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+        await page.waitForTimeout(2000);
+
+        if (page.url().includes('login') || page.url().includes('customer/account')) {
+            console.log('[rmp] Redirected to login page, executing auto-login...');
+            const cookieBtn = page.locator('#btn-cookie-allow, button:has-text("Permitir Cookies")').first();
+            if (await cookieBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await cookieBtn.click().catch(() => {});
+                await page.waitForTimeout(500);
+            }
+
+            const user = supplier?.loginCredential || 'centroautomotivo0058@hotmail.com';
+            const pass = supplier?.password || 'Ren@n0058@';
+            const userLoc = page.locator('input#email[name="login[username]"], input[name="login[username]"], input#email').first();
+            const passLoc = page.locator('input#pass[name="login[password]"], input[name="login[password]"], input#pass').first();
+            const submitBtn = page.locator('button#send-login, button:has-text("ENTRAR")').first();
+
+            if (await userLoc.isVisible({ timeout: 4000 }).catch(() => false)) {
+                await userLoc.fill(user);
+                await passLoc.fill(pass);
+                await submitBtn.click().catch(() => {});
+                await Promise.race([
+                    page.waitForURL((url) => !url.href.includes('login'), { timeout: 15000 }).catch(() => null),
+                    page.locator('.welcome-msg, .header-search, a[href*="logout"]').first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => null),
+                ]);
+                await page.waitForTimeout(2000);
+                await page.goto(searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+                await page.waitForTimeout(2500);
+            }
+        }
     },
     extractItems: async ({ page, query }) => {
         await page.waitForFunction(() => {

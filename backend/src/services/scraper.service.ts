@@ -53,9 +53,8 @@ function shouldFallbackOnLocalAgentFailure() {
     return isTruthyEnv(process.env.LOCAL_AGENT_FALLBACK_ON_FAILURE, true);
 }
 
-function requiresStoreNetworkForSearch(supplier: any) {
-    const supplierKey = normalizeVariantKey(`${supplier?.name || ''} ${supplier?.url || ''}`);
-    return supplierKey.includes('comdip');
+function requiresStoreNetworkForSearch(_supplier: any) {
+    return false;
 }
 
 function clonePayload<T>(value: T): T {

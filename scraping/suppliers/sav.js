@@ -17,12 +17,40 @@ module.exports = {
     navigateToAuthenticatedAfterLogin: true,
     waitForResultsOnly: true,
     emptyResultSelector: ['text=Nenhum registro'],
-    performSearch: async ({ page, query, fillVisibleLocator, dismissTransientUi }) => {
+    performSearch: async ({ page, query, supplier, fillVisibleLocator, dismissTransientUi }) => {
         await dismissTransientUi();
+
+        if (page.url().includes('login')) {
+            console.log('[furacao] Redirected to login page, executing auto-login...');
+            const selectLoc = page.locator('#f, select').first();
+            await selectLoc.selectOption('c').catch(() => {});
+            await page.waitForTimeout(300);
+
+            const user = supplier?.loginCredential || '125435';
+            const pass = supplier?.password || 'Re539597@';
+            const userLoc = page.locator('#username, input[name="username"]').first();
+            const passLoc = page.locator('#password, input[name="password"]').first();
+            const submitBtn = page.locator('button.btn-primary, button[type="submit"]').first();
+
+            await userLoc.fill(user).catch(() => {});
+            await passLoc.fill(pass).catch(() => {});
+            await submitBtn.click().catch(() => {});
+            await Promise.race([
+                page.waitForURL((url) => !url.href.includes('login'), { timeout: 15000 }).catch(() => null),
+                page.locator('#gsearch').first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => null),
+            ]);
+            await page.waitForTimeout(2000);
+            await page.goto('https://vendas.furacao.com.br/vendas/sav/produtos', { waitUntil: 'domcontentloaded' }).catch(() => {});
+            await page.waitForTimeout(2000);
+        }
 
         const input = page.locator('#gsearch, input[placeholder*="pesquisar" i]').first();
         await input.waitFor({ state: 'visible', timeout: 15000 });
-        await fillVisibleLocator(input, query);
+        if (fillVisibleLocator) {
+            await fillVisibleLocator(input, query);
+        } else {
+            await input.fill(query);
+        }
         await input.press('Enter').catch(() => {});
 
         await Promise.race([

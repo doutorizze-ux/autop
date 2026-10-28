@@ -302,7 +302,31 @@ module.exports = {
     ],
     searchSelector: SEARCH_SELECTORS,
     searchButtonSelector: SEARCH_BUTTON_SELECTORS,
-    performSearch: async ({ page, query, dismissTransientUi }) => {
+    performSearch: async ({ page, query, supplier, dismissTransientUi }) => {
+        const title = await page.title().catch(() => '');
+        if (title.toLowerCase().includes('login') || page.url().endsWith('/login')) {
+            console.log('[sky] Detected login page, executing auto-login...');
+            await page.goto('https://cliente.skypecas.com.br/', { waitUntil: 'domcontentloaded' }).catch(() => {});
+            const cnpjLoc = page.locator('#txtCNPJCPF, input[name="cnpj"]').first();
+            const userLoc = page.locator('input[name="login"]').first();
+            const passLoc = page.locator('input[name="senha"]').first();
+            const submitBtn = page.locator('#btnEntrar, input[type="submit"]').first();
+
+            const cnpj = supplier?.loginExtraValue || '33.299.637/0001-80';
+            const user = supplier?.loginCredential || 'renan0058';
+            const pass = supplier?.password || 'rE539597@';
+
+            if (await cnpjLoc.isVisible().catch(() => false)) {
+                await cnpjLoc.fill(cnpj);
+                await userLoc.fill(user);
+                await passLoc.fill(pass);
+                await submitBtn.click().catch(() => {});
+                await page.waitForTimeout(5000);
+            }
+            await page.goto('https://cliente.skypecas.com.br/produtos', { waitUntil: 'domcontentloaded' }).catch(() => {});
+            await page.waitForTimeout(2000);
+        }
+
         const searched = await runBranchSearch(page, query, dismissTransientUi);
         if (!searched) {
             throw new Error('Campo de busca visivel nao encontrado na Sky Pecas.');

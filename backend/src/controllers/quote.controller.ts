@@ -540,7 +540,11 @@ function parseExportPrice(value: unknown) {
 function isExactResultForQuery(result: any, query: string) {
     const normalizedQuery = normalizeExportCode(query);
     const normalizedCode = normalizeExportCode(result?.code);
-    return !!normalizedQuery && !!normalizedCode && normalizedCode === normalizedQuery;
+    const normalizedProduct = normalizeExportCode(result?.product);
+    return !!normalizedQuery && (
+        (!!normalizedCode && (normalizedCode === normalizedQuery || normalizedCode.includes(normalizedQuery))) ||
+        (!!normalizedProduct && normalizedProduct.includes(normalizedQuery))
+    );
 }
 
 function shouldRenderResultInPdf(result: any, query: string) {
