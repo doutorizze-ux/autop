@@ -1232,7 +1232,7 @@ async function scrapeProductUnsafe(supplier, productName, options = {}) {
         try {
             console.error(`[DEBUG] Executando directSearch nativo para: ${supplier.name}`);
             const directResults = await strategy.directSearch({ supplier, query: productName });
-            if (Array.isArray(directResults) && directResults.length > 0) {
+            if (Array.isArray(directResults)) {
                 console.error(`[DEBUG] directSearch retornou ${directResults.length} itens para ${supplier.name}`);
                 return directResults;
             }

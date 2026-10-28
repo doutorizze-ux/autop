@@ -226,9 +226,16 @@ export async function bootstrapSuppliers() {
             if (existing) {
                 const updateData: any = {
                     name: item.name,
-                    loginCredential: existing.loginCredential || supplierData.loginCredential,
-                    password: existing.password || supplierData.password,
-                    searchUrl: supplierData.searchUrl,
+                    url: item.url || existing.url,
+                    type: item.type || existing.type,
+                    needsLogin: item.needsLogin ?? true,
+                    loginUrl: item.loginUrl || existing.loginUrl,
+                    loginUserSelector: item.loginUserSelector || existing.loginUserSelector,
+                    loginPassSelector: item.loginPassSelector || existing.loginPassSelector,
+                    loginSubmitSelector: item.loginSubmitSelector || existing.loginSubmitSelector,
+                    loginCredential: supplierData.loginCredential || existing.loginCredential,
+                    password: supplierData.password || existing.password,
+                    searchUrl: supplierData.searchUrl || existing.searchUrl,
                     websiteSearchEnabled: true,
                 };
                 if (sessionJson && sessionJson.length > 50) {

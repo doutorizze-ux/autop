@@ -1,48 +1,14 @@
 {
   "cookies": [
     {
-      "name": "__cf_ob",
-      "value": "%7B%22cb%22%3A%7B%22cC%22%3A0%2C%22xC%22%3A0%2C%22pC%22%3A0%2C%22sC%22%3A0%2C%22cL%22%3A%5B%5D%7D%2C%22f%22%3A%7B%22t%22%3A%5B%5D%7D%2C%22k%22%3A%7B%22t%22%3A%5B%5D%7D%2C%22n%22%3A%7B%22t%22%3A%5B%7B%22p%22%3A%22%2Fcompras%22%2C%22t%22%3A%22dac3a0cd845c0e23231fc0be769a557c%22%2C%22nT%22%3A%22navigate%22%2C%22r%22%3A%22%22%2C%22ts%22%3A2631.6000000089407%2C%22dw%22%3A0.7999999970197678%7D%2C%7B%22p%22%3A%22%2Fcompras%22%2C%22t%22%3A%22357b4bc8973b8be827bc898a1926527d%22%2C%22nT%22%3A%22navigate%22%2C%22r%22%3A%22%22%2C%22ts%22%3A2632.2000000029802%2C%22dw%22%3A0.20000000298023224%7D%5D%7D%2C%22ptr%22%3A%7B%22pt%22%3A0%2C%22l%22%3A%5B%5D%2C%22tr%22%3Afalse%7D%2C%22v%22%3A%7B%22vH%22%3A0%2C%22vV%22%3A265.40000000596046%2C%22vC%22%3A0%2C%22fO%22%3A0%2C%22fI%22%3A0%7D%2C%22_to%22%3A1793106819655.3%2C%22_ti%22%3A%22d577ce4c-4b33-4d0f-8b0d-34b24ae887a4%22%2C%22_tsrc%22%3A%22new%22%7D",
-      "domain": "vesporpro.com.br",
-      "path": "/cdn-cgi/challenge-platform",
-      "expires": -1,
-      "httpOnly": false,
-      "secure": true,
-      "sameSite": "None",
-      "partitionKey": "https://vesporpro.com.br",
-      "_crHasCrossSiteAncestor": false
-    },
-    {
-      "name": "cf_clearance",
-      "value": "5BrhcuhX7Qpy.ttdkr9e.pbQsj78Wrfj8UzGp0HUF4c-1792499750-1.2.1.1-CsS1JOVh04cG9UCdcR9BcmrYM.EZxd_3fbDLDbiYueRPbcKtOuO68JeXNKnsjJ1dQ9EhOLkxr87HMkl99VHRHabrode2m3ImMUgMa4YVZYwtSW0Yljqo0l4Us1IiGy9YhMlLoZjE37NhFtUMzWHFICEI.Bxhw_Pdfs_ulBM1UTrGgu9aByS.3rXadiVfRcx8XlkZ4hEc4bOC6df24HnbmNcTyIAE4_MjEGcgjGO9Yt97hnZsGiXOzRuycF3c9D9l5HgsMN.A_0XDbH73IiCneyht677vQnXud3qaHYHqscx5eqxCeL4moq4Jv_T.fPWZ0w.2JMxx48lzlCc9dIgZ_7iGv.d.J0W.Sf9oOrxTsE8",
-      "domain": ".vesporpro.com.br",
-      "path": "/",
-      "expires": 1824035657.793533,
-      "httpOnly": true,
-      "secure": true,
-      "sameSite": "None"
-    },
-    {
       "name": "authToken",
-      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb2R1c3VhcmlvIjo0MjM3LCJsb2dpbiI6ImNlbnRyb2F1dG9tb3Rpdm8wMDU4QGhvdG1haWwuY29tIiwibm9tZSI6IkNFTlRSTyBBVVRPTU9USVZPIDAwNTggTFREQSAgTUUiLCJzdGF0dXMiOjEsImlhdCI6MTc5MzEwNjkyNSwiZXhwIjoxNzkzMTA3ODI1fQ.K9c0cN0-3wk228kwGXDZJVqys8jA7UKm2JWgHsenl-k",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb2R1c3VhcmlvIjo0MjM3LCJsb2dpbiI6ImNlbnRyb2F1dG9tb3Rpdm8wMDU4QGhvdG1haWwuY29tIiwibm9tZSI6IkNFTlRSTyBBVVRPTU9USVZPIDAwNTggTFREQSAgTUUiLCJzdGF0dXMiOjEsImlhdCI6MTc5MzIwNDQ3OSwiZXhwIjoxNzkzMjA1Mzc5fQ.ANWh9PpCSPpOxZkD_r6QUvWm6do16eUWN_2pa45Pd7c",
       "domain": "vesporpro.com.br",
       "path": "/",
       "expires": -1,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"
-    },
-    {
-      "name": "cf_clearance",
-      "value": "8UG7m9211caSdL16CJ7viKcwn_uZABT_D6czoPw1rdA-1793106928-1.2.1.1-vJtUi6i6l4W3h6m02qaEbx6yceOG0MLr_H0iSfLeW4u7A6vdADuePx8CJsnDSssFh7dc96qN_m3yH.gQ2avHYQfdszf_1mLS7y_9Zz0IhNZtYejYg3a7w7Q75UNQ6IgkZNYnQ3VtMDuf1ThwT0vtuAbKrxpTkvdUgWBObV.UpPh0hyikPzCvzYzfgsrjH7vv4li88fB8WJ8LmWQATNxD9nAXBGksPfrIWmyUS_tFznQE2gkRjhBWQWH1TvLqdqLQhYQ9W1XWnF965o6G1e9X51O.BgrRlE3ANSGdelK5yASjfxTMkCg1nDIoLJzJUj2cBcA3Db9k1As.F3wPB43SfuQAFhuHpN4Bz8ktQzUDZGxGI2ubkdfwqte9xb87nqECo7TLGrjSqzp4.JaL6EQRVjGtb299enkZ8XuSJsTAHRIO2vNI0B59FwxhH_w6uRKPf4ZQBOxPkOnScu89ERROSL2YmMD2JaijynsGuFuFP1N00JAl7Ly.SkQNdrgmMq0VjwyEEhvV2N7.1.xtna3GFbfD9z9unbGwJrd7LJiXLkYYqKk4SVMoN.hg4EQM8ejsX0NEGSBnaKYUjy_80RQqpB0bAmdfaeAC2XDIoSxqGJY",
-      "domain": ".vesporpro.com.br",
-      "path": "/",
-      "expires": 1824642822.205084,
-      "httpOnly": true,
-      "secure": true,
-      "sameSite": "None",
-      "partitionKey": "https://vesporpro.com.br",
-      "_crHasCrossSiteAncestor": false
     }
   ],
   "origins": [
@@ -50,20 +16,12 @@
       "origin": "https://vesporpro.com.br",
       "localStorage": [
         {
-          "name": "dadosLogin",
-          "value": "{\"success\":true,\"usuario\":{\"codusuario\":4237,\"login\":\"centroautomotivo0058@hotmail.com\",\"nome\":\"CENTRO AUTOMOTIVO 0058 LTDA  ME\",\"codcliente\":\"014198\",\"codclienteloja\":\"01\",\"codempresa\":3698,\"razaosocial\":\"CENTRO AUTOMOTIVO 0058 LTDA  ME\",\"codfilial\":\"52\",\"codfilori\":\"52\",\"pvt\":false,\"status\":1,\"usuariocomercial\":2},\"empresas\":[{\"codempresa\":3698,\"codfilial\":\"52\",\"codfilori\":\"52\",\"codcliente\":\"014198\",\"codclienteloja\":\"01\",\"razaosocial\":\"CENTRO AUTOMOTIVO 0058 LTDA  ME\",\"pvt\":false,\"cep_filori\":null,\"codfilial_fav\":null}],\"token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb2R1c3VhcmlvIjo0MjM3LCJsb2dpbiI6ImNlbnRyb2F1dG9tb3Rpdm8wMDU4QGhvdG1haWwuY29tIiwibm9tZSI6IkNFTlRSTyBBVVRPTU9USVZPIDAwNTggTFREQSAgTUUiLCJzdGF0dXMiOjEsImlhdCI6MTc5MzEwNjkyNSwiZXhwIjoxNzkzMTA3ODI1fQ.K9c0cN0-3wk228kwGXDZJVqys8jA7UKm2JWgHsenl-k\"}"
-        },
-        {
           "name": "authToken",
-          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb2R1c3VhcmlvIjo0MjM3LCJsb2dpbiI6ImNlbnRyb2F1dG9tb3Rpdm8wMDU4QGhvdG1haWwuY29tIiwibm9tZSI6IkNFTlRSTyBBVVRPTU9USVZPIDAwNTggTFREQSAgTUUiLCJzdGF0dXMiOjEsImlhdCI6MTc5MzEwNjkyNSwiZXhwIjoxNzkzMTA3ODI1fQ.K9c0cN0-3wk228kwGXDZJVqys8jA7UKm2JWgHsenl-k"
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb2R1c3VhcmlvIjo0MjM3LCJsb2dpbiI6ImNlbnRyb2F1dG9tb3Rpdm8wMDU4QGhvdG1haWwuY29tIiwibm9tZSI6IkNFTlRSTyBBVVRPTU9USVZPIDAwNTggTFREQSAgTUUiLCJzdGF0dXMiOjEsImlhdCI6MTc5MzIwNDQ3OSwiZXhwIjoxNzkzMjA1Mzc5fQ.ANWh9PpCSPpOxZkD_r6QUvWm6do16eUWN_2pa45Pd7c"
         },
         {
-          "name": "estadoCarrinho",
-          "value": "{\"LScarrinhoAtivo\":\"67975\",\"LScodusuario\":4237,\"LScodcliente\":\"014198\",\"LScodempresaAtual\":3698,\"LSisDarkMode\":true}"
-        },
-        {
-          "name": "ultimoCarrinhoAtivo",
-          "value": "67975"
+          "name": "dadosLogin",
+          "value": "{\"success\":true,\"usuario\":{\"codusuario\":4237,\"login\":\"centroautomotivo0058@hotmail.com\",\"nome\":\"CENTRO AUTOMOTIVO 0058 LTDA  ME\",\"codcliente\":\"014198\",\"codclienteloja\":\"01\",\"codempresa\":3698,\"razaosocial\":\"CENTRO AUTOMOTIVO 0058 LTDA  ME\",\"codfilial\":\"52\",\"codfilori\":\"52\",\"pvt\":false,\"status\":1,\"usuariocomercial\":2},\"empresas\":[{\"codempresa\":3698,\"codfilial\":\"52\",\"codfilori\":\"52\",\"codcliente\":\"014198\",\"codclienteloja\":\"01\",\"razaosocial\":\"CENTRO AUTOMOTIVO 0058 LTDA  ME\",\"pvt\":false,\"cep_filori\":null,\"codfilial_fav\":null}],\"token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb2R1c3VhcmlvIjo0MjM3LCJsb2dpbiI6ImNlbnRyb2F1dG9tb3Rpdm8wMDU4QGhvdG1haWwuY29tIiwibm9tZSI6IkNFTlRSTyBBVVRPTU9USVZPIDAwNTggTFREQSAgTUUiLCJzdGF0dXMiOjEsImlhdCI6MTc5MzIwNDQ3OSwiZXhwIjoxNzkzMjA1Mzc5fQ.ANWh9PpCSPpOxZkD_r6QUvWm6do16eUWN_2pa45Pd7c\"}"
         }
       ]
     }
