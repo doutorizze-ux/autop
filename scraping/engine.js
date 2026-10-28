@@ -995,11 +995,15 @@ async function createContext(browser, supplier, strategy = {}) {
 
     if (effectiveProfilePath) {
         console.error(`[DEBUG] Reutilizando perfil persistente para: ${supplier.name}`);
-    } else if (selectedSessionState) {
-        console.error(`[DEBUG] Reutilizando sessionData para: ${supplier.name} (${supplierSessionState.cookieCount || 0} cookies)`);
     } else if (fs.existsSync(sessionStatePath)) {
         console.error(`[DEBUG] Reutilizando sessao salva em arquivo para: ${supplier.name}`);
         contextOptions.storageState = sessionStatePath;
+    } else if (selectedSessionState) {
+        console.error(`[DEBUG] Reutilizando sessionData para: ${supplier.name} (${supplierSessionState.cookieCount || 0} cookies)`);
+        try {
+            fs.writeFileSync(sessionStatePath, JSON.stringify(selectedSessionState, null, 2));
+            contextOptions.storageState = sessionStatePath;
+        } catch (_) {}
     }
 
     let context;

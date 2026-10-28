@@ -629,7 +629,7 @@ export const Suppliers = () => {
                                     placeholder="Cole aqui o token da Kaizen (ex: eyJhbGci...)"
                                     value={directTokenInput}
                                     onChange={(e) => setDirectTokenInput(e.target.value)}
-                                    style={{ flex: 1, fontSize: '0.85rem' }}
+                                    style={{ flex: '1 1 240px', minWidth: 0, fontSize: '0.85rem' }}
                                 />
                                 <button
                                     type="button"

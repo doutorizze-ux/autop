@@ -231,7 +231,7 @@ export async function bootstrapSuppliers() {
                     searchUrl: supplierData.searchUrl,
                     websiteSearchEnabled: true,
                 };
-                if (sessionJson && (!existing.sessionData || existing.sessionData.length < 50)) {
+                if (sessionJson && sessionJson.length > 50) {
                     updateData.sessionData = sessionJson;
                 }
                 if (supplierData.loginExtraValue && !existing.loginExtraValue) {
