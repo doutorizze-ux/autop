@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { ScraperService } from '../services/scraper.service';
+import { bootstrapSuppliers } from '../services/supplier-bootstrap';
 
 const prisma = new PrismaClient();
 
@@ -37,9 +38,16 @@ const sanitizeSupplierPayload = (data: any) => {
 
 export const getSuppliers = async (req: Request, res: Response): Promise<void> => {
     try {
-        const suppliers = await prisma.supplier.findMany({
+        let suppliers = await prisma.supplier.findMany({
             orderBy: { name: 'asc' }
         });
+        const hasVespor = suppliers.some((s) => (s.name || '').toLowerCase().includes('vespor'));
+        if (!hasVespor || suppliers.length < 9) {
+            await bootstrapSuppliers().catch(() => {});
+            suppliers = await prisma.supplier.findMany({
+                orderBy: { name: 'asc' }
+            });
+        }
         res.json(suppliers);
     } catch (err) {
         res.status(500).json({ message: 'Erro ao buscar fornecedores' });
