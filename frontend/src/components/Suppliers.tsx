@@ -298,7 +298,7 @@ export const Suppliers = () => {
     };
 
     const copyTokenCommand = () => {
-        navigator.clipboard.writeText('copy(localStorage.token)');
+        navigator.clipboard.writeText("copy(localStorage.token || sessionStorage.token || (document.cookie.match(/token=([^;]+)/) || [])[1]); console.log(localStorage.token || sessionStorage.token || (document.cookie.match(/token=([^;]+)/) || [])[1]);");
         setCommandCopied(true);
         setTimeout(() => setCommandCopied(false), 2500);
     };
@@ -673,7 +673,7 @@ export const Suppliers = () => {
                                 💡 Se o Cloudflare bloquear a janela acima (erro vermelho):
                             </div>
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.6rem' }}>
-                                Abra o portal <a href="https://portal.kaizenautopecas.com.br" target="_blank" rel="noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'underline' }}>portal.kaizenautopecas.com.br</a> em outra aba do seu navegador, faça login normalmente, abra o Console (F12) e cole o comando: <code style={{ color: '#10B981', background: 'rgba(0,0,0,0.3)', padding: '2px 5px', borderRadius: '4px' }}>copy(localStorage.token)</code>. Depois, cole o token abaixo e clique em Salvar:
+                                Abra o portal <a href="https://portal.kaizenautopecas.com.br" target="_blank" rel="noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'underline' }}>portal.kaizenautopecas.com.br</a> em outra aba do seu navegador, faça login normalmente, abra o Console (F12) e cole o comando: <code style={{ color: '#10B981', background: 'rgba(0,0,0,0.3)', padding: '2px 5px', borderRadius: '4px' }}>copy(localStorage.token || sessionStorage.token || (document.cookie.match(/token=([^;]+)/) || [])[1]); console.log(localStorage.token || sessionStorage.token || (document.cookie.match(/token=([^;]+)/) || [])[1]);</code>. Depois, cole o token abaixo e clique em Salvar:
                             </div>
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
                                 <input
@@ -735,7 +735,7 @@ export const Suppliers = () => {
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
                                     <code style={{ flex: '1 1 200px', minWidth: 0, padding: '0.5rem 0.75rem', background: 'rgba(0,0,0,0.4)', borderRadius: '6px', color: '#10B981', fontFamily: 'monospace', fontSize: '0.9rem' }}>
-                                        copy(localStorage.token)
+                                        copy(localStorage.token || sessionStorage.token || (document.cookie.match(/token=([^;]+)/) || [])[1]); console.log(localStorage.token || sessionStorage.token || (document.cookie.match(/token=([^;]+)/) || [])[1]);
                                     </code>
                                     <button
                                         type="button"
