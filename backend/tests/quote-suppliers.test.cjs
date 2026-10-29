@@ -141,7 +141,6 @@ test('9 active suppliers survive 3 offers, missing returns, history and PDF', as
         for (const name of supplierNames) assert.ok(fixture.pdfText.includes(name));
     }
 });
-
 test('all suppliers without offers still produce a complete quote', async () => {
     const payload = await finishJob(controllerFixture({}));
     assert.equal(payload.suppliers.length, 9);
@@ -151,7 +150,6 @@ test('all suppliers without offers still produce a complete quote', async () => 
         assert.ok(Object.values(payload.selectedOffers[query]).every((result) => result === null));
     }
 });
-
 test('batch search retains empty, malformed and failed results without searching disabled suppliers', async () => {
     const suppliers = [
         { id: 'offer', name: 'Oferta', websiteSearchEnabled: true },
@@ -186,4 +184,165 @@ test('batch search retains empty, malformed and failed results without searching
     assert.ok(matrix.HF81A.find((row) => row.provider === 'Vazio').error.includes('nao retornou oferta'));
     assert.ok(matrix.HF81A.find((row) => row.provider === 'Falha').error.includes('Sessão expirada'));
     assert.equal(matrix.HF81A.find((row) => row.provider === 'Oferta').price, 122.74);
+});
+
+test('DPK can diagnose its REST response from the backend when local routing is not required', async () => {
+    const previousMode = process.env.LOCAL_AGENT_MODE;
+    const previousRequired = process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH;
+    process.env.LOCAL_AGENT_MODE = 'disabled';
+    process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH = 'false';
+
+    let directSearchCalls = 0;
+    try {
+        const enginePath = path.resolve(__dirname, '../../scraping/engine.js');
+        const service = loadModule('../dist/services/scraper.service.js', {
+            '@prisma/client': { PrismaClient: function () {
+                return {
+                    supplier: {
+                        findMany: async () => [{ id: 'dpk', name: 'DPK', url: 'https://www.dpk.com.br', websiteSearchEnabled: true, needsLogin: true }],
+                    },
+                };
+            } },
+            '../index': { io: socket },
+            './local-agent.service': {
+                LocalAgentService: {
+                    hasActiveAgentsForSupplier: () => false,
+                    dispatchSearchTask: async () => { throw new Error('Unexpected dispatch'); },
+                },
+            },
+            [enginePath]: { scrapeProduct: async () => {
+                directSearchCalls += 1;
+                return {
+                    provider: 'DPK',
+                    product: 'HF81A',
+                    price: '---',
+                    available: false,
+                    error: 'API DPK recusada: HTTP 403; x-amz-cf-id=cf-request-456',
+                };
+            } },
+        });
+        const matrix = await service.ScraperService.searchMultipleProducts(['HF81A']);
+        assert.equal(directSearchCalls, 1);
+        assert.equal(matrix.HF81A[0].provider, 'DPK');
+        assert.match(matrix.HF81A[0].error, /HTTP 403/);
+    } finally {
+        if (previousMode === undefined) delete process.env.LOCAL_AGENT_MODE;
+        else process.env.LOCAL_AGENT_MODE = previousMode;
+        if (previousRequired === undefined) delete process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH;
+        else process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH = previousRequired;
+    }
+});
+
+test('LOCAL_AGENT_REQUIRE_FOR_SEARCH fails closed even when agent mode is disabled', async () => {
+    const previousMode = process.env.LOCAL_AGENT_MODE;
+    const previousRequired = process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH;
+    process.env.LOCAL_AGENT_MODE = 'disabled';
+    process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH = 'true';
+
+    let directSearchCalls = 0;
+    try {
+        const enginePath = path.resolve(__dirname, '../../scraping/engine.js');
+        const service = loadModule('../dist/services/scraper.service.js', {
+            '@prisma/client': { PrismaClient: function () {
+                return {
+                    supplier: {
+                        findMany: async () => [{ id: 'comdip', name: 'Comdip', url: 'https://portalcomdip.com.br', websiteSearchEnabled: true, needsLogin: true }],
+                    },
+                };
+            } },
+            '../index': { io: socket },
+            './local-agent.service': {
+                LocalAgentService: {
+                    hasActiveAgentsForSupplier: () => false,
+                    dispatchSearchTask: async () => { throw new Error('Unexpected dispatch'); },
+                },
+            },
+            [enginePath]: { scrapeProduct: async () => {
+                directSearchCalls += 1;
+                return [offer('Comdip')];
+            } },
+        });
+        const matrix = await service.ScraperService.searchMultipleProducts(['HF81A']);
+        assert.equal(directSearchCalls, 0);
+        assert.match(matrix.HF81A[0].error, /LOCAL_AGENT_REQUIRE_FOR_SEARCH está ativo/);
+    } finally {
+        if (previousMode === undefined) delete process.env.LOCAL_AGENT_MODE;
+        else process.env.LOCAL_AGENT_MODE = previousMode;
+        if (previousRequired === undefined) delete process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH;
+        else process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH = previousRequired;
+    }
+});
+
+test('DPK direct API failures retain CloudFront diagnostics and do not trigger Playwright fallback', async () => {
+    let browserLaunches = 0;
+    const originalFetch = global.fetch;
+    global.fetch = async () => ({
+        ok: false,
+        status: 403,
+        headers: new Map([
+            ['x-amz-cf-id', 'cf-request-123'],
+            ['x-cache', 'Error from cloudfront'],
+            ['authorization', 'must-not-be-read'],
+        ]),
+    });
+
+    try {
+        const dpkStrategy = loadModule('../../scraping/suppliers/dpk.js', {});
+        const enginePath = path.resolve(__dirname, '../../scraping/engine.js');
+        const engineModule = loadModule(enginePath, {
+            playwright: {
+                chromium: {
+                    launch: async () => {
+                        browserLaunches += 1;
+                        throw new Error('Browser fallback must not run');
+                    },
+                },
+            },
+            './suppliers': { resolveStrategy: () => dpkStrategy },
+            './suppliers/shared': { safeString: (value) => String(value || '').trim(), buildSelectorList: () => [] },
+        });
+
+        const result = await engineModule.scrapeProduct({ name: 'DPK', url: 'https://www.dpk.com.br' }, 'W712');
+        assert.equal(browserLaunches, 0);
+        assert.equal(result.provider, 'DPK');
+        assert.match(result.error, /HTTP 403/);
+        assert.match(result.error, /x-amz-cf-id=cf-request-123/);
+        assert.equal(JSON.stringify(result).includes('authorization'), false);
+        assert.equal(JSON.stringify(result).includes('Bearer '), false);
+    } finally {
+        global.fetch = originalFetch;
+    }
+});
+
+test('DPK API diagnostics exclude unsafe response headers and credentials', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = async () => ({
+        ok: false,
+        status: 403,
+        headers: new Map([
+            ['x-amz-cf-id', 'cf-request-456'],
+            ['x-cache', 'Error from cloudfront'],
+            ['authorization', 'must-not-be-read'],
+        ]),
+    });
+
+    try {
+        const strategy = loadModule('../../scraping/suppliers/dpk.js', {});
+        await assert.rejects(
+            strategy.directSearch({
+                supplier: { name: 'DPK', loginCredential: 'user-value', password: 'secret-value' },
+                query: 'W712',
+            }),
+            (error) => {
+                assert.match(error.message, /HTTP 403/);
+                assert.match(error.message, /x-amz-cf-id=cf-request-456/);
+                assert.match(error.message, /x-cache=Error from cloudfront/);
+                assert.equal(error.message.includes('must-not-be-read'), false);
+                assert.equal(error.message.includes('secret-value'), false);
+                return true;
+            }
+        );
+    } finally {
+        global.fetch = originalFetch;
+    }
 });

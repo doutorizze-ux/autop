@@ -3,6 +3,21 @@ const path = require('path');
 
 let cachedBootstrapState = null;
 
+function formatHttpDiagnostic(response) {
+    const safeHeaders = ['x-amz-cf-id', 'x-amz-cf-pop', 'x-cache', 'via', 'x-request-id', 'request-id'];
+    const details = safeHeaders
+        .map((name) => {
+            const value = String(response.headers?.get(name) || '')
+                .replace(/[\r\n]+/g, ' ')
+                .trim()
+                .slice(0, 180);
+            return value ? `${name}=${value}` : '';
+        })
+        .filter(Boolean);
+
+    return [`HTTP ${response.status}`, ...details].join('; ');
+}
+
 function normalizeAscii(value) {
     return String(value || '')
         .replace(/\0/g, '')
@@ -33,7 +48,7 @@ async function getDpkToken(user, pass) {
     });
 
     if (!res.ok) {
-        throw new Error(`Falha no login DPK: HTTP ${res.status}`);
+        throw new Error(`Autenticação da API DPK recusada: ${formatHttpDiagnostic(res)}`);
     }
 
     const data = await res.json();
@@ -65,7 +80,7 @@ async function directSearch({ supplier, query }) {
     });
 
     if (!searchRes.ok) {
-        throw new Error(`Busca DPK falhou: HTTP ${searchRes.status}`);
+        throw new Error(`Busca da API DPK recusada: ${formatHttpDiagnostic(searchRes)}`);
     }
 
     const searchData = await searchRes.json();
@@ -111,23 +126,32 @@ async function directSearch({ supplier, query }) {
                     },
                     signal: AbortSignal.timeout(8000),
                 });
-                return res.ok ? await res.json() : [];
-            } catch (_) {
-                return [];
+                if (!res.ok) {
+                    return { requestError: `Consulta de preço DPK recusada: ${formatHttpDiagnostic(res)}` };
+                }
+                return await res.json();
+            } catch (error) {
+                const reason = error?.name === 'TimeoutError' || error?.name === 'AbortError'
+                    ? 'timeout após 8s'
+                    : 'falha de rede ao consultar preços';
+                return { requestError: `Consulta de preço DPK: ${reason}.` };
             }
         })
     );
 
     const priceMap = new Map();
+    const priceErrors = [];
     for (const list of priceResponses) {
         if (Array.isArray(list)) {
             for (const item of list) {
                 priceMap.set(String(item.id), item);
             }
+        } else if (list?.requestError) {
+            priceErrors.push(list.requestError);
         }
     }
 
-    return targetProducts.map(p => {
+    const results = targetProducts.map(p => {
         const priceInfo = priceMap.get(String(p.sapCode)) || {};
         const price = Number(priceInfo.price || 0);
         const stock = Number(priceInfo.stock || 0);
@@ -147,12 +171,26 @@ async function directSearch({ supplier, query }) {
             variantKey: `${p.description || ''}`.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
         };
     }).filter(p => p.price > 0);
+
+    if (results.length === 0 && priceErrors.length > 0) {
+        return {
+            provider: supplier?.name || 'DPK',
+            product: query,
+            price: '---',
+            available: false,
+            error: `API DPK encontrou produtos, mas não conseguiu consultar preços. ${priceErrors.join(' | ')}`,
+            debug: { source: 'DPK API', phase: 'price' },
+        };
+    }
+
+    return results;
 }
 
 module.exports = {
     key: 'dpk',
     matches: (supplierName) => supplierName.toLowerCase().includes('dpk'),
     directSearch,
+    directSearchFailureIsFinal: true,
     authenticatedUrl: 'https://www.dpk.com.br/#/',
     userSelector: ['input[type="email"]', 'input[formcontrolname="userPrincipalName"]', 'input[formcontrolname="email"]', 'input[name="login"]'],
     passSelector: ['input[type="password"]', 'input[formcontrolname="password"]', 'input[formcontrolname="senha"]'],

@@ -42,19 +42,18 @@ function isTruthyEnv(value: string | undefined, defaultValue = false) {
 }
 
 function isLocalAgentModeEnabled() {
-    return String(process.env.LOCAL_AGENT_MODE || '').trim().toLowerCase() !== 'disabled';
+    return (
+        isTruthyEnv(process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH, false) ||
+        String(process.env.LOCAL_AGENT_MODE || '').trim().toLowerCase() !== 'disabled'
+    );
 }
 
 function shouldRequireLocalAgentForSearch() {
-    return isLocalAgentModeEnabled() && isTruthyEnv(process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH, false);
+    return isTruthyEnv(process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH, false);
 }
 
 function shouldFallbackOnLocalAgentFailure() {
     return isTruthyEnv(process.env.LOCAL_AGENT_FALLBACK_ON_FAILURE, true);
-}
-
-function requiresStoreNetworkForSearch(_supplier: any) {
-    return false;
 }
 
 function clonePayload<T>(value: T): T {
@@ -551,25 +550,13 @@ async function executeSupplierSearch(supplier: any, productName: string) {
     const localAgentMode = isLocalAgentModeEnabled();
     const requireLocalAgent = shouldRequireLocalAgentForSearch();
     const localAgentAvailable = localAgentMode && LocalAgentService.hasActiveAgentsForSupplier(supplier);
-    // Estes portais bloqueiam ou esvaziam a pagina quando acessados pelo IP do VPS.
-    const storeNetworkRequired = requiresStoreNetworkForSearch(supplier);
-    const shouldUseLocalAgent = localAgentMode && localAgentAvailable && (requireLocalAgent || storeNetworkRequired);
 
-    if (shouldUseLocalAgent) {
-        try {
-            console.log(
-                `[Scraper] Encaminhando busca via agente local para ${supplier.name} -> ${productName}` +
-                ` (require=${requireLocalAgent ? 'sim' : 'nao'}, storeNetwork=${storeNetworkRequired ? 'sim' : 'nao'}, active=${localAgentAvailable ? 'sim' : 'nao'})`
-            );
-            return await LocalAgentService.dispatchSearchTask(supplier, productName);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            if (requireLocalAgent || !shouldFallbackOnLocalAgentFailure()) {
-                throw error;
-            }
-
-            console.warn(`[Scraper] Falha no agente local para ${supplier.name}; fallback direto habilitado. Motivo: ${message}`);
+    if (requireLocalAgent) {
+        if (!localAgentAvailable) {
+            throw new Error(`LOCAL_AGENT_REQUIRE_FOR_SEARCH está ativo, mas nenhum agente compatível está conectado para ${supplier.name}.`);
         }
+
+        return LocalAgentService.dispatchSearchTask(supplier, productName);
     }
 
     const directResult = await runSupplierSearch(supplier, productName);

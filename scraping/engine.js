@@ -1236,8 +1236,25 @@ async function scrapeProductUnsafe(supplier, productName, options = {}) {
                 console.error(`[DEBUG] directSearch retornou ${directResults.length} itens para ${supplier.name}`);
                 return directResults;
             }
+            if (strategy.directSearchFailureIsFinal && directResults?.error) {
+                return {
+                    ...directResults,
+                    provider: directResults.provider || supplier.name,
+                    product: directResults.product || productName,
+                };
+            }
         } catch (directErr) {
-            console.error(`[WARN] directSearch falhou para ${supplier.name}: ${directErr.message}. Continuando com Playwright...`);
+            console.error(`[WARN] directSearch falhou para ${supplier.name}: ${directErr.message}`);
+            if (strategy.directSearchFailureIsFinal) {
+                return {
+                    provider: supplier.name,
+                    product: productName,
+                    price: '---',
+                    available: false,
+                    error: `API DPK falhou; navegador não acionado para preservar o diagnóstico original: ${directErr.message}`,
+                    debug: { source: 'DPK API', phase: 'request' },
+                };
+            }
         }
     }
 
