@@ -61,23 +61,43 @@ async function getSupplierOrFail(supplierId: string) {
     return supplier;
 }
 
-function shouldUseLocalAgent() {
-    return process.env.LOCAL_AGENT_MODE === 'enabled' && LocalAgentService.hasActiveAgents();
+function requiresLocalAgent(supplier: any) {
+    const identity = `${supplier?.name || ''} ${supplier?.url || ''}`
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+    const requireForSearch = ['1', 'true', 'yes', 'on', 'enabled'].includes(
+        String(process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH || '').trim().toLowerCase()
+    );
+
+    return identity.includes('dpk') || requireForSearch;
 }
 
-function isLocalAgentModeEnabled() {
-    return false;
+function shouldUseLocalAgent(supplier: any) {
+    const modeEnabled = String(process.env.LOCAL_AGENT_MODE || '').trim().toLowerCase() === 'enabled';
+    return (
+        (modeEnabled || requiresLocalAgent(supplier)) &&
+        LocalAgentService.hasActiveAgentsForSupplier(supplier)
+    );
+}
+
+function assertLocalAgentAvailable(supplier: any) {
+    if (requiresLocalAgent(supplier) && !LocalAgentService.hasActiveAgentsForSupplier(supplier)) {
+        throw new Error(
+            `O Login Assistido de ${supplier.name} precisa do Chrome da loja. Conecte um agente local compatível e tente novamente.`
+        );
+    }
 }
 
 export class SupplierSessionService {
     static async start(supplierId: string) {
         const supplier = await getSupplierOrFail(supplierId);
 
-        if (shouldUseLocalAgent()) {
+        if (shouldUseLocalAgent(supplier)) {
             return LocalAgentService.dispatchSessionTask(supplier, 'start') as Promise<any>;
         }
 
-        
+        assertLocalAgentAvailable(supplier);
 
         await closeExisting(supplierId);
 
@@ -132,12 +152,12 @@ export class SupplierSessionService {
     }
 
     static async snapshot(supplierId: string) {
-        if (shouldUseLocalAgent()) {
-            const supplier = await getSupplierOrFail(supplierId);
+        const supplier = await getSupplierOrFail(supplierId);
+        if (shouldUseLocalAgent(supplier)) {
             return LocalAgentService.dispatchSessionTask(supplier, 'snapshot') as Promise<any>;
         }
 
-        
+        assertLocalAgentAvailable(supplier);
 
         const session = sessions.get(supplierId);
         if (!session) {
@@ -153,12 +173,12 @@ export class SupplierSessionService {
     }
 
     static async click(supplierId: string, x: number, y: number) {
-        if (shouldUseLocalAgent()) {
-            const supplier = await getSupplierOrFail(supplierId);
+        const supplier = await getSupplierOrFail(supplierId);
+        if (shouldUseLocalAgent(supplier)) {
             return LocalAgentService.dispatchSessionTask(supplier, 'click', { x, y }) as Promise<any>;
         }
 
-        
+        assertLocalAgentAvailable(supplier);
 
         const session = sessions.get(supplierId);
         if (!session) {
@@ -171,12 +191,12 @@ export class SupplierSessionService {
     }
 
     static async type(supplierId: string, text: string) {
-        if (shouldUseLocalAgent()) {
-            const supplier = await getSupplierOrFail(supplierId);
+        const supplier = await getSupplierOrFail(supplierId);
+        if (shouldUseLocalAgent(supplier)) {
             return LocalAgentService.dispatchSessionTask(supplier, 'type', { text }) as Promise<any>;
         }
 
-        
+        assertLocalAgentAvailable(supplier);
 
         const session = sessions.get(supplierId);
         if (!session) {
@@ -189,12 +209,12 @@ export class SupplierSessionService {
     }
 
     static async press(supplierId: string, key: string) {
-        if (shouldUseLocalAgent()) {
-            const supplier = await getSupplierOrFail(supplierId);
+        const supplier = await getSupplierOrFail(supplierId);
+        if (shouldUseLocalAgent(supplier)) {
             return LocalAgentService.dispatchSessionTask(supplier, 'press', { key }) as Promise<any>;
         }
 
-        
+        assertLocalAgentAvailable(supplier);
 
         const session = sessions.get(supplierId);
         if (!session) {
@@ -271,7 +291,7 @@ export class SupplierSessionService {
             return { saved: true, direct: true };
         }
 
-        if (shouldUseLocalAgent()) {
+        if (shouldUseLocalAgent(supplier)) {
             const result = await LocalAgentService.dispatchSessionTask(supplier, 'save') as any;
             await (prisma.supplier as any).update({
                 where: { id: supplierId },
@@ -288,7 +308,7 @@ export class SupplierSessionService {
             };
         }
 
-        
+        assertLocalAgentAvailable(supplier);
 
         const session = sessions.get(supplierId);
         if (!session) {
@@ -327,12 +347,12 @@ export class SupplierSessionService {
     }
 
     static async stop(supplierId: string) {
-        if (shouldUseLocalAgent()) {
-            const supplier = await getSupplierOrFail(supplierId);
+        const supplier = await getSupplierOrFail(supplierId);
+        if (shouldUseLocalAgent(supplier)) {
             return LocalAgentService.dispatchSessionTask(supplier, 'stop') as Promise<any>;
         }
 
-        if (isLocalAgentModeEnabled()) {
+        if (requiresLocalAgent(supplier)) {
             return { stopped: true, mode: 'local-agent-offline' };
         }
 

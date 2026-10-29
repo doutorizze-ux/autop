@@ -346,3 +346,76 @@ test('DPK API diagnostics exclude unsafe response headers and credentials', asyn
         global.fetch = originalFetch;
     }
 });
+
+test('DPK assisted login uses the store Chrome even when local-agent mode is disabled', async () => {
+    const previousMode = process.env.LOCAL_AGENT_MODE;
+    const previousRequired = process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH;
+    process.env.LOCAL_AGENT_MODE = 'disabled';
+    process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH = 'false';
+
+    const supplier = { id: 'dpk', name: 'DPK', url: 'https://www.dpk.com.br' };
+    const dispatched = [];
+    try {
+        const service = loadModule('../dist/services/supplier-session.service.js', {
+            '@prisma/client': {
+                PrismaClient: function () {
+                    return { supplier: { findUnique: async () => supplier } };
+                },
+            },
+            './local-agent.service': {
+                LocalAgentService: {
+                    hasActiveAgentsForSupplier: (candidate) => candidate.id === supplier.id,
+                    dispatchSessionTask: async (_candidate, action) => {
+                        dispatched.push(action);
+                        return { mode: 'local-agent', action };
+                    },
+                },
+            },
+        });
+
+        const result = await service.SupplierSessionService.start(supplier.id);
+        assert.deepEqual(result, { mode: 'local-agent', action: 'start' });
+        assert.deepEqual(dispatched, ['start']);
+    } finally {
+        if (previousMode === undefined) delete process.env.LOCAL_AGENT_MODE;
+        else process.env.LOCAL_AGENT_MODE = previousMode;
+        if (previousRequired === undefined) delete process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH;
+        else process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH = previousRequired;
+    }
+});
+
+test('DPK assisted login fails clearly instead of opening a CloudFront-blocked server browser', async () => {
+    const previousMode = process.env.LOCAL_AGENT_MODE;
+    const previousRequired = process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH;
+    process.env.LOCAL_AGENT_MODE = 'disabled';
+    process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH = 'false';
+
+    const supplier = { id: 'dpk-offline', name: 'DPK', url: 'https://www.dpk.com.br' };
+    try {
+        const service = loadModule('../dist/services/supplier-session.service.js', {
+            '@prisma/client': {
+                PrismaClient: function () {
+                    return { supplier: { findUnique: async () => supplier } };
+                },
+            },
+            './local-agent.service': {
+                LocalAgentService: {
+                    hasActiveAgentsForSupplier: () => false,
+                    dispatchSessionTask: async () => {
+                        throw new Error('An offline agent must not receive a task');
+                    },
+                },
+            },
+        });
+
+        await assert.rejects(
+            service.SupplierSessionService.start(supplier.id),
+            /precisa do Chrome da loja/
+        );
+    } finally {
+        if (previousMode === undefined) delete process.env.LOCAL_AGENT_MODE;
+        else process.env.LOCAL_AGENT_MODE = previousMode;
+        if (previousRequired === undefined) delete process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH;
+        else process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH = previousRequired;
+    }
+});

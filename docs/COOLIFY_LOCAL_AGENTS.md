@@ -75,6 +75,8 @@ logs/local-agents
 4. Os resultados chegam por Socket.IO conforme cada fornecedor responde.
 5. Se `LOCAL_AGENT_REQUIRE_FOR_SEARCH=true`, o backend nao tenta consultar fornecedor pelo IP do servidor quando nao houver agente local online.
 
+O Login Assistido da DPK sempre usa um agente compatível e o Chrome da loja. O CloudFront pode bloquear a abertura do portal pelo navegador hospedado no Coolify; sem agente online, o sistema informa como conectar em vez de abrir outra janela que será bloqueada.
+
 ## Ajuste de velocidade
 
 Use `SCRAPER_CONCURRENCY` no backend para definir quantos fornecedores entram em paralelo por produto.
