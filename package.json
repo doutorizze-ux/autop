@@ -1,0 +1,16 @@
+{
+  "name": "autopecas-hub",
+  "version": "1.0.0",
+  "description": "AutoPeças Hub - Sistema Desktop de Gestão e Cotações",
+  "main": "electron/main.js",
+  "scripts": {
+    "build:frontend": "cd frontend && npm run build",
+    "build:backend": "cd backend && npm run build",
+    "build": "npm run build:frontend && npm run build:backend",
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11"
+  }
+}
