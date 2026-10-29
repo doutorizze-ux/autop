@@ -432,6 +432,10 @@ export async function runSupplierSearch(supplier: any, productName: string) {
         }
         const data = await scrapeProduct(supplier, productName);
 
+        if (Array.isArray(data) && data.length === 0) {
+            return buildNoOfferResult(supplier, productName);
+        }
+
         if (Array.isArray(data) && data.length > 0) {
             const normalizedItems = normalizeSupplierResults(data, supplier, productName);
             if (normalizedItems.length === 1) {
@@ -645,7 +649,14 @@ function normalizeSearchResultPayload(result: any, supplier: any, productName: s
             : normalizedItems;
     }
 
-    return result;
+    if (!result || typeof result !== 'object') {
+        return buildNoOfferResult(supplier, productName);
+    }
+
+    return {
+        ...result,
+        provider: result.provider || supplier.name,
+    };
 }
 
 export class ScraperService {

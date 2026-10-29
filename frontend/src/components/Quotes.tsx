@@ -1052,9 +1052,13 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                     const hasExactMatch = providerResults.some(
                                         (entry) => normalizeCodeValue(entry.code) === normalizedQueryCode
                                     );
+                                    const supplierError = rawResults.find(
+                                        (entry) => matchesProviderName(entry.provider, provider) && entry.error
+                                    )?.error;
 
                                     return {
                                         provider,
+                                        supplierError,
                                         providerResults,
                                         selectedResult,
                                         hasExactMatch,
@@ -1063,8 +1067,7 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                         selectedVariantKey,
                                         selectedVariant,
                                     };
-                                })
-                                .filter((card) => activeResultView === 'summary' ? !!card.selectedResult : true);
+                                });
 
                             const visibleSelectedResults = providerCards
                                 .map((card) => card.selectedResult)
@@ -1121,7 +1124,9 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                                                 <strong>{card.provider}</strong>
                                                             </div>
                                                             <div className="supplier-view-error">
-                                                                Este fornecedor não retornou oferta real para a peça escolhida.
+                                                                {card.supplierError || (isSearching
+                                                                    ? 'Aguardando consulta deste fornecedor...'
+                                                                    : 'Este fornecedor não retornou oferta real para a peça escolhida.')}
                                                             </div>
                                                         </div>
                                                     );

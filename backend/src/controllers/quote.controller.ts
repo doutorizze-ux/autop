@@ -516,6 +516,29 @@ function extractSuppliersFromMatrix(matrix: QuoteMatrix) {
     ) as string[];
 }
 
+function ensureSupplierCoverage(matrix: QuoteMatrix, suppliers: string[], items: QuoteItem[]) {
+    items.forEach((item) => {
+        if (!matrix[item.query]) {
+            matrix[item.query] = [];
+        }
+
+        suppliers.forEach((supplier) => {
+            const alreadyRepresented = matrix[item.query].some((result) => result?.provider === supplier);
+            if (!alreadyRepresented) {
+                matrix[item.query].push({
+                    provider: supplier,
+                    product: item.query,
+                    price: '---',
+                    error: 'Fornecedor não retornou resultado para esta peça.',
+                    available: false,
+                });
+            }
+        });
+    });
+
+    return matrix;
+}
+
 function normalizeExportCode(value: unknown) {
     return String(value || '')
         .toLowerCase()
@@ -841,7 +864,7 @@ function renderPDFSections(res: Response, sections: QuotePdfSection[], filenameP
         doc.moveDown(0.35);
     };
 
-    const drawSupplierRow = (supplier: string, result: any, bestPrice: number) => {
+    const drawSupplierRow = (supplier: string, result: any, bestPrice: number, status: string) => {
         const price = result && !result.error ? parseExportPrice(result.price) : Number.POSITIVE_INFINITY;
         const hasPrintableResult = !!result && !result.error && Number.isFinite(price);
         const isBest = hasPrintableResult && price === bestPrice && bestPrice !== Number.POSITIVE_INFINITY;
@@ -879,7 +902,11 @@ function renderPDFSections(res: Response, sections: QuotePdfSection[], filenameP
             }
         } else {
             doc.font('Helvetica').fontSize(8).fillColor('#9CA3AF')
-                .text(result?.error ? 'Erro na consulta' : 'Sem retorno', xPrice + 6, y + 12, { width: tableWidth - columns.supplier - 8 });
+                .text(status, xPrice + 6, y + 6, {
+                    width: tableWidth - columns.supplier - 12,
+                    height: 32,
+                    ellipsis: true,
+                });
         }
 
         doc.y = y + rowHeight;
@@ -937,7 +964,14 @@ function renderPDFSections(res: Response, sections: QuotePdfSection[], filenameP
 
             section.suppliers.forEach((supplier: string) => {
                 const result = section.selectedOffers[item.query]?.[supplier] || null;
-                drawSupplierRow(supplier, shouldRenderResultInPdf(result, item.query) ? result : null, bestPrice);
+                const printable = shouldRenderResultInPdf(result, item.query);
+                const supplierResults = (section.matrix[item.query] || []).filter((entry) => entry?.provider === supplier);
+                const hasOffer = supplierResults.some((entry) => entry && !entry.error && Number.isFinite(parseExportPrice(entry.price)));
+                const diagnostic = supplierResults.find((entry) => entry?.error || entry?.whatsappStatus);
+                const status = hasOffer
+                    ? 'Oferta não incluída: selecione um similar para o PDF.'
+                    : diagnostic?.error || diagnostic?.whatsappError || diagnostic?.stockText || 'Sem retorno';
+                drawSupplierRow(supplier, printable ? result : null, bestPrice, status);
             });
         });
     });
@@ -1069,12 +1103,24 @@ export const searchQuote = async (req: Request, res: Response) => {
             return res.status(401).json({ message: 'Usuario nao autenticado.' });
         }
 
+        // Capture the roster before searching; offers alone do not identify every attempted supplier.
+        const activeSuppliers = await prisma.supplier.findMany({
+            where: {
+                OR: [
+                    { websiteSearchEnabled: true },
+                    { whatsappEnabled: true, whatsappPhone: { not: null } },
+                ],
+            },
+            select: { name: true },
+            orderBy: { name: 'asc' },
+        });
+
         const job: QuoteJob = {
             id: randomUUID(),
             userId,
             status: 'running',
             items,
-            suppliers: [],
+            suppliers: Array.from(new Set(activeSuppliers.map((supplier) => supplier.name))),
             matrix: {},
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -1115,7 +1161,11 @@ async function runQuoteJob(job: QuoteJob) {
         }
 
         const matrix = mergeQuoteMatrices(websiteMatrix, whatsappMatrix, job.matrix);
-        const suppliers = extractSuppliersFromMatrix(matrix);
+        const suppliers = Array.from(new Set([
+            ...job.suppliers,
+            ...extractSuppliersFromMatrix(matrix),
+        ]));
+        ensureSupplierCoverage(matrix, suppliers, job.items);
 
         const payload: StoredQuotePayload = {
             version: 2,
