@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { timingSafeEqual } from 'crypto';
+import jwt from 'jsonwebtoken';
 import { LocalAgentService } from '../services/local-agent.service';
 
 function readAgentToken(req: Request) {
@@ -29,17 +30,30 @@ function readBearerToken(req: Request) {
  */
 function isAuthorized(req: Request) {
     const expected = String(process.env.LOCAL_AGENT_TOKEN || '').trim();
-    if (!expected) return true;
+    const configuredAgentToken = readAgentToken(req);
 
-    const provided = readAgentToken(req) || readBearerToken(req);
-    if (!provided) return false;
+    if (expected && configuredAgentToken) {
+        // Comparacao de tempo constante: nao vaza o token por diferenca de resposta.
+        const expectedBuffer = Buffer.from(expected);
+        const providedBuffer = Buffer.from(configuredAgentToken);
+        if (expectedBuffer.length === providedBuffer.length && timingSafeEqual(expectedBuffer, providedBuffer)) {
+            return true;
+        }
+    }
 
-    // Comparacao de tempo constante: nao vaza o token por diferenca de resposta.
-    const expectedBuffer = Buffer.from(expected);
-    const providedBuffer = Buffer.from(provided);
-    if (expectedBuffer.length !== providedBuffer.length) return false;
+    // A extensão pode usar a sessão ADMIN já aberta no painel, sem um segundo
+    // segredo ou arquivo de configuração no PC da loja.
+    const bearerToken = readBearerToken(req);
+    if (bearerToken) {
+        try {
+            const decoded = jwt.verify(bearerToken, process.env.JWT_SECRET || 'secret') as { role?: string };
+            if (decoded?.role === 'ADMIN') return true;
+        } catch (_) {}
+    }
 
-    return timingSafeEqual(expectedBuffer, providedBuffer);
+    // Compatibilidade de desenvolvimento somente. Em produção, agente precisa
+    // provar a posse do token configurado ou de uma sessão ADMIN válida.
+    return !expected && process.env.NODE_ENV !== 'production';
 }
 
 function readAgentIdentity(req: Request) {

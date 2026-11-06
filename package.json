@@ -1,7 +1,7 @@
 {
-  "name": "autopecas-hub",
+  "name": "centro-automotivo-0058",
   "version": "1.0.0",
-  "description": "AutoPeças Hub - Sistema Desktop de Gestão e Cotações",
+  "description": "Centro Automotivo 0058 - Gestão & Cotações",
   "main": "electron/main.js",
   "scripts": {
     "build:frontend": "cd frontend && npm run build",
@@ -11,6 +11,44 @@
     "dist": "electron-builder --win"
   },
   "devDependencies": {
-    "electron": "^33.4.11"
+    "electron": "^33.4.11",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.centroautomotivo0058.app",
+    "productName": "Centro Automotivo 0058",
+    "directories": {
+      "output": "dist-installer"
+    },
+    "asar": false,
+    "files": [
+      "electron/**/*",
+      "frontend/dist/**/*",
+      "backend/dist/**/*",
+      "backend/prisma/**/*",
+      "backend/data/**/*",
+      "backend/node_modules/**/*",
+      "backend/.env",
+      "scraping/**/*",
+      "build/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Centro Automotivo 0058"
+    }
   }
 }

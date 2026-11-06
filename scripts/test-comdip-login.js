@@ -1,47 +1,43 @@
 const { chromium } = require('../scraping/node_modules/playwright');
-const { PrismaClient } = require('../backend/node_modules/@prisma/client');
-const comdipSupplier = require('../scraping/suppliers/comdip');
-const fs = require('fs');
-const prisma = new PrismaClient();
 
-async function saveComdipSession() {
-    const supplier = await prisma.supplier.findFirst({ where: { name: { contains: 'Comdip' } } });
+async function testComdipLogin() {
     const browser = await chromium.launch({
-        headless: true,
-        executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+        executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        headless: false,
     });
     const page = await browser.newPage();
-    console.log('Navigating to login...');
-    await page.goto('https://portalcomdip.com.br/comdip/catalogo/login', { waitUntil: 'networkidle' });
+    console.log('Navigating to Comdip...');
+    await page.goto('https://portalcomdip.com.br/comdip/catalogo/login');
+    await page.waitForTimeout(2000);
 
-    console.log('Filling login...');
-    await comdipSupplier.fillLogin({
-        page,
-        supplier,
-        fillVisibleLocator: async (loc, val) => loc.fill(val),
-        dismissTransientUi: async () => {}
-    });
+    const emailField = page.locator('#mat-input-0');
+    await emailField.click();
+    await emailField.fill('33.299.637/0001-80');
 
-    console.log('Clicking button.btn-parametro...');
-    const submit = page.locator('button.btn-parametro, button:has-text("Entrar"):visible').first();
-    await submit.click();
+    const passField = page.locator('#mat-input-1');
+    await passField.click();
+    await passField.fill('Re539597@');
+
+    const checkbox = page.locator('input[name="cbAceitarTermos"]');
+    await checkbox.check({ force: true }).catch(() => {});
+
+    await page.waitForTimeout(500);
+
+    const btn = page.locator('button:has-text("Entrar")').first();
+    console.log('Clicking Entrar...');
+    await btn.click();
+
+    console.log('Waiting 5s...');
     await page.waitForTimeout(5000);
 
-    console.log('After submit URL:', page.url());
-    if (page.url().includes('compras') || (await page.locator('text="OFICINA DO"').isVisible().catch(() => false))) {
-        const state = await page.context().storageState();
-        fs.mkdirSync('scraping/sessions', { recursive: true });
-        fs.writeFileSync('scraping/sessions/comdip.json', JSON.stringify(state, null, 2));
+    console.log('URL after login:', page.url());
+    console.log('Body snippet:', (await page.evaluate(() => document.body.innerText)).slice(0, 400));
 
-        await prisma.supplier.update({
-            where: { id: supplier.id },
-            data: { sessionData: JSON.stringify(state) }
-        });
-        console.log('Comdip session saved successfully to disk and DB!');
-    } else {
-        console.error('Failed to log in to Comdip');
-    }
+    // Save session storage state
+    const storage = await page.context().storageState();
+    console.log('Cookies count:', storage.cookies.length);
 
     await browser.close();
 }
-saveComdipSession().catch(console.error);
+
+testComdipLogin().catch(console.error);

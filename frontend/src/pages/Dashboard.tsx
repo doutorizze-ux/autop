@@ -22,8 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { Clients } from '../components/Clients';
-import { WhatsAppConnect } from '../components/WhatsAppConnect';
-import { ChatArea } from '../components/ChatArea';
+import { WhatsAppWebTab } from '../components/WhatsAppWebTab';
 import { Suppliers } from '../components/Suppliers';
 import { Settings as SettingsComponent } from '../components/Settings';
 import { Quotes } from '../components/Quotes';
@@ -97,7 +96,6 @@ const defaultWhatsappChannels: WhatsappChannel[] = [
   },
 ];
 
-const quoteWhatsappCategories = ['Pecas automotivas', 'Pecas eletricas', 'Concessionarias', 'Pneu'];
 
 const normalizeText = (value: string) =>
   String(value || '')
@@ -280,11 +278,7 @@ export const Dashboard = () => {
   const activeWhatsappChannel =
     whatsappChannels.find((channel) => channel.key === activeWhatsappChannelKey) || whatsappChannels[0] || defaultWhatsappChannels[0];
   const primaryWhatsappStatus = wsStatusByChannel[defaultWhatsappChannelKey] || 'connecting';
-  const activeWhatsappStatus = wsStatusByChannel[activeWhatsappChannel.key] || 'connecting';
-  const handleWhatsappConnected = useCallback((channelKey = defaultWhatsappChannelKey) => {
-    setWsStatusByChannel((current) => ({ ...current, [channelKey]: 'connected' }));
-  }, []);
-  const filteredTeamQuoteEmployees = useMemo(() => {
+      const filteredTeamQuoteEmployees = useMemo(() => {
     const term = normalizeText(teamQuoteSearch);
     if (!term) return teamQuoteHistory.employees;
 
@@ -339,12 +333,12 @@ export const Dashboard = () => {
         <div className="sidebar-shell">
           <div className="sidebar-header">
             <div className="brand-mark">
-              {themeLogo ? (
-                <img src={themeLogo} alt="Logo" className="logo-image" />
+              {(themeLogo || '/logo.png') ? (
+                <img src={themeLogo || "/logo.png"} alt="Centro Automotivo 0058" className="logo-image" style={{ maxHeight: "64px", width: "auto", objectFit: "contain" }} />
               ) : (
                 <div className="brand-fallback">
-                  <span className="brand-kicker">Autopecas</span>
-                  <h2>AutoCRM</h2>
+                  <span className="brand-kicker">Centro Automotivo</span>
+                  <h2>0058</h2>
                 </div>
               )}
             </div>
@@ -545,8 +539,16 @@ export const Dashboard = () => {
             />
           )}
 
-          {activeTab === 'atendimento' && (
-            <div className="dashboard-section">
+          {/* Deck permanente do WhatsApp: NUNCA desmonta para manter chamadas e mensagens em tempo real ativas */}
+          <div
+            className="dashboard-section"
+            style={{
+              display: activeTab === 'atendimento' ? 'flex' : 'none',
+              flexDirection: 'column',
+              height: '100%',
+              flex: 1,
+            }}
+          >
               <div className="section-heading">
                 <h2 className="page-title">Atendimento WhatsApp</h2>
                 <p>Escolha o numero de atendimento ou o WhatsApp usado para cotacoes com fornecedores.</p>
@@ -554,8 +556,6 @@ export const Dashboard = () => {
 
               <div className="whatsapp-channel-tabs">
                 {whatsappChannels.map((channel) => {
-                  const status = wsStatusByChannel[channel.key] || 'connecting';
-                  const isConnected = status === 'connected';
                   const isActive = activeWhatsappChannel.key === channel.key;
 
                   return (
@@ -572,44 +572,32 @@ export const Dashboard = () => {
                         <strong>{channel.label}</strong>
                         <small>{channel.description}</small>
                       </span>
-                      <span className={`whatsapp-channel-status ${isConnected ? 'connected' : ''}`}>
-                        {isConnected ? 'Conectado' : status === 'qr' ? 'QR Code' : 'Conectar'}
+                      <span className="whatsapp-channel-status connected">
+                        Ativo • Voz & Chat
                       </span>
                     </button>
                   );
                 })}
               </div>
 
-              {activeWhatsappChannel.kind === 'quote' && (
-                <div className="quote-whatsapp-panel">
-                  <div>
-                    <h3>Painel de cotacao</h3>
-                    <p>Este numero fica separado do atendimento e sera usado para enviar pedidos aos fornecedores sem site.</p>
+              <div className="whatsapp-channels-deck">
+                {whatsappChannels.map((channel) => (
+                  <div
+                    key={channel.key}
+                    style={{
+                      display: activeWhatsappChannel.key === channel.key ? 'block' : 'none',
+                      height: '100%',
+                    }}
+                  >
+                    <WhatsAppWebTab
+                      channelKey={channel.key}
+                      channelLabel={channel.label}
+                      description={channel.description}
+                    />
                   </div>
-                  <div className="quote-whatsapp-categories">
-                    {quoteWhatsappCategories.map((category) => (
-                      <span key={category}>{category}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {activeWhatsappStatus === 'connected' ? (
-                <ChatArea
-                  key={activeWhatsappChannel.key}
-                  channelKey={activeWhatsappChannel.key}
-                  channelLabel={activeWhatsappChannel.label}
-                />
-              ) : (
-                <WhatsAppConnect
-                  key={activeWhatsappChannel.key}
-                  channelKey={activeWhatsappChannel.key}
-                  channelLabel={activeWhatsappChannel.label}
-                  onConnected={() => handleWhatsappConnected(activeWhatsappChannel.key)}
-                />
-              )}
+                ))}
+              </div>
             </div>
-          )}
 
           {activeTab === 'fornecedores' && <Suppliers />}
           {activeTab === 'cotacoes' && <Quotes openHistoryId={quoteToOpen} />}

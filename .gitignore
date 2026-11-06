@@ -26,3 +26,10 @@ scraping/tmp-*.png
 scraping/tmp-*.jpg
 scraping/tmp-*.html
 scraping/tmp-*.js
+dist-installer/
+*.exe
+*.blockmap
+*.png
+!frontend/public/*.png
+!frontend/src/assets/*.png
+test_fast_multi_branch.js

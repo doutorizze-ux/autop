@@ -419,3 +419,78 @@ test('DPK assisted login fails clearly instead of opening a CloudFront-blocked s
         else process.env.LOCAL_AGENT_REQUIRE_FOR_SEARCH = previousRequired;
     }
 });
+
+test('extension agent can authenticate with a live ADMIN session without a separate agent secret', async () => {
+    const previousSecret = process.env.LOCAL_AGENT_TOKEN;
+    const previousJwtSecret = process.env.JWT_SECRET;
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.LOCAL_AGENT_TOKEN = 'configured-agent-secret';
+    process.env.JWT_SECRET = 'quote-agent-test-jwt-secret';
+    process.env.NODE_ENV = 'production';
+
+    try {
+        const jwt = require('jsonwebtoken');
+        const controller = loadModule('../dist/controllers/local-agent.controller.js', {
+            '../services/local-agent.service': {
+                LocalAgentService: {
+                    heartbeat: (id, name, version, filters) => ({ id, name, version, filters, online: true }),
+                },
+            },
+        });
+        const token = jwt.sign({ userId: 'admin-test', role: 'ADMIN' }, process.env.JWT_SECRET);
+        const body = { agentId: 'chrome-store', agentName: 'Store Chrome', supplierFilters: [] };
+        const response = jsonResponse();
+
+        controller.agentHeartbeat({
+            headers: { authorization: `Bearer ${token}` },
+            body,
+        }, response);
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.online, true);
+    } finally {
+        if (previousSecret === undefined) delete process.env.LOCAL_AGENT_TOKEN;
+        else process.env.LOCAL_AGENT_TOKEN = previousSecret;
+        if (previousJwtSecret === undefined) delete process.env.JWT_SECRET;
+        else process.env.JWT_SECRET = previousJwtSecret;
+        if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = previousNodeEnv;
+    }
+});
+
+test('extension agent cannot authenticate with a non-admin dashboard session', async () => {
+    const previousSecret = process.env.LOCAL_AGENT_TOKEN;
+    const previousJwtSecret = process.env.JWT_SECRET;
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.LOCAL_AGENT_TOKEN = 'configured-agent-secret';
+    process.env.JWT_SECRET = 'quote-agent-test-jwt-secret';
+    process.env.NODE_ENV = 'production';
+
+    try {
+        const jwt = require('jsonwebtoken');
+        const controller = loadModule('../dist/controllers/local-agent.controller.js', {
+            '../services/local-agent.service': {
+                LocalAgentService: {
+                    heartbeat: () => ({ online: true }),
+                },
+            },
+        });
+        const token = jwt.sign({ userId: 'user-test', role: 'USER' }, process.env.JWT_SECRET);
+        const response = jsonResponse();
+
+        controller.agentHeartbeat({
+            headers: { authorization: `Bearer ${token}` },
+            body: { agentId: 'untrusted-agent', supplierFilters: [] },
+        }, response);
+
+        assert.equal(response.statusCode, 401);
+        assert.equal(response.body.message, 'Token do agente local invalido.');
+    } finally {
+        if (previousSecret === undefined) delete process.env.LOCAL_AGENT_TOKEN;
+        else process.env.LOCAL_AGENT_TOKEN = previousSecret;
+        if (previousJwtSecret === undefined) delete process.env.JWT_SECRET;
+        else process.env.JWT_SECRET = previousJwtSecret;
+        if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = previousNodeEnv;
+    }
+});

@@ -50,12 +50,13 @@ module.exports = {
         '#header-form-search input',
         'input[placeholder*="PESQUISE" i]',
     ],
-    itemContainerSelector: ['.product-info', '.ant-spin-container'],
+    itemContainerSelector: ['.product-info', '.ui-product-card'],
     emptyResultSelector: [
         '.ant-empty',
-        ':has-text("Nenhum produto encontrado")',
+        'text="Nenhum produto encontrado"',
     ],
     preferStrategySelectors: true,
+    waitForResultsOnly: true,
 
     fillLogin: async ({ page, supplier, dismissTransientUi }) => {
         if (dismissTransientUi) {
@@ -82,8 +83,9 @@ module.exports = {
     buildSearchUrl: (query) => `https://rolemarmaster.com/produtos?busca=${encodeURIComponent(query)}`,
     performSearch: async ({ page, query, supplier }) => {
         const searchUrl = `https://rolemarmaster.com/produtos?busca=${encodeURIComponent(query)}`;
-        await page.goto(searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
-        await page.waitForTimeout(2500);
+        if (page.url() !== searchUrl) {
+            await page.goto(searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+        }
 
         // If redirected to login, perform auto-login
         if (page.url().includes('login')) {
@@ -109,15 +111,16 @@ module.exports = {
                 ]);
                 await page.waitForTimeout(2000);
                 await page.goto(searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
-                await page.waitForTimeout(2500);
             }
         }
 
+        // Wait for AJAX search response or product cards
         await Promise.race([
-            page.locator('.product-info').first().waitFor({ state: 'visible', timeout: 8000 }).catch(() => null),
-            page.locator('.ant-empty, :has-text("Nenhum produto")').first().waitFor({ state: 'visible', timeout: 8000 }).catch(() => null),
+            page.waitForResponse((res) => res.url().includes('ajax-busca'), { timeout: 10000 }).catch(() => null),
+            page.locator('.product-info, .ui-product-card').first().waitFor({ state: 'visible', timeout: 10000 }).catch(() => null),
         ]);
-        await page.waitForTimeout(1000);
+        await page.locator('.product-info, .ui-product-card').first().waitFor({ state: 'visible', timeout: 6000 }).catch(() => null);
+        await page.waitForTimeout(1500);
     },
 
     extractItems: async ({ page, supplier, query }) => {

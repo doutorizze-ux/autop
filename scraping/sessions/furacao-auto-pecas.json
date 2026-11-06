@@ -21,36 +21,6 @@
       "sameSite": "Lax"
     },
     {
-      "name": "XSRF-TOKEN",
-      "value": "eyJpdiI6IkhlTDZDWUc2SmhcL2hNZWdOVGpGazdBPT0iLCJ2YWx1ZSI6Im1HYjltZVNuZXN0MWdSeXRacm8wRlRvT09ZM20ycjBORnQwTnQ4bUdoN0dOY1VoQnVSU1pPTGlsUUo3UGlnZUg5a0FST0piSEdvaytPVURMbnErOVNRPT0iLCJtYWMiOiI0NjU4NzBmMDFlY2ZjNmI1NDNlNDQyZWM5MzE4NWY4YmRhOTQzZDMzZGFkZmIxZDUzMzBjNzU0ODNjY2E5Y2ExIn0%3D",
-      "domain": "vendas.furacao.com.br",
-      "path": "/",
-      "expires": 1793233872.019572,
-      "httpOnly": false,
-      "secure": false,
-      "sameSite": "Lax"
-    },
-    {
-      "name": "laravel_session",
-      "value": "eyJpdiI6Iit0YzF3SW15TmZ6c1FcL2tGbFRXeHVRPT0iLCJ2YWx1ZSI6Ik1aYTV3R0dlaDNcL3lcLzhOVERaVjhuamwyZG9ORnBVYVlzbkR6RkRVdmQxVUpwb2xEa3ZSQk9CZzBibmVmb0FtNEhFdDRNaExEeitwVVlFem1OOXBCcmc9PSIsIm1hYyI6ImM1YjNkMjEzODdkNzY5ZGE0NzI4NjcwMmExNWUzMmFkNzA4NmFjMjAwODYxMzBkYzhhZDQ1MDRmMTRkMjZhNTEifQ%3D%3D",
-      "domain": "vendas.furacao.com.br",
-      "path": "/",
-      "expires": 1793233872.019709,
-      "httpOnly": true,
-      "secure": false,
-      "sameSite": "Lax"
-    },
-    {
-      "name": "FWIDEXT",
-      "value": "5-a03a7c5812f19809c50061faf8ba064c012676e1f9f373167863419-2",
-      "domain": "vendas.furacao.com.br",
-      "path": "/",
-      "expires": -1,
-      "httpOnly": true,
-      "secure": false,
-      "sameSite": "Lax"
-    },
-    {
       "name": "SAVFW_LIC",
       "value": "M1M3QVdDUVlUS1lSUlQ4RUZTWFJJNzQ4V1ZSWDNMU0E7MTI1NDM1",
       "domain": "vendas.furacao.com.br",
@@ -61,11 +31,41 @@
       "sameSite": "Lax"
     },
     {
+      "name": "XSRF-TOKEN",
+      "value": "eyJpdiI6InI3Mm1YVlwvNEFtMWxUSEpWaGtTbVdRPT0iLCJ2YWx1ZSI6IlwveUU2RWRvQmdEM25YTGFJdjVrRUZJajZvdEtDdjdPVWR2RmhPc1hOQSt0RWJ1WFwvNGtXM2Y2dDcyOWJDMXBaVTN1aDVSWUZubzI3S0c3ZDRxMXNWcEE9PSIsIm1hYyI6IjZhZTQ5NzJkZDBjMDY5ZjE1NTVhYzQ1OTBkYTU5NmNmYjdjMjFhMWNlZGM4YzEyMGJkZjE4Y2IxNTlkNGQ0MjgifQ%3D%3D",
+      "domain": "vendas.furacao.com.br",
+      "path": "/",
+      "expires": 1793799156.322351,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "laravel_session",
+      "value": "eyJpdiI6ImRMbHZyRmdiVFFTakFCTkZHcmtkcVE9PSIsInZhbHVlIjoiZUtvV0xsaXl2amZJdkxlTlUyU1dLcDRBaFJuK1dPcXNYY3dwQU95MVdTM0Eyc0EzZTkzWXRcL1ZGVGxIcHUrOWdBWnpVYW9VcndlRVd3UFBMRWROc1ZRPT0iLCJtYWMiOiJkN2UzNjg5MGZiNjNmMjUyYzNmMjAwNmM5MGNiOTJkODQzOTU3MWYwOTJlNjgzYWY4NjU1NTQ3NjAxMzhiODc4In0%3D",
+      "domain": "vendas.furacao.com.br",
+      "path": "/",
+      "expires": 1793799156.322504,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "FWIDEXT",
+      "value": "7-85bb756acdfdb71769597314e6d71a9c94e0084000861e167863419-4",
+      "domain": "vendas.furacao.com.br",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
       "name": "_ga_9T6V4TXRPR",
-      "value": "GS2.1.s1793226670$o1$g1$t1793226673$j57$l0$h0",
+      "value": "GS2.1.s1793791945$o7$g1$t1793791956$j49$l0$h0",
       "domain": ".furacao.com.br",
       "path": "/",
-      "expires": 1827786673.022509,
+      "expires": 1828351956.883591,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"

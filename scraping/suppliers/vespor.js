@@ -33,9 +33,7 @@ async function getFreshApiToken(loginCredential, password) {
             })
         });
         const data = await res.json();
-        if (data?.token) {
-            return data;
-        }
+        return data;
     } catch (_) {}
     return null;
 }
@@ -52,8 +50,16 @@ module.exports = {
         try {
             const loginData = await getFreshApiToken(supplier?.loginCredential, supplier?.password);
             if (!loginData?.token) {
-                console.error('[vespor] Falha ao autenticar na API do Vespor Pro');
-                return null;
+                const serverMsg = loginData?.message || 'Servidor da Vespor Pro temporariamente indisponível.';
+                console.error('[vespor] Aviso da API do Vespor Pro:', serverMsg);
+                return [{
+                    provider: supplier.name,
+                    product: query,
+                    price: '---',
+                    available: false,
+                    error: `Aviso do Fornecedor: ${serverMsg}`,
+                    link: 'https://vesporpro.com.br/login'
+                }];
             }
 
             const token = loginData.token;

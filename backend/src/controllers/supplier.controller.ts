@@ -42,7 +42,7 @@ export const getSuppliers = async (req: Request, res: Response): Promise<void> =
             orderBy: { name: 'asc' }
         });
         const hasVespor = suppliers.some((s) => (s.name || '').toLowerCase().includes('vespor'));
-        if (!hasVespor || suppliers.length < 9) {
+        if (!hasVespor || suppliers.length < 8) {
             await bootstrapSuppliers().catch(() => {});
             suppliers = await prisma.supplier.findMany({
                 orderBy: { name: 'asc' }

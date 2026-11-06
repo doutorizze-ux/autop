@@ -22,7 +22,7 @@ export const defaultThemeAppearance: AppliedThemeAppearance = {
   themeSidebarStart: '#0f172a',
   themeSidebarEnd: '#172f4c',
   themeBackground: '#eef2f6',
-  themeLogo: '',
+  themeLogo: '/logo.png',
 };
 
 const storageKeys = {

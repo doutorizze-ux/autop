@@ -29,13 +29,18 @@ import {
   PAGE_readWebStorage,
 } from './page-functions.js';
 
+const DASHBOARD_URLS = [
+  'https://centroautomotivo0058.store',
+  'https://www.centroautomotivo0058.store',
+];
+
 /* ------------------------------------------------------------------ *
  * Configuracao
  * ------------------------------------------------------------------ */
 
 const DEFAULT_CONFIG = {
-  backendUrl: 'http://localhost:5000',
-  agentToken: 'autopecas-agent-token',
+  backendUrl: 'https://centroautomotivo0058.store',
+  agentToken: '',
   agentId: '',
   agentName: 'Agente Chrome - Loja',
   version: '2.1.0',
@@ -80,11 +85,14 @@ function baseUrl() {
 }
 
 function agentHeaders() {
-  return {
+  const headers = {
     'Content-Type': 'application/json',
-    'x-local-agent-token': currentConfig.agentToken || 'autopecas-agent-token',
     'x-local-agent-id': currentConfig.agentId || 'chrome-ext',
   };
+  if (currentConfig.agentToken) {
+    headers['x-local-agent-token'] = currentConfig.agentToken;
+  }
+  return headers;
 }
 
 function errorMessage(error) {
@@ -114,9 +122,10 @@ async function postJson(path, body, timeoutMs = 15000) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    currentConfig.backendUrl = await resolveBackendUrl(currentConfig.backendUrl);
     const response = await fetch(`${baseUrl()}${path}`, {
       method: 'POST',
-      headers: agentHeaders(),
+      headers: await authenticatedAgentHeaders(),
       body: JSON.stringify(body || {}),
       signal: controller.signal,
     });
@@ -135,6 +144,7 @@ async function initConfig() {
   const storedConfig = stored.autopecas_config || {};
 
   currentConfig = { ...DEFAULT_CONFIG, ...storedConfig };
+  currentConfig.backendUrl = await resolveBackendUrl(currentConfig.backendUrl);
 
   // agentId estavel por instalacao: se mudasse a cada boot, o backend veria um
   // agente novo a cada reinicio do worker e tarefas ficariam presas em um id
@@ -156,6 +166,53 @@ async function initConfig() {
   }
 
   console.log('[AutoPecas] Configuracao pronta:', currentConfig.backendUrl, currentConfig.agentId);
+}
+
+function normalizeBackendOrigin(value) {
+  try {
+    const url = new URL(String(value || '').trim());
+    if (!/^https?:$/.test(url.protocol)) return '';
+    return url.origin;
+  } catch (_) {
+    return '';
+  }
+}
+
+async function resolveBackendUrl(configuredUrl) {
+  const configuredOrigin = normalizeBackendOrigin(configuredUrl);
+  if (configuredOrigin && !['http://localhost:5000', 'http://127.0.0.1:5000'].includes(configuredOrigin)) {
+    return configuredOrigin;
+  }
+
+  const tabs = await chrome.tabs.query({});
+  const dashboardTab = tabs.find((tab) => DASHBOARD_URLS.some((origin) => String(tab.url || '').startsWith(origin)));
+  return normalizeBackendOrigin(dashboardTab?.url) || configuredOrigin || DEFAULT_CONFIG.backendUrl;
+}
+
+async function getDashboardSessionToken() {
+  const tabs = await chrome.tabs.query({});
+  const dashboardTab = tabs.find((tab) => DASHBOARD_URLS.some((origin) => String(tab.url || '').startsWith(origin)));
+  if (!dashboardTab?.id) return '';
+
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: dashboardTab.id },
+      func: () => localStorage.getItem('token') || sessionStorage.getItem('token') || '',
+    });
+    return String(results?.[0]?.result || '').trim();
+  } catch (error) {
+    console.warn('[AutoPecas] Nao foi possivel ler a sessao do painel:', errorMessage(error));
+    return '';
+  }
+}
+
+async function authenticatedAgentHeaders() {
+  const headers = agentHeaders();
+  const sessionToken = await getDashboardSessionToken();
+  if (sessionToken) {
+    headers.Authorization = `Bearer ${sessionToken}`;
+  }
+  return headers;
 }
 
 async function persistStats() {
@@ -610,9 +667,12 @@ async function handleSessionTask(task) {
           }];
         }
 
-        if (storageState.cookies.length === 0) {
+        const hasWebStorage = storageState.origins.some((origin) =>
+          Array.isArray(origin.localStorage) && origin.localStorage.length > 0
+        );
+        if (storageState.cookies.length === 0 && !hasWebStorage) {
           throw new Error(
-            `Nenhum cookie encontrado para ${label}. Confirme que a pagina do portal esta aberta e que o login foi concluido.`
+            `Nenhum cookie ou dado de sessao encontrado para ${label}. Confirme que o login foi concluido.`
           );
         }
 
@@ -710,7 +770,9 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
       ...currentConfig,
       ...request.payload,
       backendUrl: rawUrl.replace(/\/+$/, ''),
-      agentToken: (request.payload && request.payload.agentToken) || currentConfig.agentToken,
+      agentToken: request.payload && request.payload.agentToken !== undefined
+        ? String(request.payload.agentToken || '').trim()
+        : currentConfig.agentToken,
     };
 
     chrome.storage.local.set({ autopecas_config: currentConfig });

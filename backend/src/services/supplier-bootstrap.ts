@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import fs from 'fs';
 import path from 'path';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -70,7 +71,7 @@ const defaultSuppliers = [
         url: 'https://portalcomdip.com.br/comdip/compras',
         type: 'Distribuidor',
         needsLogin: true,
-        loginUrl: 'https://portalcomdip.com.br/comdip/login',
+        loginUrl: 'https://portalcomdip.com.br/comdip/catalogo/login',
         loginUserSelector: 'input[placeholder*="cnpj" i], #Cnpj, #Login',
         loginPassSelector: 'input[placeholder*="senha" i], #pass, input[type="password"]',
         loginSubmitSelector: 'button:has-text("Entrar"), button[type="submit"]',
@@ -126,21 +127,6 @@ const defaultSuppliers = [
         sessionSlug: 'furacao-auto-pecas',
     },
     {
-        name: 'Kaizen Auto Peças',
-        url: 'https://portal.kaizenautopecas.com.br/principal',
-        type: 'Distribuidor',
-        needsLogin: true,
-        loginUrl: 'https://portal.kaizenautopecas.com.br',
-        loginUserSelector: 'input[placeholder*="cnpj" i], input[placeholder*="cpf" i]',
-        loginPassSelector: 'input[type="password"]',
-        loginSubmitSelector: 'button:has-text("Entrar")',
-        loginCredential: '33.299.637/0001-80',
-        password: 'Re539597@',
-        searchUrl: 'https://portal.kaizenautopecas.com.br/principal',
-        websiteSearchEnabled: true,
-        sessionSlug: 'kaizen-auto-pecas',
-    },
-    {
         name: 'Rolemar Master',
         url: 'https://rolemarmaster.com',
         type: 'Distribuidor',
@@ -153,7 +139,7 @@ const defaultSuppliers = [
         password: 'Re539597@',
         searchUrl: 'https://rolemarmaster.com/produtos?busca={query}',
         searchBarSelector: '#header-form-search input',
-        itemContainerSelector: '.product-info, .ant-spin-container',
+        itemContainerSelector: '.product-info, .ui-product-card',
         websiteSearchEnabled: true,
         sessionSlug: 'rolemar-master',
     },
@@ -188,30 +174,60 @@ function getSupplierCanonicalKey(name: string, url: string): string {
     return s.trim();
 }
 
-export async function bootstrapSuppliers() {
-    try {
-        const sessionsDir = path.resolve(__dirname, '../../../scraping/sessions');
 
-        // 1. Elimina duplicados no banco de dados (ex: 'Real Moto Peças' e 'Real Moto Peças (RMP)')
-        const allInDb = await prisma.supplier.findMany();
-        const seenKeys = new Map<string, string>();
-        for (const sup of allInDb) {
-            const cKey = getSupplierCanonicalKey(sup.name, sup.url);
-            if (seenKeys.has(cKey)) {
-                console.log(`[Bootstrap] Deletando fornecedor duplicado no banco: ${sup.name} (${sup.id})`);
-                await prisma.supplier.delete({ where: { id: sup.id } }).catch(() => {});
-            } else {
-                seenKeys.set(cKey, sup.id);
-            }
+async function ensureAdminUser() {
+    try {
+        const email = 'admin@centroautomotivo0058.store';
+        const rawPass = 'admin158158';
+        const hash = await bcrypt.hash(rawPass, 10);
+        await prisma.user.upsert({
+            where: { email },
+            update: {
+                password: hash,
+                role: 'ADMIN',
+                name: 'Administrador',
+            },
+            create: {
+                email,
+                password: hash,
+                role: 'ADMIN',
+                name: 'Administrador',
+            },
+        });
+        console.log('[Bootstrap] Usuário admin@centroautomotivo0058.store garantido.');
+    } catch (e: any) {
+        console.error('[Bootstrap Error] Falha ao sincronizar admin:', e.message);
+    }
+}
+
+export async function bootstrapSuppliers() {
+    await ensureAdminUser();
+    try {
+        const count = await prisma.supplier.count();
+        if (count >= 8) {
+            console.log(`[Bootstrap] Banco de dados já possui ${count} fornecedores configurados. Nenhuma alteração forçada.`);
+            return;
         }
 
-        // 2. Sincroniza e atualiza os 9 fornecedores oficiais
-        const refreshedDb = await prisma.supplier.findMany();
+        console.log(`[Bootstrap] Banco de dados possui ${count} fornecedores. Sincronizando fornecedores padrão...`);
+        const possibleDirs = [
+            process.env.SCRAPER_SESSIONS_DIR,
+            path.resolve(__dirname, '../../../scraping/sessions'),
+            path.resolve(__dirname, '../../scraping/sessions'),
+            path.join(process.cwd(), 'scraping/sessions'),
+        ].filter(Boolean) as string[];
+        const sessionsDir = possibleDirs.find((d) => fs.existsSync(d)) || possibleDirs[1];
+
         for (const item of defaultSuppliers) {
+            const exists = await prisma.supplier.findFirst({
+                where: { name: item.name },
+            });
+            if (exists) continue;
+
             const { sessionSlug, ...supplierData } = item;
             let sessionJson: string | null = null;
 
-            if (sessionSlug) {
+            if (sessionSlug && sessionsDir) {
                 const sessionFile = path.join(sessionsDir, `${sessionSlug}.json`);
                 if (fs.existsSync(sessionFile)) {
                     try {
@@ -220,46 +236,15 @@ export async function bootstrapSuppliers() {
                 }
             }
 
-            const itemKey = getSupplierCanonicalKey(item.name, item.url);
-            const existing = refreshedDb.find((s) => getSupplierCanonicalKey(s.name, s.url) === itemKey);
-
-            if (existing) {
-                const updateData: any = {
-                    name: item.name,
-                    url: item.url || existing.url,
-                    type: item.type || existing.type,
-                    needsLogin: item.needsLogin ?? true,
-                    loginUrl: item.loginUrl || existing.loginUrl,
-                    loginUserSelector: item.loginUserSelector || existing.loginUserSelector,
-                    loginPassSelector: item.loginPassSelector || existing.loginPassSelector,
-                    loginSubmitSelector: item.loginSubmitSelector || existing.loginSubmitSelector,
-                    loginCredential: supplierData.loginCredential || existing.loginCredential,
-                    password: supplierData.password || existing.password,
-                    searchUrl: supplierData.searchUrl || existing.searchUrl,
-                    websiteSearchEnabled: true,
-                };
-                if (sessionJson && sessionJson.length > 50) {
-                    updateData.sessionData = sessionJson;
-                }
-                if (supplierData.loginExtraValue && !existing.loginExtraValue) {
-                    updateData.loginExtraValue = supplierData.loginExtraValue;
-                }
-
-                await prisma.supplier.update({
-                    where: { id: existing.id },
-                    data: updateData,
-                });
-            } else {
-                await prisma.supplier.create({
-                    data: {
-                        ...supplierData,
-                        sessionData: sessionJson,
-                    },
-                });
-                console.log(`[Bootstrap] Fornecedor criado: ${item.name}`);
-            }
+            await prisma.supplier.create({
+                data: {
+                    ...supplierData,
+                    sessionData: sessionJson,
+                },
+            });
+            console.log(`[Bootstrap] Fornecedor inicial criado: ${item.name}`);
         }
-        console.log('[Bootstrap] Fornecedores verificados e sincronizados com sucesso.');
+        console.log('[Bootstrap] Inicialização de fornecedores concluída com sucesso.');
     } catch (error: any) {
         console.error('[Bootstrap Error] Falha ao sincronizar fornecedores:', error.message);
     }

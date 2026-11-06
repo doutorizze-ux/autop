@@ -8,8 +8,8 @@ import { applyAppearanceTheme } from '../utils/theme';
 
 export const Login = () => {
   const [themeLogo, setThemeLogo] = useState(() => localStorage.getItem('theme_logo') || '');
-  const [email, setEmail] = useState('admin@autopecas.com');
-  const [password, setPassword] = useState('123456');
+  const [email, setEmail] = useState('admin@centroautomotivo0058.store');
+  const [password, setPassword] = useState('admin158158');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
@@ -53,11 +53,8 @@ export const Login = () => {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-logo">
-          {themeLogo ? (
-            <img src={themeLogo} alt="Logo da loja" />
-          ) : (
-            <h1>Sistema de Atendimento</h1>
-          )}
+          <img src={themeLogo || '/logo.png'} alt="Centro Automotivo 0058" style={{ maxHeight: '90px', width: 'auto', objectFit: 'contain', margin: '0 auto 12px auto', display: 'block' }} />
+          <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>Centro Automotivo 0058</h1>
         </div>
         {error && <div className="error-message">{error}</div>}
         <form onSubmit={handleSubmit}>

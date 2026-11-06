@@ -29,14 +29,16 @@
   <div id="viewConnection" class="view active">
     <div class="card">
       <label for="backendUrl">URL do Backend (Sistema)</label>
-      <input type="text" id="backendUrl" value="http://127.0.0.1:5000" placeholder="http://127.0.0.1:5000" />
+      <input type="text" id="backendUrl" value="https://centroautomotivo0058.store" placeholder="https://centroautomotivo0058.store" />
       <small>
-        Local: <code>http://127.0.0.1:5000</code>. No servidor, use o dominio do seu Coolify.
-        Use <code>127.0.0.1</code> em vez de <code>localhost</code> para evitar bloqueio de CORS.
+        Detectada automaticamente ao abrir o painel da loja. Mantenha o painel conectado nesta máquina.
       </small>
 
-      <label for="agentToken">Token do Agente</label>
-      <input type="text" id="agentToken" value="autopecas-agent-token" placeholder="autopecas-agent-token" />
+      <label for="agentToken">Token do Agente (opcional)</label>
+      <input type="password" id="agentToken" value="" placeholder="Normalmente não é necessário" autocomplete="off" />
+      <small>
+        A extensão reutiliza a sessão ADMIN do painel aberto. Não copie nem compartilhe seu token de acesso.
+      </small>
 
       <div class="btn-group">
         <button id="btnSave" class="btn btn-primary">Salvar e Conectar</button>

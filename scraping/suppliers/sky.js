@@ -96,10 +96,15 @@ async function waitForSearchRender(page, previousSignature = '') {
 }
 
 async function runBranchSearch(page, query, dismissTransientUi) {
-    console.log('[SKY DEBUG] runBranchSearch called with query:', query, 'url:', page.url());
     if (typeof dismissTransientUi === 'function') {
         await dismissTransientUi().catch(() => {});
     }
+
+    const pageTitle = await page.title().catch(() => '');
+    if (/522|520|524|502|504|Connection timed out|Cloudflare/i.test(pageTitle)) {
+        throw new Error('Site da Sky Peças instável ou fora do ar (Cloudflare Timeout).');
+    }
+
     try {
         const swalBtn = page.locator('button.swal2-confirm, button.swal2-close, .swal2-actions button, button:has-text("OK")').first();
         if (await swalBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
@@ -109,17 +114,29 @@ async function runBranchSearch(page, query, dismissTransientUi) {
     } catch (_) {}
 
     const inp = page.locator('#inpCodigo').first();
+    const isVisible = await inp.isVisible({ timeout: 4000 }).catch(() => false);
+    if (!isVisible) {
+        const fallbackInp = await pickSearchInput(page, query);
+        if (fallbackInp) {
+            await fallbackInp.click({ force: true });
+            await fallbackInp.fill(String(query || ''));
+            await fallbackInp.dispatchEvent('input');
+            await fallbackInp.dispatchEvent('change');
+            await clickVisibleSearchButton(page);
+            await page.waitForTimeout(2500);
+            return true;
+        }
+        return false;
+    }
+
     await inp.click({ force: true });
     await inp.fill(String(query || ''));
     await inp.dispatchEvent('input');
     await inp.dispatchEvent('change');
 
     const btn = page.locator('#btnBuscar').first();
-    console.log('[SKY DEBUG] Clicking #btnBuscar...');
     await btn.click({ force: true });
-    await page.waitForTimeout(4000);
-    const count = await page.locator('.bx_produto').count();
-    console.log('[SKY DEBUG] .bx_produto found right after click:', count);
+    await page.waitForTimeout(2500);
 
     if (typeof dismissTransientUi === 'function') {
         await dismissTransientUi().catch(() => {});
@@ -287,6 +304,100 @@ async function extractBranchResults(page, providerName) {
     }, { providerName });
 }
 
+const SKY_BRANCHES = [
+    { id: '222', name: 'FORTLUB (GOIÂNIA)' },
+    { id: '411', name: 'Embrepar (GO - Perimetral)' },
+    { id: '414', name: 'Embrepar (GO - Aeroviario)' },
+];
+
+async function searchAllSkyBranches(page, supplierName, query) {
+    return page.evaluate(async ({ query, supplierName, branches }) => {
+        const clean = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+        const allItems = [];
+        const csfr = (window.$ ? window.$('#csrf_token').val() : '') || '';
+
+        for (const b of branches) {
+            await new Promise((resolve) => {
+                window.$.post('/site/troca_loja', { loja: b.id }, () => resolve(), 'json').fail(() => resolve());
+            });
+            await new Promise((r) => setTimeout(r, 350));
+
+            const busca = await new Promise((resolve) => {
+                window.$.post('/site/buscar', {
+                    montadora: '0',
+                    veiculo: '0',
+                    marca: '0',
+                    departamento: '0',
+                    produto: '0',
+                    modelo: '0',
+                    motor: '0',
+                    valvula: '0',
+                    ano: '',
+                    codigo: query,
+                    peca: '',
+                    codigo_barras: '',
+                    codigos: '',
+                    tipo_clique_busca_peca: 'clique',
+                    csrf_token: csfr,
+                    codigos_multiplos: [],
+                }, (res) => resolve(res), 'json').fail(() => resolve({ fail: true }));
+            });
+
+            if (busca && busca.html) {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = busca.html;
+                const cards = Array.from(tempDiv.querySelectorAll('.bx_produto'));
+
+                for (const card of cards) {
+                    const rawText = String(card.innerText || '');
+                    const cleanText = clean(rawText);
+                    const priceMatch = rawText.match(/R\$\s*([0-9.,]+)/);
+                    if (!priceMatch) continue;
+                    const price = `R$ ${clean(priceMatch[1])}`;
+
+                    const fabCodeMatch = rawText.match(/C[oó]d\.?\s*F[aá]b\.?:\s*([^\s\t\n]+)/i);
+                    const nnCodeMatch = rawText.match(/N\/N:\s*([^\s\t\n]+)/i);
+                    const codigo = (fabCodeMatch ? fabCodeMatch[1] : (nnCodeMatch ? nnCodeMatch[1] : '')) || '';
+
+                    const isIndisponivel = /indisponivel|fora de estoque/i.test(rawText);
+                    const stockMatch = rawText.match(/Estoque:\s*([0-9]+)/i);
+                    const stockNum = stockMatch ? Number.parseInt(stockMatch[1], 10) : (isIndisponivel ? 0 : 1);
+                    const stock = String(Number.isFinite(stockNum) ? stockNum : 0);
+
+                    const lines = rawText.split('\n').map(clean).filter(Boolean);
+                    const titleLine = lines[0] || '';
+                    const parts = titleLine.split('-');
+                    const nome = clean(card.querySelector('.nome')?.innerText || parts[0] || titleLine);
+                    const marca = clean(card.querySelector('.fornecedor')?.innerText || parts[1] || (lines.find((l) => /MANN|WEGA|FRAM|TECFIL|FRAS-LE|NAKATA|COBREQ/i.test(l)) || ''));
+
+                    const linkNode = card.querySelector('a[href]');
+
+                    const stockText = Number(stock) > 0
+                        ? `Estoque: ${stock} (${b.name})`
+                        : `Consulte filial (${b.name})`;
+
+                    allItems.push({
+                        provider: supplierName,
+                        branch: b.name,
+                        nome: `${nome} ${marca} ${codigo}`.trim(),
+                        preco: price,
+                        codigo,
+                        marca,
+                        estoque: stock,
+                        estoqueTexto: stockText,
+                        available: true,
+                        link: linkNode ? linkNode.href : window.location.href,
+                    });
+                }
+            }
+        }
+
+        // Ordena itens: com estoque > 0 primeiro
+        allItems.sort((a, b) => Number(b.estoque || 0) - Number(a.estoque || 0));
+        return allItems;
+    }, { query, supplierName, branches: SKY_BRANCHES });
+}
+
 module.exports = {
     key: 'sky',
     matches: (supplierName) => supplierName.includes('sky'),
@@ -304,6 +415,9 @@ module.exports = {
     searchButtonSelector: SEARCH_BUTTON_SELECTORS,
     performSearch: async ({ page, query, supplier, dismissTransientUi }) => {
         const title = await page.title().catch(() => '');
+        if (/522|520|524|502|504|Connection timed out|Cloudflare/i.test(title)) {
+            throw new Error('Site da Sky Peças instável no momento (servidor do fornecedor com timeout).');
+        }
         if (title.toLowerCase().includes('login') || page.url().endsWith('/login')) {
             console.log('[sky] Detected login page, executing auto-login...');
             await page.goto('https://cliente.skypecas.com.br/', { waitUntil: 'domcontentloaded' }).catch(() => {});
@@ -316,20 +430,20 @@ module.exports = {
             const user = supplier?.loginCredential || 'renan0058';
             const pass = supplier?.password || 'rE539597@';
 
-            if (await cnpjLoc.isVisible().catch(() => false)) {
+            if (await cnpjLoc.isVisible({ timeout: 3000 }).catch(() => false)) {
                 await cnpjLoc.fill(cnpj);
                 await userLoc.fill(user);
                 await passLoc.fill(pass);
                 await submitBtn.click().catch(() => {});
-                await page.waitForTimeout(5000);
+                await page.waitForTimeout(4000);
             }
             await page.goto('https://cliente.skypecas.com.br/produtos', { waitUntil: 'domcontentloaded' }).catch(() => {});
-            await page.waitForTimeout(2000);
+            await page.waitForTimeout(1500);
         }
 
-        const searched = await runBranchSearch(page, query, dismissTransientUi);
-        if (!searched) {
-            throw new Error('Campo de busca visivel nao encontrado na Sky Pecas.');
+        // Não precisa clicar no botão da tela pois extractItems faz busca direta nas 3 lojas
+        if (typeof dismissTransientUi === 'function') {
+            await dismissTransientUi().catch(() => {});
         }
     },
     fillLogin: async ({ page, supplier, fillVisibleLocator, dismissTransientUi }) => {
@@ -365,48 +479,11 @@ module.exports = {
             await fillVisibleLocator(passwordField, supplier.password || '');
         }
     },
-    extractItems: async ({ page, supplier, query, dismissTransientUi }) => {
-        const branchSelect = await resolveBranchSelect(page);
-        if (!branchSelect) {
-            return extractBranchResults(page, supplier.name);
+    extractItems: async ({ page, supplier, query }) => {
+        const items = await searchAllSkyBranches(page, supplier.name, query);
+        if (items && items.length > 0) {
+            return items;
         }
-
-        const selectedLabel = await getSelectedBranchLabel(branchSelect.locator);
-        const orderedOptions = [
-            ...branchSelect.options.filter((option) => option.label === selectedLabel),
-            ...branchSelect.options.filter((option) => option.label !== selectedLabel),
-        ];
-
-        const providerName = supplier.name;
-        const currentItems = await extractBranchResults(page, providerName);
-        if (currentItems.length > 0) {
-            return currentItems;
-        }
-
-        const results = [];
-        const visited = new Set();
-        if (selectedLabel) visited.add(selectedLabel);
-
-        for (const option of orderedOptions) {
-            const optionValue = String(option.value || '').trim();
-            const optionLabel = String(option.label || '').trim();
-            const dedupeKey = optionValue || optionLabel;
-            if (!optionLabel || visited.has(dedupeKey)) continue;
-            visited.add(dedupeKey);
-
-            if (optionValue) {
-                await branchSelect.locator.selectOption(optionValue).catch(() => {});
-                await page.waitForLoadState('domcontentloaded').catch(() => {});
-                await page.waitForTimeout(1500);
-                await dismissTransientUi();
-                await runBranchSearch(page, query, dismissTransientUi);
-            }
-
-            const branchProviderName = supplier.name;
-            const branchItems = await extractBranchResults(page, branchProviderName);
-            results.push(...branchItems);
-        }
-
-        return results;
+        return extractBranchResults(page, supplier.name);
     },
 };

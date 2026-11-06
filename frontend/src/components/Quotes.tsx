@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { API_URL } from '../services/api';
 import { socket } from '../services/socket';
@@ -595,8 +595,8 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
         } catch (error) {
             console.error('Search Quote Error:', error);
             const message = axios.isAxiosError(error)
-                ? error.response?.data?.message
-                : '';
+                ? (error.response?.data?.message || (error.code === 'ERR_NETWORK' ? 'Não foi possível conectar ao servidor local. Verifique se o sistema está em execução.' : error.message))
+                : (error instanceof Error ? error.message : String(error));
             alert(message || 'Erro ao buscar preços. Verifique se os fornecedores estão configurados corretamente.');
             setIsSearching(false);
             setQuoteJobStatus('');
@@ -1083,6 +1083,9 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                     const aExact = normalizeCodeValue(a.code) === normalizedQueryCode;
                                     const bExact = normalizeCodeValue(b.code) === normalizedQueryCode;
                                     if (aExact !== bExact) return aExact ? -1 : 1;
+                                    const aHasStock = Number(a.stock || 0) > 0 || (!!a.stockText && !/sem estoque|indisponivel/i.test(a.stockText));
+                                    const bHasStock = Number(b.stock || 0) > 0 || (!!b.stockText && !/sem estoque|indisponivel/i.test(b.stockText));
+                                    if (aHasStock !== bHasStock) return aHasStock ? -1 : 1;
                                     return parsePriceValue(a.price) - parsePriceValue(b.price);
                                 })[0] || null;
 
@@ -1115,6 +1118,15 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                             providerCards.map((card) => {
                                                 const supplierResult = card.selectedResult;
                                                 if (!supplierResult) {
+                                                    const errorText = card.supplierError || (isSearching
+                                                        ? 'Aguardando consulta deste fornecedor...'
+                                                        : 'Este fornecedor não retornou oferta real para a peça escolhida.');
+                                                    const isRealError = !!card.supplierError &&
+                                                        !card.supplierError.includes('não retornou oferta') &&
+                                                        !card.supplierError.includes('nao retornou oferta') &&
+                                                        !card.supplierError.includes('Não encontrado') &&
+                                                        !card.supplierError.includes('Nao encontrado');
+
                                                     return (
                                                         <div
                                                             key={`${item.query}-${card.provider}-empty`}
@@ -1123,10 +1135,8 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                                             <div className="supplier-view-header compact-supplier-header">
                                                                 <strong>{card.provider}</strong>
                                                             </div>
-                                                            <div className="supplier-view-error">
-                                                                {card.supplierError || (isSearching
-                                                                    ? 'Aguardando consulta deste fornecedor...'
-                                                                    : 'Este fornecedor não retornou oferta real para a peça escolhida.')}
+                                                            <div className={isRealError ? "supplier-view-error" : "supplier-view-empty-message"}>
+                                                                {errorText}
                                                             </div>
                                                         </div>
                                                     );
@@ -1963,6 +1973,15 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                     color: #dc2626;
                     background: rgba(239, 68, 68, 0.06);
                     border: 1px solid rgba(239, 68, 68, 0.14);
+                    border-radius: 8px;
+                    padding: 0.85rem 0.95rem;
+                    font-size: 0.88rem;
+                    line-height: 1.45;
+                }
+                .supplier-view-empty-message {
+                    color: #64748b;
+                    background: rgba(100, 116, 139, 0.06);
+                    border: 1px solid rgba(100, 116, 139, 0.16);
                     border-radius: 8px;
                     padding: 0.85rem 0.95rem;
                     font-size: 0.88rem;

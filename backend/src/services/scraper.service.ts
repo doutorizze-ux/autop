@@ -385,18 +385,19 @@ function normalizeSupplierResults(data: any, supplier: any, productName: string)
         const provider = String(item?.provider || supplier.name || '').trim() || supplier.name;
         const numericPrice = parsePriceNumber(item?.price);
         if (!numericPrice) continue;
-        if (isUnavailableResult(item)) continue;
         if (!hasReliableProductIdentity(item, supplier, productName)) continue;
 
-        const stockText = item?.stockText ? String(item.stockText) : '';
+        const isUnavail = isUnavailableResult(item);
+        const stockText = item?.stockText ? String(item.stockText) : (isUnavail ? 'Sem estoque' : '');
+        const parsedStock = parseStockValue(item?.stock, stockText);
         const normalizedItem = {
             provider,
             product: item?.product || productName,
             price: numericPrice,
             available: true,
             link: item?.link || supplier.url,
-            stock: parseStockValue(item?.stock, stockText),
-            stockText,
+            stock: isUnavail ? 0 : parsedStock,
+            stockText: isUnavail && !stockText ? 'Sem estoque' : stockText,
             code: item?.code ? String(item.code) : '',
             brand: item?.brand ? String(item.brand) : '',
             application: item?.application ? String(item.application) : '',
@@ -413,6 +414,10 @@ function normalizeSupplierResults(data: any, supplier: any, productName: string)
     return Array.from(bestByIdentity.values()).sort((a, b) => {
         const relevanceCompare = getResultRelevance(a, productName) - getResultRelevance(b, productName);
         if (relevanceCompare !== 0) return relevanceCompare;
+
+        const aHasStock = Number(a.stock || 0) > 0 ? 1 : 0;
+        const bHasStock = Number(b.stock || 0) > 0 ? 1 : 0;
+        if (aHasStock !== bHasStock) return bHasStock - aHasStock;
 
         const productCompare = String(a.product || '').localeCompare(String(b.product || ''), 'pt-BR');
         if (productCompare !== 0) return productCompare;
@@ -445,7 +450,7 @@ export async function runSupplierSearch(supplier: any, productName: string) {
             }
             // Array retornou dados mas todos foram descartados pela normalizacao
             console.warn(`[Scraper] ${supplier.name} retornou ${data.length} item(s) para "${productName}" mas todos foram descartados apos normalizacao.`);
-            return buildNoOfferResult(supplier, productName, 'Fornecedor retornou itens mas nenhum passou na validacao de identidade/preco.');
+            return buildNoOfferResult(supplier, productName, 'Não encontrado nesta consulta. Preço/estoque não confirmado.');
         }
 
         if (data && data.items && data.items.length > 0) {
@@ -456,7 +461,7 @@ export async function runSupplierSearch(supplier: any, productName: string) {
                     provider: data.provider || supplier.name,
                     product: productName,
                     price: '---',
-                    error: 'Fornecedor retornou apenas item indisponivel ou sem preco valido.',
+                    error: 'Não encontrado nesta consulta. Preço/estoque não confirmado.',
                     link: supplier.url,
                     available: false,
                     debug: null,
@@ -502,8 +507,8 @@ export async function runSupplierSearch(supplier: any, productName: string) {
                 errorMsg = 'Sessão expirada ou login bloqueado. Refaça o Login Assistido deste fornecedor.';
             } else if (errorMsg.includes('Nenhum produto encontrado') || errorMsg.includes('Nenhum item')) {
                 errorMsg = 'Não encontrado nesta consulta. Preço/estoque não confirmado.';
-            } else if (!errorMsg.startsWith('Erro do Bot')) {
-                errorMsg = `Erro do Bot: ${data.error}`;
+            } else if (errorMsg.includes('browserType.launch') || errorMsg.includes('Target page, context or browser has been closed') || errorMsg.includes('Browser logs:')) {
+                errorMsg = 'Navegador reiniciado pelo sistema. Faça uma nova pesquisa.';
             }
 
             return {
@@ -521,7 +526,7 @@ export async function runSupplierSearch(supplier: any, productName: string) {
             provider: supplier.name,
             product: productName,
             price: '---',
-            error: 'Erro do Bot: Nenhum retorno válido do fornecedor.',
+            error: 'Nenhum retorno do fornecedor para esta consulta.',
             link: supplier.url,
             available: false,
             debug: null,
@@ -530,11 +535,17 @@ export async function runSupplierSearch(supplier: any, productName: string) {
     } catch (error: any) {
         console.error(`[Scraper Warning] Falha na execução para ${supplier.name}: message=${error.message}`);
         
+        let errorMsg = error?.message || 'Falha na consulta deste fornecedor.';
+        if (errorMsg.includes('Nenhum produto encontrado') || errorMsg.includes('Nenhum item')) {
+            errorMsg = 'Não encontrado nesta consulta. Preço/estoque não confirmado.';
+        } else if (errorMsg.includes('browserType.launch') || errorMsg.includes('Target page, context or browser has been closed') || errorMsg.includes('Browser logs:')) {
+            errorMsg = 'Navegador reiniciado pelo sistema. Faça uma nova pesquisa.';
+        }
         return {
             provider: supplier.name,
             product: productName,
             price: '---',
-            error: `Erro crítico. ${error.message || 'Falha desconhecida.'}`,
+            error: errorMsg,
             link: supplier.url,
             available: false,
             debug: null,
@@ -584,7 +595,7 @@ async function executeSupplierSearch(supplier: any, productName: string) {
 async function executeSupplierSearchWithGuards(supplier: any, productName: string) {
     const cacheEnabled = isResultCacheEnabled();
     const cacheTtlMs = cacheEnabled ? parseNonNegativeInt(process.env.SCRAPER_CACHE_TTL_MS, 0) : 0;
-    const timeoutMs = parsePositiveInt(process.env.SCRAPER_SUPPLIER_TIMEOUT_MS, 165_000);
+    const timeoutMs = parsePositiveInt(process.env.SCRAPER_SUPPLIER_TIMEOUT_MS, 120_000);
     const cacheKey = getSupplierCacheKey(supplier, productName);
     const cached = cacheEnabled ? supplierSearchCache.get(cacheKey) : null;
 
@@ -606,11 +617,15 @@ async function executeSupplierSearchWithGuards(supplier: any, productName: strin
             `${supplier.name} (${productName})`
         );
     } catch (error: any) {
+        let errorMsg = error?.message || 'Fornecedor excedeu o tempo limite.';
+        if (errorMsg.includes('excedeu') || errorMsg.includes('timeout') || errorMsg.includes('Timeout')) {
+            errorMsg = 'Fornecedor demorou para responder (site instável ou timeout).';
+        }
         return {
             provider: supplier.name,
             product: productName,
             price: '---',
-            error: `Erro do Bot: ${error?.message || 'Fornecedor excedeu o tempo limite.'}`,
+            error: errorMsg,
             link: supplier.url,
             available: false,
             debug: null,
@@ -680,7 +695,7 @@ export class ScraperService {
         shouldCancel?: () => boolean
     ) {
         const suppliers = (await prisma.supplier.findMany()).filter((supplier: any) => supplier.websiteSearchEnabled !== false);
-        const concurrency = Math.max(1, Number.parseInt(process.env.SCRAPER_CONCURRENCY || '3', 10) || 3);
+        const concurrency = Math.max(1, Number.parseInt(process.env.SCRAPER_CONCURRENCY || '2', 10) || 2);
         const resultsByProduct: Record<string, any[]> = {};
 
         for (const productName of productNames) {

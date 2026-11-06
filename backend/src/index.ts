@@ -1,3 +1,5 @@
+process.on('uncaughtException', (err) => console.error('[UNCAUGHT EXCEPTION]', err));
+process.on('unhandledRejection', (reason) => console.error('[UNHANDLED REJECTION]', reason));
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -107,7 +109,7 @@ if (fs.existsSync(frontendDistPath)) {
 
 import { bootstrapSuppliers } from './services/supplier-bootstrap';
 
-server.listen(PORT, async () => {
+server.listen(Number(PORT), '0.0.0.0', async () => {
     console.log(`Server is running on port ${PORT}`);
     await bootstrapSuppliers();
 });

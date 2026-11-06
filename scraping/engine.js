@@ -465,6 +465,8 @@ async function waitForLoginCompletion(page, previousUrl, loginUrl, supplier, str
 
 function buildSearchQueries(productName) {
     const baseQuery = safeString(productName).trim();
+    if (!baseQuery) return [];
+
     const queries = [baseQuery];
 
     // Clean alphanumeric code (e.g. "PSL-560" -> "PSL560")
@@ -473,29 +475,7 @@ function buildSearchQueries(productName) {
         queries.push(cleanNoPunct);
     }
 
-    // Letters + Numbers with hyphen (e.g. "PSL560" -> "PSL-560")
-    const withHyphen = baseQuery.replace(/^([A-Za-z]{2,5})(\d{2,6})$/, '$1-$2');
-    if (withHyphen !== baseQuery && !queries.includes(withHyphen)) {
-        queries.push(withHyphen);
-    }
-
-    const withSpace = baseQuery.replace(/^([A-Za-z]{2,5})(\d{2,6})$/, '$1 $2');
-    if (withSpace !== baseQuery && !queries.includes(withSpace)) {
-        queries.push(withSpace);
-    }
-
-    const tokens = baseQuery
-        .split(/\s+/)
-        .map((token) => token.trim())
-        .filter((token) => token.length >= 3);
-
-    for (const token of tokens) {
-        if (!queries.includes(token)) {
-            queries.push(token);
-        }
-    }
-
-    return queries.slice(0, 3);
+    return queries.slice(0, 2);
 }
 
 async function clickFirstVisible(page, selectors, options = {}) {
@@ -903,16 +883,19 @@ async function extractGeneric(page) {
 }
 
 async function isAnySelectorVisible(page, selectors, timeout = 2500) {
-    for (const selector of selectors) {
-        try {
-            const visible = await page.locator(selector).first().isVisible({ timeout }).catch(() => false);
-            if (visible) {
-                return true;
-            }
-        } catch (_) {}
+    if (!selectors || !selectors.length) return false;
+    try {
+        const waiters = selectors.map((s) =>
+            page.locator(s).first().waitFor({ state: 'visible', timeout }).then(() => true).catch(() => false)
+        );
+        const anyVisible = await Promise.race([
+            Promise.any(waiters.map((p) => p.then((v) => (v ? true : Promise.reject())))).catch(() => false),
+            page.waitForTimeout(timeout).then(() => false),
+        ]);
+        return Boolean(anyVisible);
+    } catch (_) {
+        return false;
     }
-
-    return false;
 }
 
 function resolveAuthenticatedUrl(strategy = {}, supplier, loginUrl) {
@@ -1008,18 +991,22 @@ async function createContext(browser, supplier, strategy = {}) {
 
     let context;
     if (effectiveProfilePath) {
-        // Tenta usar o Chrome real (channel: chrome) para bypassar Cloudflare.
-        // Se falhar (ex: Chrome não instalado), cai de volta para o Chromium.
+        const installedExe = resolveInstalledBrowserExecutable();
         try {
-            context = await launchPersistentContextWithRecovery(effectiveProfilePath, {
+            const launchOpts = {
                 headless: forceVisiblePersistentContext ? false : process.env.HEADLESS !== 'false',
                 ...contextOptions,
-                channel: 'chrome',
                 ignoreDefaultArgs: ['--enable-automation'],
                 args: systemChromeProfileRoot
                     ? [...(contextOptions.args || []), '--profile-directory=Default']
                     : contextOptions.args,
-            }, supplier.name);
+            };
+            if (installedExe) {
+                launchOpts.executablePath = installedExe;
+            } else {
+                launchOpts.channel = 'chrome';
+            }
+            context = await launchPersistentContextWithRecovery(effectiveProfilePath, launchOpts, supplier.name);
         } catch (error) {
             console.error(`[DEBUG] Chrome real indisponivel para ${supplier.name}, usando Chromium: ${error.message}`);
             try {
@@ -1051,8 +1038,14 @@ async function createContext(browser, supplier, strategy = {}) {
     });
     await context.route('**/*', (route) => {
         const resourceType = route.request().resourceType();
-        if (['media'].includes(resourceType)) {
+        if (['media', 'font'].includes(resourceType)) {
             return route.abort();
+        }
+        if (resourceType === 'image') {
+            const url = route.request().url().toLowerCase();
+            if (!url.includes('captcha') && !url.includes('turnstile')) {
+                return route.abort();
+            }
         }
 
         return route.continue();
@@ -1069,8 +1062,12 @@ async function persistSession(context, supplier, shouldPersist) {
         return;
     }
 
-    const sessionStatePath = getSessionStatePath(supplier);
-    await context.storageState({ path: sessionStatePath });
+    try {
+        const sessionStatePath = getSessionStatePath(supplier);
+        await context.storageState({ path: sessionStatePath });
+    } catch (e) {
+        console.warn(`[WARN] Nao foi possivel persistir sessao em arquivo: ${e.message}`);
+    }
 }
 
 async function captureDebugState(page) {
@@ -1183,44 +1180,72 @@ function resolveInstalledBrowserExecutable() {
 
 function getBrowser() {
     if (!globalBrowserPromise) {
-        console.error("[Playwright] Inicializando Browser Global pela primeira vez...");
+        console.error("[Playwright] Inicializando Browser Global com redundância...");
         globalBrowserPromise = (async () => {
             const launchOptions = {
                 headless: process.env.HEADLESS !== 'false',
-                ignoreDefaultArgs: ['--enable-automation'],
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
                     '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
                     '--disable-gpu',
-                    '--disable-blink-features=AutomationControlled',
-                    '--disable-features=IsolateOrigins,site-per-process',
                     '--no-first-run',
-                    '--no-zygote',
+                    '--disable-extensions',
+                    '--disable-background-networking',
+                    '--disable-default-apps',
+                    '--disable-sync',
+                    '--disable-translate',
+                    '--mute-audio',
+                    '--renderer-process-limit=2',
                     '--window-size=1920,1080',
                 ],
             };
 
+            // 1. Canal oficial Chrome
+            try {
+                console.error("[Playwright] Tentando iniciar via canal 'chrome'...");
+                return await chromium.launch({
+                    ...launchOptions,
+                    channel: 'chrome',
+                });
+            } catch (errChrome) {
+                console.warn(`[Playwright] Canal 'chrome' indisponível: ${errChrome.message}`);
+            }
+
+            // 2. Canal oficial Edge (sempre presente no Windows)
+            try {
+                console.error("[Playwright] Tentando iniciar via canal 'msedge'...");
+                return await chromium.launch({
+                    ...launchOptions,
+                    channel: 'msedge',
+                });
+            } catch (errEdge) {
+                console.warn(`[Playwright] Canal 'msedge' indisponível: ${errEdge.message}`);
+            }
+
+            // 3. Chromium padrão Playwright
+            try {
+                console.error("[Playwright] Tentando iniciar via Chromium empacotado...");
+                return await chromium.launch(launchOptions);
+            } catch (errChromium) {
+                console.warn(`[Playwright] Chromium padrão indisponível: ${errChromium.message}`);
+            }
+
+            // 4. Executável resolvido manualmente
             const executablePath = resolveInstalledBrowserExecutable();
             if (executablePath) {
-                console.error(`[Playwright] Usando navegador instalado: ${executablePath}`);
-                return chromium.launch({
+                console.error(`[Playwright] Tentando iniciar via caminho direto: ${executablePath}`);
+                return await chromium.launch({
                     ...launchOptions,
                     executablePath,
                 });
             }
 
-            try {
-                return await chromium.launch({
-                    ...launchOptions,
-                    channel: 'chrome',
-                });
-            } catch (error) {
-                console.error(`[Playwright] Chrome real indisponivel, usando Chromium: ${error.message}`);
-                return chromium.launch(launchOptions);
-            }
-        })();
+            throw new Error('Nenhum navegador (Chrome, Edge ou Chromium) pôde ser iniciado.');
+        })().catch((err) => {
+            globalBrowserPromise = null;
+            throw err;
+        });
     }
     return globalBrowserPromise;
 }
@@ -1293,6 +1318,7 @@ async function scrapeProductUnsafe(supplier, productName, options = {}) {
 
         await page.goto(initialUrl, { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(500);
+        console.error(`[DEBUG Comdip URL after initial goto] ${page.url()}`);
         await dismissTransientUi(page);
 
         let didLoginThisRun = false;
@@ -1306,7 +1332,7 @@ async function scrapeProductUnsafe(supplier, productName, options = {}) {
             const alreadyLogged = await isAnySelectorVisible(
                 page,
                 checkSelectors,
-                3000
+                strategy.loginCheckTimeout ?? 7000
             );
 
             if (!alreadyLogged) {
@@ -1327,7 +1353,10 @@ async function scrapeProductUnsafe(supplier, productName, options = {}) {
                 await dismissTransientUi(page);
                 await ensureLoggedIn(page, loginUrl, supplier, strategy);
             }
-            await persistSession(context, supplier, didLoginThisRun || hasPreloadedSession);
+            const isLoginPage = page.url().includes('login') || (await page.locator('input[type="password"]').first().isVisible().catch(() => false));
+            if (!isLoginPage && (didLoginThisRun || !hasPreloadedSession)) {
+                await persistSession(context, supplier, true);
+            }
         }
 
         const authenticatedTargetUrl = resolveAuthenticatedUrl(strategy, supplier, loginUrl);
@@ -1374,7 +1403,7 @@ async function scrapeProductUnsafe(supplier, productName, options = {}) {
         for (const query of queries) {
             console.error(`[DEBUG] Buscando por: ${query}`);
 
-            if (supplier.searchUrl) {
+            if (supplier.searchUrl && !strategy.performSearch) {
                 const targetSearchUrl = supplier.searchUrl.includes('{query}')
                     ? supplier.searchUrl.replace(/\{query\}/gi, encodeURIComponent(query))
                     : supplier.searchUrl;
@@ -1383,6 +1412,7 @@ async function scrapeProductUnsafe(supplier, productName, options = {}) {
             }
 
             const beforeSearchUrl = page.url();
+            console.error(`[DEBUG ${supplier.name} URL before performSearch] ${beforeSearchUrl}`);
             await performSearch(page, supplier, query, strategy);
             const postSearchSelectors = strategy.waitForResultsOnly
                 ? buildSelectorList(
@@ -1414,8 +1444,13 @@ async function scrapeProductUnsafe(supplier, productName, options = {}) {
             await dismissTransientUi(page);
 
             let items = [];
+            console.error(`[DEBUG ${supplier.name}] URL exata antes de extrair: ${page.url()}`);
             if (strategy.extractItems) {
+                const htmlLen = await page.evaluate(() => document.body.innerHTML.length);
+                const cardsCount = await page.evaluate(() => document.querySelectorAll('.product-info, .ui-product-card').length);
+                console.error(`[DEBUG ${supplier.name}] No momento do extract: htmlLen=${htmlLen}, cardsCount=${cardsCount}`);
                 items = await strategy.extractItems({ page, supplier, query, dismissTransientUi });
+                console.error(`[DEBUG ${supplier.name}] strategy.extractItems retornou ${items.length} itens`);
             }
 
             if (
@@ -1430,6 +1465,7 @@ async function scrapeProductUnsafe(supplier, productName, options = {}) {
             }
 
             finalItems = buildBrowserPayload(items, supplier);
+            console.error(`[DEBUG ${supplier.name}] buildBrowserPayload retornou ${finalItems.length} itens`);
 
             if (!finalItems.length && hasVisibleItemsWithoutPrice(items)) {
                 if (supplier.needsLogin && (supplier.password || supplier.loginCredential) && !didLoginThisRun) {

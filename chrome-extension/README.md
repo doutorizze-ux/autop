@@ -31,13 +31,12 @@ Esta extensão substitui os antigos scrapers locais baseados em Playwright que t
 
 ## ⚙️ Configuração
 
-1. Clique no ícone da extensão no Chrome para abrir o popup.
-2. Defina os campos:
-   - **URL do Backend**:
-     - Para testes locais: `http://localhost:5000`
-     - Para produção no Coolify: `https://seu-dominio-coolify.com`
-   - **Token do Agente**: `autopecas-agent-token` (ou o token configurado no `.env` do backend).
-3. Clique em **"Salvar e Conectar"**. O status ficará verde: **Online**.
+1. Abra o painel da loja e entre com uma conta ADMIN.
+2. Mantenha o painel aberto no mesmo perfil do Chrome onde a extensão está instalada.
+3. A extensão detecta o endereço do painel e reutiliza a sessão ADMIN para se conectar. Não é necessário copiar JWT, criar arquivo de agente ou configurar um segundo token.
+4. Abra o popup da extensão para confirmar que o status está **Online**.
+
+Se usar um ambiente de teste local ou um backend diferente, altere **URL do Backend** no popup. O token do agente é opcional; deixe em branco no uso normal com o painel da loja aberto.
 
 ---
 
