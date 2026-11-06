@@ -494,9 +494,11 @@ export async function runSupplierSearch(supplier: any, productName: string) {
                 debugContext.includes('request could not be satisfied') ||
                 debugContext.includes('403 error') ||
                 debugContext.includes('cloudfront') ||
-                debugContext.includes('request blocked')
+                debugContext.includes('request blocked') ||
+                errorMsg.includes('HTTP 403') ||
+                errorMsg.includes('recusada: HTTP 403')
             ) {
-                errorMsg = 'Erro do Bot: Acesso bloqueado pelo site (CloudFront/403).';
+                errorMsg = 'Fornecedor bloqueou o IP do servidor em nuvem (HTTP 403). Disponível normalmente pelo App Desktop da loja.';
             } else
             if (
                 errorMsg.includes('Sessão manual inválida') ||
@@ -509,6 +511,8 @@ export async function runSupplierSearch(supplier: any, productName: string) {
                 errorMsg = 'Não encontrado nesta consulta. Preço/estoque não confirmado.';
             } else if (errorMsg.includes('browserType.launch') || errorMsg.includes('Target page, context or browser has been closed') || errorMsg.includes('Browser logs:')) {
                 errorMsg = 'Navegador reiniciado pelo sistema. Faça uma nova pesquisa.';
+            } else if (errorMsg.includes('Timeout') && errorMsg.includes('exceeded')) {
+                errorMsg = 'Fornecedor demorou para responder ou a página não carregou a tempo.';
             }
 
             return {

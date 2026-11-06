@@ -1317,6 +1317,117 @@ table {
   border: none;
 }
 
+.whatsapp-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: rgba(255, 255, 255, 0.95);
+  z-index: 10;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.whatsapp-spinner {
+  animation: spin 1s linear infinite;
+  color: var(--primary-color);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.whatsapp-web-browser-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: 100%;
+  padding: 3rem 2rem;
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.whatsapp-browser-icon-bubble {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #dcfce7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 8px 24px rgba(34, 197, 94, 0.2);
+}
+
+.whatsapp-web-browser-card h3 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 0.75rem;
+}
+
+.whatsapp-browser-desc {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin-bottom: 2rem;
+}
+
+.whatsapp-browser-launch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.9rem 1.8rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: #22c55e;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 6px 20px rgba(34, 197, 94, 0.35);
+  margin-bottom: 2.5rem;
+}
+
+.whatsapp-browser-launch-btn:hover {
+  background: #16a34a;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(34, 197, 94, 0.45);
+}
+
+.whatsapp-browser-tip-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  text-align: left;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  width: 100%;
+}
+
+.whatsapp-browser-tip-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.whatsapp-browser-tip-item .tip-icon {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  color: var(--primary-color);
+}
+
 .whatsapp-web-footer-hint {
   display: flex;
   align-items: center;

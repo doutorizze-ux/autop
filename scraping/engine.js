@@ -377,19 +377,35 @@ async function waitForAnyVisible(page, selectors, timeout = 8000) {
 
 async function fillFirstVisible(page, selectors, value, options = {}) {
     const target = await waitForAnyVisible(page, selectors, options.timeout);
-    await target.locator.fill(safeString(value), { force: true });
+    try {
+        await target.locator.fill(safeString(value), { force: true, timeout: options.timeout ?? 8000 });
+    } catch (_) {
+        await target.locator.evaluate((el, val) => {
+            el.value = val;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+        }, safeString(value)).catch(() => {});
+    }
     return target.selector;
 }
 
 async function fillVisibleLocator(locator, value) {
     const stringValue = safeString(value);
-    await locator.click({ force: true }).catch(() => {});
-    await locator.press('Control+A').catch(() => {});
-    await locator.fill('');
+    await locator.click({ force: true, timeout: 5000 }).catch(() => {});
+    await locator.press('Control+A', { timeout: 2000 }).catch(() => {});
+    await locator.fill('', { timeout: 3000 }).catch(() => {});
     try {
-        await locator.type(stringValue, { delay: 35 });
+        await locator.type(stringValue, { delay: 35, timeout: 8000 });
     } catch (_) {
-        await locator.fill(stringValue, { force: true });
+        try {
+            await locator.fill(stringValue, { force: true, timeout: 5000 });
+        } catch (__) {
+            await locator.evaluate((el, val) => {
+                el.value = val;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            }, stringValue).catch(() => {});
+        }
     }
     await locator.evaluate((el) => {
         el.dispatchEvent(new Event('input', { bubbles: true }));
