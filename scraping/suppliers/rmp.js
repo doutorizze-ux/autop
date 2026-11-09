@@ -1,375 +1,305 @@
+const fs = require('fs');
+const path = require('path');
+const { safeString } = require('./shared');
+
+const RMP_BASE_URL = 'https://loja.rmp.com.br';
+const RMP_SIGNIN_URL = 'https://loja.rmp.com.br/auth/sign-in';
+const RMP_HOME_URL = 'https://loja.rmp.com.br/home';
+const COLETOR_API_BASE = 'https://coletor.greal.com.br/api/v1/ecommerce/products/search';
+
+function getStoredAccessToken() {
+    try {
+        const sessionPath = path.resolve(__dirname, '../sessions/real-moto-pecas-rmp.json');
+        if (!fs.existsSync(sessionPath)) return '';
+
+        const session = JSON.parse(fs.readFileSync(sessionPath, 'utf8'));
+        const origins = session.origins || [];
+        for (const origin of origins) {
+            if (origin.origin && origin.origin.includes('rmp.com.br')) {
+                const ls = origin.localStorage || [];
+                const entry = ls.find((x) => x.name === 'cockpit.ecomm.identity.session');
+                if (entry && entry.value) {
+                    const parsed = JSON.parse(entry.value);
+                    if (parsed && parsed.accessToken) {
+                        return parsed.accessToken;
+                    }
+                }
+            }
+        }
+    } catch (_) {}
+    return '';
+}
+
+function mapApiItemsToNormalized(rawItems, query) {
+    if (!Array.isArray(rawItems)) return [];
+
+    return rawItems.map((item) => {
+        const description = safeString(item.description || item.name || '').trim();
+        const code = safeString(item.productGestCode || item.productCode || item.sku || '').trim();
+        const manufacturer = safeString(item.manufacturer || item.brand || '').trim();
+        const price = Number(item.finalUnitPrice || item.unitPriceWithTaxes || item.unitPrice || 0);
+        const stock = Number(item.stockQuantityAvailable ?? (item.availableOtherBranches ? 1 : 0));
+        const branch = safeString(item.stockBranchName || 'Goiânia').trim();
+        const application = safeString(item.applicationSummary || '').trim();
+        const isAvailable = item.isAvailableForSale !== false && (stock > 0 || item.availableOtherBranches);
+
+        return {
+            nome: description,
+            product: description,
+            preco: price,
+            price: price,
+            codigo: code,
+            code: code,
+            marca: manufacturer,
+            brand: manufacturer,
+            estoque: stock,
+            stock: stock,
+            estoqueTexto: stock > 0 ? `${stock} un. (${branch})` : (item.availableOtherBranches ? 'Outras filiais' : 'Sem estoque'),
+            stockText: stock > 0 ? `${stock} un. (${branch})` : (item.availableOtherBranches ? 'Outras filiais' : 'Sem estoque'),
+            disponivel: isAvailable,
+            available: isAvailable,
+            aplicacao: application,
+            application: application,
+            link: item.sku ? `${RMP_BASE_URL}/product/${item.sku}` : `${RMP_BASE_URL}/products/search?q=${encodeURIComponent(query)}`,
+            textoCompleto: `${description} ${code} ${manufacturer} ${application}`,
+        };
+    }).filter((it) => it.preco > 0);
+}
+
 module.exports = {
     key: 'rmp',
     matches: (supplierName) => supplierName.includes('real moto') || supplierName.includes('rmp'),
+    authenticatedUrl: RMP_HOME_URL,
+    loginUrl: RMP_SIGNIN_URL,
     userSelector: [
-        'input[name="login[username]"]',
+        '#username',
+        'input[formcontrolname="username"]',
         'input[placeholder*="e-mail" i]',
-        'input[placeholder*="telefone" i]',
         'input[placeholder*="cnpj" i]',
-        'input[name*="user" i]',
-        'input[name*="login" i]',
-        'input[type="email"]',
+        'input[type="text"]',
     ],
     passSelector: [
-        'input[name="login[password]"]',
+        '#password',
+        'input[formcontrolname="password"]',
         'input[placeholder*="senha" i]',
         'input[type="password"]',
     ],
+    submitSelector: [
+        'button[type="submit"]',
+        'button:has-text("Entrar")',
+    ],
     loginSuccessSelector: [
-        '.header-search',
-        '.welcome-msg',
+        'input[type="search"]',
+        'input[placeholder*="Buscar" i]',
         'a[href*="logout"]',
-        '#search-cod-fab-input',
-        '#minisearch-input-top-search',
-        'input[placeholder*="codigo" i]',
-        'input[placeholder*="descricao" i]',
-        'input[placeholder*="marca" i]',
-        '.authorization-link',
+        '.customer-name',
+        'button[aria-label*="perfil" i]',
     ],
     searchSelector: [
-        '#search-cod-fab-input',
-        '#minisearch-input-top-search',
-        'input[placeholder*="codigo" i]',
-        'input[placeholder*="descricao" i]',
-        'input.busca',
+        'input[type="search"]',
+        'input[placeholder*="Buscar" i]',
+        'article.product-row',
     ],
-    searchButtonSelector: ['button.btn-search-fab-cod', 'button:has(.fa-search)', 'button[type="submit"]'],
     itemContainerSelector: [
-        'li.item.product.product-item',
-        '.product-item',
-        '.products .item',
-        '.product-item-info',
-        '.product.details',
+        'article.product-row',
+        'article[class*="product"]',
         'article',
     ],
     productNameSelector: [
-        '.product-item-name a',
-        '.product-item-link',
-        '.product.name a',
-        '.product-name',
         'h2',
         'h3',
+        '.product-name',
+        '.product-description',
     ],
     priceSelector: [
-        '.price-box .price',
-        '.special-price .price',
-        '.regular-price .price',
-        '.price',
         '[class*="price"]',
+        '.price',
+        'strong',
+        'span',
     ],
-    availableSelector: ['.stock', '.availability', '[class*="stock"]'],
     preferStrategySelectors: true,
     waitForResultsOnly: true,
-    emptyResultSelector: ['.message.notice', '.message.info', '.search.results .message'],
-    buildSearchUrl: (query) => {
-        const value = String(query).trim();
-        const looksLikeCode = /^[A-Za-z0-9-]{3,}$/.test(value) && !/\s/.test(value);
-        const codeParam = looksLikeCode ? '&code=' + encodeURIComponent(value) : '';
-        return 'https://loja.rmp.com.br/catalogsearch/result/?q=' + encodeURIComponent(value) + codeParam;
-    },
-    performSearch: async ({ page, query, supplier }) => {
-        const value = String(query).trim();
-        const looksLikeCode = /^[A-Za-z0-9-]{3,}$/.test(value) && !/\s/.test(value);
-        const codeParam = looksLikeCode ? '&code=' + encodeURIComponent(value) : '';
-        const searchUrl = 'https://loja.rmp.com.br/catalogsearch/result/?q=' + encodeURIComponent(value) + codeParam;
 
-        await page.goto(searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
-        await page.waitForTimeout(2000);
-
-        if (page.url().includes('login') || page.url().includes('customer/account')) {
-            console.log('[rmp] Redirected to login page, executing auto-login...');
-            const cookieBtn = page.locator('#btn-cookie-allow, button:has-text("Permitir Cookies")').first();
-            if (await cookieBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-                await cookieBtn.click().catch(() => {});
-                await page.waitForTimeout(500);
-            }
-
-            const user = supplier?.loginCredential || 'centroautomotivo0058@hotmail.com';
-            const pass = supplier?.password || 'Ren@n0058@';
-            const userLoc = page.locator('input#email[name="login[username]"], input[name="login[username]"], input#email').first();
-            const passLoc = page.locator('input#pass[name="login[password]"], input[name="login[password]"], input#pass').first();
-            const submitBtn = page.locator('button#send-login, button:has-text("ENTRAR")').first();
-
-            if (await userLoc.isVisible({ timeout: 4000 }).catch(() => false)) {
-                await userLoc.fill(user);
-                await passLoc.fill(pass);
-                await submitBtn.click().catch(() => {});
-                await Promise.race([
-                    page.waitForURL((url) => !url.href.includes('login'), { timeout: 15000 }).catch(() => null),
-                    page.locator('.welcome-msg, .header-search, a[href*="logout"]').first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => null),
-                ]);
-                await page.waitForTimeout(2000);
-                await page.goto(searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
-                await page.waitForTimeout(2500);
-            }
-        }
-    },
-    extractItems: async ({ page, query }) => {
-        await page.waitForFunction(() => {
-            const text = String(document.body?.innerText || '');
-            const productRoots = Array.from(document.querySelectorAll(
-                'li.item.product.product-item, .products-grid .product-item, .products-list .product-item'
-            ));
-            const hasProductPrice = productRoots.some((root) => (
-                /R\$\s*[0-9.]+,\d{2}/.test(String(root.textContent || ''))
-            ));
-            const normalizedText = text
-                .toLowerCase()
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '');
-            const hasEmptyResult =
-                /pesquisa\s+nao\s+retornou\s+resultados|nenhum\s+resultado|sem\s+resultado/.test(normalizedText);
-            return hasProductPrice || hasEmptyResult;
-        }, null, { timeout: 15_000 }).catch(() => {});
-
-        const evaluatedItems = await page.evaluate(async (requestedQuery) => {
-        const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
-        const bodyText = normalize(document.body && document.body.textContent);
-        const bodyAvailabilityText = bodyText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        if (/pesquisa\s+nao\s+retornou\s+resultados|nao\s+retornou\s+resultados|nenhum\s+resultado|sem\s+resultado/.test(bodyAvailabilityText)) {
-            return [];
+    // 1. Busca direta ultrarrápida via API coletor RMP
+    directSearch: async ({ supplier, query }) => {
+        const token = getStoredAccessToken();
+        if (!token) {
+            throw new Error('Token RMP não encontrado no armazenamento local.');
         }
 
-        const parsePriceText = (text) => {
-            const match = normalize(text).match(/R\$\s*[0-9.]+,\d{2}/);
-            return match ? match[0] : '';
-        };
-        const getText = (root, selectors) => {
-            for (const selector of selectors) {
-                const node = root.querySelector(selector);
-                const text = normalize(node && node.textContent);
-                if (text) return text;
-            }
-            return '';
-        };
+        const cleanQuery = safeString(query).trim();
+        const apiUrl = `${COLETOR_API_BASE}?page=0&size=12&sort=relevance&vehicleSearch=false&compatibleProducts=false&q=${encodeURIComponent(cleanQuery)}&limit=30`;
 
-        const selectors = [
-            'li.item.product.product-item',
-            '.product-item',
-            '.products .item',
-            '.product-item-info',
-            '.product.details',
-            'article',
-        ];
-        const roots = Array.from(new Set(selectors.flatMap((selector) => Array.from(document.querySelectorAll(selector)))));
-        const items = [];
-
-        for (const root of roots) {
-            const text = normalize(root.textContent);
-            const availabilityText = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            const unavailable = /\bfora\s+de\s+estoque\b|\bsem\s+estoque\b|\bindisponivel\b|\bavise\s*[- ]?me\b|\besgotad[oa]\b/.test(availabilityText);
-            if (unavailable) continue;
-
-            const preco =
-                parsePriceText(text)
-                || parsePriceText(getText(root, ['.price-box', '.special-price', '.regular-price', '[class*="price"]']))
-                || parsePriceText(Array.from(root.querySelectorAll('span, strong, div, p')).map((node) => normalize(node.textContent || '')).join(' '));
-            if (!preco) continue;
-
-            const nome = getText(root, [
-                '.product-item-name a',
-                '.product-item-link',
-                '.product.name a',
-                '.product-name',
-                'h2',
-                'h3',
-            ]) || text.split('APLICA')[0].replace(preco, '').trim().split('R$')[0].trim();
-            const linkNode = root.querySelector('a[href]');
-
-            items.push({
-                nome,
-                preco,
-                estoque: '',
-                estoqueTexto: getText(root, ['.stock', '.availability', '[class*="stock"]']),
-                textoCompleto: text,
-                link: linkNode ? linkNode.href : window.location.href,
-            });
-        }
-
-        if (items.length) {
-            return items;
-        }
-
-        let priceIntegration = null;
-        const integrationScripts = Array.from(document.querySelectorAll('script[type="text/x-magento-init"]'));
-        for (const script of integrationScripts) {
-            const source = String(script.textContent || '').trim();
-            if (!source.includes('price_integration')) continue;
-
-            try {
-                const parsed = JSON.parse(source);
-                const current = parsed?.['*']?.price_integration;
-                if (Array.isArray(current?.skus) && current.skus.length) {
-                    priceIntegration = current;
-                    break;
-                }
-            } catch (_) {
-                const skusMatch = source.match(/"skus"\s*:\s*(\[[^\]]*\])/);
-                const pricesMatch = source.match(/"prices"\s*:\s*(\[[^\]]*\])/);
-                try {
-                    const skus = skusMatch ? JSON.parse(skusMatch[1]) : [];
-                    const prices = pricesMatch ? JSON.parse(pricesMatch[1]) : [];
-                    if (Array.isArray(skus) && skus.length) {
-                        priceIntegration = { skus, prices };
-                        break;
-                    }
-                } catch (_) {}
-            }
-        }
-
-        if (!priceIntegration) {
-            return [];
-        }
-
-        try {
-            const response = await fetch('/preco/index/priceajax', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                body: JSON.stringify({
-                    skus: priceIntegration.skus,
-                    prices: priceIntegration.prices || [],
-                }),
-            });
-            if (!response.ok) {
-                return [];
-            }
-
-            const payload = await response.json();
-            const offers = payload?.result?.estoquesPrecoFlexibilizado;
-            if (!Array.isArray(offers)) {
-                return [];
-            }
-
-            const normalizedQuery = normalize(requestedQuery).toUpperCase();
-            return offers.map((offer) => {
-                const root = document.getElementById(`product-item-${offer.sku}`);
-                const text = normalize(root?.textContent || '');
-                const nome = getText(root || document, [
-                    '.product-item-name a',
-                    '.product-item-link',
-                    '.product.name a',
-                    '.product-name',
-                ]) || normalize(offer.nomeProduto);
-                const linkNode = root?.querySelector('a.product-item-link[href], a[href]');
-                const codeMatch = text.match(/C[o\u00f3]d(?:igo)?(?:\s+de|\s+do)?\s+Fabricante\s*:?\s*([A-Z0-9./_-]+)/i);
-                const brandMatch = text.match(/Fabricante\s*:?\s*([A-Z0-9 .&/-]+?)(?=\s+C[o\u00f3]d|\s*$)/i);
-                const code = normalize(codeMatch?.[1])
-                    || (normalizedQuery && nome.toUpperCase().includes(normalizedQuery) ? normalize(requestedQuery) : '');
-
-                return {
-                    nome,
-                    preco: Number(offer.precoFlexibilizado || offer.precoFlexibilizadoTributado || 0),
-                    codigo: code,
-                    marca: normalize(brandMatch?.[1]),
-                    estoque: Number(offer.quantidadeDisponivelEstoque || 0),
-                    estoqueTexto: `${Number(offer.quantidadeDisponivelEstoque || 0)} un.`,
-                    disponivel: offer.disponivelVenda === 'S' && Number(offer.quantidadeDisponivelEstoque || 0) > 0,
-                    textoCompleto: text,
-                    link: linkNode?.href || window.location.href,
-                };
-            }).filter((item) => item.preco > 0 && item.disponivel);
-        } catch (_) {
-            return [];
-        }
-        }, query);
-
-        if (evaluatedItems.length) {
-            return evaluatedItems;
-        }
-
-        const priceIntegration = await page.evaluate(() => {
-            const scripts = Array.from(document.querySelectorAll('script[type="text/x-magento-init"]'));
-            for (const script of scripts) {
-                const source = String(script.textContent || '');
-                if (!source.includes('price_integration')) continue;
-
-                try {
-                    const parsed = JSON.parse(source)?.['*']?.price_integration;
-                    if (Array.isArray(parsed?.skus) && parsed.skus.length) {
-                        return { skus: parsed.skus, prices: parsed.prices || [] };
-                    }
-                } catch (_) {
-                    const skusMatch = source.match(/"skus"\s*:\s*(\[[^\]]*\])/);
-                    const pricesMatch = source.match(/"prices"\s*:\s*(\[[^\]]*\])/);
-                    try {
-                        const skus = skusMatch ? JSON.parse(skusMatch[1]) : [];
-                        const prices = pricesMatch ? JSON.parse(pricesMatch[1]) : [];
-                        if (Array.isArray(skus) && skus.length) {
-                            return { skus, prices };
-                        }
-                    } catch (_) {}
-                }
-            }
-
-            const skus = Array.from(document.querySelectorAll('li[id^="product-item-"]'))
-                .map((root) => String(root.id || '').replace(/^product-item-/, '').trim())
-                .filter(Boolean);
-            return skus.length ? { skus: Array.from(new Set(skus)), prices: [] } : null;
+        const res = await fetch(apiUrl, {
+            headers: {
+                'authorization': `Bearer ${token}`,
+                'accept': 'application/json',
+                'x-store-host': RMP_BASE_URL,
+            },
         });
 
-        if (!priceIntegration) {
-            return [];
+        if (!res.ok) {
+            throw new Error(`API Coletor RMP HTTP ${res.status}`);
         }
+
+        const data = await res.json();
+        const items = mapApiItemsToNormalized(data.items, cleanQuery);
+        console.error(`[RMP directSearch] Sucesso! ${items.length} itens encontrados para "${cleanQuery}".`);
+        return items;
+    },
+
+    // 2. Fallback de login automatizado na nova estrutura
+    fillLogin: async ({ page, supplier }) => {
+        console.error('[RMP] Executando preenchimento de login na nova estrutura...');
+        const user = supplier?.loginCredential || 'centroautomotivo0058@hotmail.com';
+        const pass = supplier?.password || 'Ren@n0058@';
+
+        const userLoc = page.locator('#username, input[formcontrolname="username"]').first();
+        const passLoc = page.locator('#password, input[formcontrolname="password"]').first();
+
+        await userLoc.waitFor({ state: 'visible', timeout: 8000 }).catch(() => {});
+        await userLoc.fill(user);
+
+        await passLoc.waitFor({ state: 'visible', timeout: 8000 }).catch(() => {});
+        await passLoc.fill(pass);
+
+        const submitBtn = page.locator('button[type="submit"], button:has-text("Entrar")').first();
+        await submitBtn.click().catch(() => {});
+    },
+
+    afterLogin: async ({ page, context }) => {
+        console.error('[RMP] Aguardando autenticação e persistindo sessão...');
+        await page.waitForURL((url) => !url.href.includes('sign-in') && !url.href.includes('auth'), { timeout: 15000 }).catch(() => {});
+        await page.waitForTimeout(3000);
 
         try {
-            const response = await page.request.post('https://loja.rmp.com.br/preco/index/priceajax', {
-                data: {
-                    skus: priceIntegration.skus,
-                    prices: priceIntegration.prices,
-                },
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    Referer: page.url(),
-                },
-                timeout: 30000,
-            });
-            if (!response.ok()) {
-                return [];
-            }
-
-            const payload = await response.json();
-            const offers = payload?.result?.estoquesPrecoFlexibilizado;
-            if (!Array.isArray(offers)) {
-                return [];
-            }
-
-            const metadata = await page.evaluate((skus) => Object.fromEntries(skus.map((sku) => {
-                const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
-                const root = document.getElementById(`product-item-${sku}`);
-                const text = normalize(root?.textContent || '');
-                const nameNode = root?.querySelector('.product-item-name a, .product-item-link, .product.name a, .product-name');
-                const linkNode = root?.querySelector('a.product-item-link[href], a[href]');
-                const code = (text.match(/C[o\u00f3]digo\s+do\s+Fabricante\s*:?\s*([A-Z0-9./_-]+)/i) || [])[1] || '';
-                const brandMatches = Array.from(text.matchAll(
-                    /Fabricante\s*:?\s*([A-Z0-9 .&/-]+?)(?=\s+(?:Fabricante|C[o\u00f3]d|Aplica|Quantidade|Pre[c\u00e7]o)|\s*$)/gi
-                ));
-                const brand = brandMatches.at(-1)?.[1] || '';
-                return [sku, { name: normalize(nameNode?.textContent), code: normalize(code), brand: normalize(brand), link: linkNode?.href || '' }];
-            })), priceIntegration.skus);
-
-            const normalizedQuery = String(query || '').trim().toUpperCase();
-            return offers.map((offer) => {
-                const details = metadata?.[offer.sku] || {};
-                const name = details.name || String(offer.nomeProduto || '').trim();
-                const code = details.code || (normalizedQuery && name.toUpperCase().includes(normalizedQuery) ? String(query).trim() : '');
-                const stock = Number(offer.quantidadeDisponivelEstoque || 0);
-                return {
-                    nome: name,
-                    preco: Number(offer.precoFlexibilizado || offer.precoFlexibilizadoTributado || 0),
-                    codigo: code,
-                    marca: details.brand || '',
-                    estoque: stock,
-                    estoqueTexto: `${stock} un.`,
-                    disponivel: offer.disponivelVenda === 'S' && stock > 0,
-                    link: details.link || page.url(),
-                };
-            }).filter((item) => item.preco > 0 && item.disponivel);
-        } catch (_) {
-            return [];
+            const sessionPath = path.resolve(__dirname, '../sessions/real-moto-pecas-rmp.json');
+            const state = await context.storageState();
+            fs.writeFileSync(sessionPath, JSON.stringify(state, null, 2));
+            console.error('[RMP] Sessão atualizada e gravada com sucesso!');
+        } catch (e) {
+            console.error(`[RMP] Falha ao persistir sessão: ${e.message}`);
         }
+    },
+
+    buildSearchUrl: (query) => {
+        const clean = safeString(query).trim();
+        return `${RMP_BASE_URL}/products/search?page=0&size=12&sort=relevance&vehicleSearch=false&compatibleProducts=false&q=${encodeURIComponent(clean)}&limit=30`;
+    },
+
+    // 3. Execução de busca no navegador com consulta direta via evaluate
+    performSearch: async ({ page, query, supplier }) => {
+        const cleanQuery = safeString(query).trim();
+        const searchUrl = `${RMP_BASE_URL}/products/search?page=0&size=12&sort=relevance&vehicleSearch=false&compatibleProducts=false&q=${encodeURIComponent(cleanQuery)}&limit=30`;
+
+        console.error(`[RMP performSearch] Navegando para ${searchUrl}`);
+        await page.goto(searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+        await page.waitForTimeout(1500);
+
+        // Se redirecionou para login, faz o login na hora
+        if (page.url().includes('sign-in') || page.url().includes('auth')) {
+            console.error('[RMP performSearch] Redirecionado para sign-in; realizando login...');
+            const user = supplier?.loginCredential || 'centroautomotivo0058@hotmail.com';
+            const pass = supplier?.password || 'Ren@n0058@';
+
+            const userLoc = page.locator('#username, input[formcontrolname="username"]').first();
+            const passLoc = page.locator('#password, input[formcontrolname="password"]').first();
+            await userLoc.fill(user).catch(() => {});
+            await passLoc.fill(pass).catch(() => {});
+            await page.click('button[type="submit"]').catch(() => {});
+
+            await page.waitForURL((url) => !url.href.includes('sign-in'), { timeout: 15000 }).catch(() => {});
+            await page.waitForTimeout(2000);
+            await page.goto(searchUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+            await page.waitForTimeout(2000);
+        }
+    },
+
+    // 4. Extração de itens (tenta via coletor API no contexto da página e fallback DOM)
+    extractItems: async ({ page, query }) => {
+        const cleanQuery = safeString(query).trim();
+
+        // Tentativa A: Consultar API pelo evaluate da página autenticada
+        const apiResult = await page.evaluate(async (q) => {
+            try {
+                let token = '';
+                const sessionRaw = localStorage.getItem('cockpit.ecomm.identity.session');
+                if (sessionRaw) {
+                    const sessionObj = JSON.parse(sessionRaw);
+                    token = sessionObj.accessToken;
+                }
+                if (!token) return null;
+
+                const url = `https://coletor.greal.com.br/api/v1/ecommerce/products/search?page=0&size=12&sort=relevance&vehicleSearch=false&compatibleProducts=false&q=${encodeURIComponent(q)}&limit=30`;
+                const res = await fetch(url, {
+                    headers: {
+                        'authorization': `Bearer ${token}`,
+                        'accept': 'application/json',
+                        'x-store-host': 'https://loja.rmp.com.br',
+                    },
+                });
+
+                if (!res.ok) return null;
+                const data = await res.json();
+                return data.items || [];
+            } catch (_) {
+                return null;
+            }
+        }, cleanQuery);
+
+        if (Array.isArray(apiResult) && apiResult.length > 0) {
+            console.error(`[RMP extractItems] Extraídos ${apiResult.length} itens via API nativa da página.`);
+            return mapApiItemsToNormalized(apiResult, cleanQuery);
+        }
+
+        // Tentativa B: Extrair via DOM da nova grade de produtos
+        console.error('[RMP extractItems] Tentando extração via DOM dos cards...');
+        const domItems = await page.evaluate((q) => {
+            const articles = Array.from(document.querySelectorAll('article.product-row, article[class*="product"], article'));
+            const results = [];
+
+            for (const art of articles) {
+                const text = String(art.innerText || '').trim();
+                if (!text || !text.includes('R$')) continue;
+
+                const priceMatch = text.match(/R\$\s*([0-9.]+,\d{2})/);
+                if (!priceMatch) continue;
+
+                const cleanPrice = parseFloat(priceMatch[1].replace(/\./g, '').replace(',', '.'));
+                if (!(cleanPrice > 0)) continue;
+
+                const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+                const title = lines[0] || '';
+
+                const codeMatch = text.match(/CÓD:\s*([A-Z0-9./_-]+)/i) || text.match(/C[o\u00f3]d(?:igo)?:\s*([A-Z0-9./_-]+)/i);
+                const brandMatch = text.match(/FABRICANTE:\s*([A-Z0-9 .&/-]+)/i);
+
+                const hasStockGoiania = /GOIÂNIA/i.test(text) && !/Indisponível/i.test(text);
+
+                results.push({
+                    nome: title,
+                    product: title,
+                    preco: cleanPrice,
+                    price: cleanPrice,
+                    codigo: codeMatch ? codeMatch[1].trim() : '',
+                    code: codeMatch ? codeMatch[1].trim() : '',
+                    marca: brandMatch ? brandMatch[1].trim() : '',
+                    brand: brandMatch ? brandMatch[1].trim() : '',
+                    estoque: hasStockGoiania ? 1 : 0,
+                    stock: hasStockGoiania ? 1 : 0,
+                    estoqueTexto: hasStockGoiania ? 'Disponível em Goiânia' : 'Sem estoque local',
+                    stockText: hasStockGoiania ? 'Disponível em Goiânia' : 'Sem estoque local',
+                    disponivel: hasStockGoiania || /Disponível/i.test(text),
+                    available: hasStockGoiania || /Disponível/i.test(text),
+                    textoCompleto: text,
+                    link: window.location.href,
+                });
+            }
+
+            return results;
+        }, cleanQuery);
+
+        console.error(`[RMP extractItems] Extraídos ${domItems.length} itens via DOM.`);
+        return domItems;
     },
 };
