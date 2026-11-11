@@ -53,7 +53,17 @@ export const Login = () => {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-logo">
-          <img src={themeLogo || '/logo.png'} alt="Centro Automotivo 0058" style={{ maxHeight: '90px', width: 'auto', objectFit: 'contain', margin: '0 auto 12px auto', display: 'block' }} />
+          <img
+            src={themeLogo || '/logo.png'}
+            alt="Centro Automotivo 0058"
+            referrerPolicy="no-referrer"
+            onError={(e) => {
+              if (!e.currentTarget.src.endsWith('/logo.png')) {
+                e.currentTarget.src = '/logo.png';
+              }
+            }}
+            style={{ maxHeight: '90px', width: 'auto', objectFit: 'contain', margin: '0 auto 12px auto', display: 'block' }}
+          />
           <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>Centro Automotivo 0058</h1>
         </div>
         {error && <div className="error-message">{error}</div>}

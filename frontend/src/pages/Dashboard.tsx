@@ -334,7 +334,18 @@ export const Dashboard = () => {
           <div className="sidebar-header">
             <div className="brand-mark">
               {(themeLogo || '/logo.png') ? (
-                <img src={themeLogo || "/logo.png"} alt="Centro Automotivo 0058" className="logo-image" style={{ maxHeight: "64px", width: "auto", objectFit: "contain" }} />
+                <img
+                  src={themeLogo || "/logo.png"}
+                  alt="Centro Automotivo 0058"
+                  className="logo-image"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    if (!e.currentTarget.src.endsWith('/logo.png')) {
+                      e.currentTarget.src = '/logo.png';
+                    }
+                  }}
+                  style={{ maxHeight: "64px", width: "auto", objectFit: "contain" }}
+                />
               ) : (
                 <div className="brand-fallback">
                   <span className="brand-kicker">Centro Automotivo</span>

@@ -2,12 +2,13 @@ const { app, BrowserWindow, dialog, session, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const net = require('net');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const http = require('http');
 
 let mainWindow = null;
 let backendProcess = null;
 let activeBackendPort = 5000;
+let isQuitting = false;
 const whatsappWindows = new Map();
 
 // Permitir autoplay de som de chamada sem interação prévia e evitar suspensão/congelamento em segundo plano
@@ -51,16 +52,58 @@ function log(msg) {
 // Garantir instância única
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
-    app.quit();
+    app.exit(0);
     process.exit(0);
 }
 
 app.on('second-instance', () => {
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
         if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
         mainWindow.focus();
+    } else if (!isQuitting) {
+        createWindow();
     }
 });
+
+function killProcessTreeSync(pid) {
+    if (!pid) return;
+    try {
+        if (process.platform === 'win32') {
+            execFileSync('taskkill', ['/pid', String(pid), '/f', '/t'], {
+                windowsHide: true,
+                stdio: 'ignore',
+                timeout: 4000,
+            });
+        } else {
+            process.kill(pid, 'SIGKILL');
+        }
+    } catch (_) {}
+}
+
+function getBackendPidFile() {
+    try {
+        return path.join(app.getPath('userData'), 'backend.pid');
+    } catch (_) {
+        return null;
+    }
+}
+
+function cleanupOrphanBackend() {
+    const pidFile = getBackendPidFile();
+    if (!pidFile) return;
+    try {
+        if (fs.existsSync(pidFile)) {
+            const raw = fs.readFileSync(pidFile, 'utf8').trim();
+            const oldPid = parseInt(raw, 10);
+            if (oldPid && oldPid !== process.pid) {
+                log(`[Electron] Encerrando backend órfão anterior (PID ${oldPid})...`);
+                killProcessTreeSync(oldPid);
+            }
+            fs.unlinkSync(pidFile);
+        }
+    } catch (_) {}
+}
 
 // Helper para encontrar porta livre
 function findFreePort(startPort) {
@@ -97,6 +140,7 @@ function startBackend() {
         } catch (_) {}
 
 
+        cleanupOrphanBackend();
         log('[Electron] Iniciando backend em: ' + scriptPath);
 
         // Garantir banco persistente e pré-populado em userData
@@ -147,7 +191,15 @@ function startBackend() {
             cwd: backendDir,
             env: spawnEnv,
             stdio: ['ignore', 'pipe', 'pipe'],
+            windowsHide: true,
         });
+
+        try {
+            const pidFile = getBackendPidFile();
+            if (pidFile && backendProcess.pid) {
+                fs.writeFileSync(pidFile, String(backendProcess.pid), 'utf8');
+            }
+        } catch (_) {}
 
         backendProcess.stdout.on('data', (data) => {
             const str = data.toString();
@@ -282,7 +334,19 @@ function createWindow() {
     });
 
     mainWindow.on('closed', () => {
+        isQuitting = true;
         mainWindow = null;
+        for (const [, win] of whatsappWindows.entries()) {
+            try {
+                if (win && !win.isDestroyed()) win.destroy();
+            } catch (_) {}
+        }
+        whatsappWindows.clear();
+        killBackend();
+        app.quit();
+        setTimeout(() => {
+            app.exit(0);
+        }, 400);
     });
 }
 
@@ -293,80 +357,142 @@ function generateWhatsappSignatureScript(cfg) {
     return `
 (function() {
   window.__ATTENDANT_SIGNATURE_CONFIG = ${JSON.stringify(cfg)};
-  if (window.__ATTENDANT_SIGNATURE_INSTALLED) return;
-  window.__ATTENDANT_SIGNATURE_INSTALLED = true;
+  if (window.__ATTENDANT_SIGNATURE_V2_INSTALLED) return;
+  window.__ATTENDANT_SIGNATURE_V2_INSTALLED = true;
+  window.__BYPASS_SIG_SEND = false;
+  window.__SIG_IN_PROGRESS = false;
 
   function getComposer() {
-    return document.querySelector('footer div[contenteditable="true"][role="textbox"]') ||
-           document.querySelector('div[contenteditable="true"][data-tab="10"]');
+    var selectors = [
+      '#main footer div[contenteditable="true"][role="textbox"]',
+      '#main footer div[contenteditable="true"][data-lexical-editor="true"]',
+      '#main footer div[contenteditable="true"]',
+      'footer div[contenteditable="true"][data-tab="10"]',
+      'div[contenteditable="true"][data-tab="10"]'
+    ];
+    for (var i = 0; i < selectors.length; i++) {
+      var el = document.querySelector(selectors[i]);
+      if (el && !el.closest('#side') && el.getAttribute('data-tab') !== '3') {
+        return el;
+      }
+    }
+    var lexicalAll = document.querySelectorAll('div[contenteditable="true"][data-lexical-editor="true"]');
+    for (var j = 0; j < lexicalAll.length; j++) {
+      var cand = lexicalAll[j];
+      if (!cand.closest('#side') && cand.getAttribute('data-tab') !== '3') {
+        return cand;
+      }
+    }
+    return null;
   }
 
-  function applySignature(composer) {
-    const config = window.__ATTENDANT_SIGNATURE_CONFIG;
-    if (!config || !config.enabled || !config.name || !config.name.trim()) return false;
-    
-    const name = config.name.trim();
-    const rawText = composer.innerText || composer.textContent || '';
-    const cleanText = rawText.replace(/\\u200B/g, '').trim();
-    if (!cleanText) return false;
+  function findSendButton(target) {
+    if (!target || !target.closest) return null;
+    return target.closest(
+      'button[aria-label="Enviar"], ' +
+      'button[aria-label="Send"], ' +
+      'button[aria-label*="Enviar" i], ' +
+      'button[data-tab="11"], ' +
+      'span[data-icon="send"], ' +
+      'span[data-icon="wds-ic-send-filled"]'
+    );
+  }
 
-    const prefix = '*[' + name + ']:* ';
-    const prefixCheck = '[' + name + ']:';
-    const suffix = '\\n\\n_~ Atendente ' + name + '_';
-    const suffixCheck = '~ Atendente ' + name;
+  function buildSignPlan(composer) {
+    var config = window.__ATTENDANT_SIGNATURE_CONFIG;
+    if (!config || !config.enabled || !config.name || !config.name.trim()) return null;
 
-    let newText = cleanText;
+    var name = config.name.trim();
+    var rawText = composer.innerText || composer.textContent || '';
+    var cleanText = rawText.replace(/\\u200B/g, '').trim();
+    if (!cleanText) return null;
+
+    var prefix = '*[' + name + ']:* ';
+    var prefixCheck = '[' + name + ']:';
+    var suffixCheck = '~ Atendente ' + name;
+
     if (config.format === 'suffix') {
-      if (cleanText.includes(suffixCheck)) return false;
-      newText = cleanText + suffix;
+      if (cleanText.indexOf(suffixCheck) !== -1) return null;
+      return { format: 'suffix', name: name, textToInsert: '_~ Atendente ' + name + '_' };
     } else {
-      if (cleanText.includes(prefixCheck) || cleanText.startsWith('*[')) return false;
-      newText = prefix + cleanText;
+      if (cleanText.indexOf(prefixCheck) !== -1 || cleanText.indexOf('*[') === 0) return null;
+      return { format: 'prefix', name: name, textToInsert: prefix };
     }
+  }
+
+  function triggerNativeSignAndSend(e, composer) {
+    if (window.__BYPASS_SIG_SEND) return;
+    if (window.__SIG_IN_PROGRESS) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      return;
+    }
+
+    var plan = buildSignPlan(composer);
+    if (!plan) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    window.__SIG_IN_PROGRESS = true;
+    setTimeout(function() { window.__SIG_IN_PROGRESS = false; }, 1500);
 
     try {
       composer.focus();
-      const sel = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(composer);
+      var sel = window.getSelection();
+      var range = document.createRange();
+      var walker = document.createTreeWalker(composer, NodeFilter.SHOW_TEXT, null);
+
+      if (plan.format === 'suffix') {
+        var lastText = null;
+        var n;
+        while ((n = walker.nextNode())) lastText = n;
+        if (lastText) {
+          range.setStart(lastText, lastText.length);
+          range.collapse(true);
+        } else {
+          range.selectNodeContents(composer);
+          range.collapse(false);
+        }
+      } else {
+        var firstText = walker.nextNode();
+        if (firstText) {
+          range.setStart(firstText, 0);
+          range.collapse(true);
+        } else {
+          range.selectNodeContents(composer);
+          range.collapse(true);
+        }
+      }
+
       sel.removeAllRanges();
       sel.addRange(range);
-      
-      const success = document.execCommand('insertText', false, newText);
-      if (!success) {
-        const dt = new DataTransfer();
-        dt.setData('text/plain', newText);
-        composer.dispatchEvent(new ClipboardEvent('paste', {
-          clipboardData: dt,
-          bubbles: true,
-          cancelable: true
-        }));
-      }
-      return true;
-    } catch (e) {
-      console.warn('[Signature] Error applying signature:', e);
-      return false;
-    }
+    } catch (_) {}
+
+    console.debug('__WA_SIGN_SEND__:' + JSON.stringify(plan));
   }
 
   window.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
-      const composer = getComposer();
+      var composer = getComposer();
       if (composer && (composer === e.target || composer.contains(e.target))) {
-        applySignature(composer);
+        triggerNativeSignAndSend(e, composer);
       }
     }
   }, true);
 
-  window.addEventListener('pointerdown', function(e) {
-    const sendBtn = e.target && e.target.closest && e.target.closest('button[aria-label*="Enviar" i], button span[data-icon="send"], span[data-icon="send"]');
-    if (sendBtn) {
-      const composer = getComposer();
-      if (composer) {
-        applySignature(composer);
+  ['pointerdown', 'mousedown', 'click'].forEach(function(evtName) {
+    window.addEventListener(evtName, function(e) {
+      var sendBtn = findSendButton(e.target);
+      if (sendBtn) {
+        var composer = getComposer();
+        if (composer) {
+          triggerNativeSignAndSend(e, composer);
+        }
       }
-    }
-  }, true);
+    }, true);
+  });
 })();
 `;
 }
@@ -426,6 +552,56 @@ ipcMain.handle('open-whatsapp-window', (event, { channelKey, label, signatureNam
 
     win.webContents.on('dom-ready', injectSignature);
     win.webContents.on('did-finish-load', injectSignature);
+    win.webContents.on('did-navigate-in-page', injectSignature);
+
+    win.webContents.on('console-message', async (event, level, message) => {
+        const msg = String(message || '');
+        if (!msg.startsWith('__WA_SIGN_SEND__:')) return;
+        try {
+            const plan = JSON.parse(msg.slice('__WA_SIGN_SEND__:'.length));
+            if (win.isDestroyed()) return;
+            win.webContents.focus();
+
+            if (plan.format === 'suffix') {
+                win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return', modifiers: ['shift'] });
+                win.webContents.sendInputEvent({ type: 'char', keyCode: 'Return', modifiers: ['shift'] });
+                win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return', modifiers: ['shift'] });
+                win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return', modifiers: ['shift'] });
+                win.webContents.sendInputEvent({ type: 'char', keyCode: 'Return', modifiers: ['shift'] });
+                win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return', modifiers: ['shift'] });
+                await new Promise((r) => setTimeout(r, 25));
+            }
+
+            await win.webContents.insertText(plan.textToInsert);
+            await new Promise((r) => setTimeout(r, 75));
+
+            if (!win.isDestroyed()) {
+                await win.webContents.executeJavaScript(`
+                    window.__BYPASS_SIG_SEND = true;
+                    window.__SIG_IN_PROGRESS = false;
+                    (function() {
+                        var c = document.querySelector('#main footer div[contenteditable="true"]') ||
+                                document.querySelector('div[contenteditable="true"][data-lexical-editor="true"]:not([data-tab="3"])');
+                        if (c) c.focus();
+                    })();
+                `).catch(() => {});
+
+                win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
+                win.webContents.sendInputEvent({ type: 'char', keyCode: 'Return' });
+                win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+
+                setTimeout(() => {
+                    if (!win.isDestroyed()) {
+                        win.webContents.executeJavaScript('window.__BYPASS_SIG_SEND = false;').catch(() => {});
+                    }
+                }, 200);
+            }
+        } catch (_) {
+            if (!win.isDestroyed()) {
+                win.webContents.executeJavaScript('window.__SIG_IN_PROGRESS = false; window.__BYPASS_SIG_SEND = false;').catch(() => {});
+            }
+        }
+    });
 
     win.loadURL('https://web.whatsapp.com', { userAgent: WHATSAPP_USER_AGENT });
 
@@ -455,16 +631,28 @@ ipcMain.handle('update-whatsapp-signature', (event, { channelKey, signatureName,
 
 function killBackend() {
     if (backendProcess) {
-        console.log('[Electron] Encerrando backend...');
-        try {
-            if (process.platform === 'win32') {
-                spawn('taskkill', ['/pid', String(backendProcess.pid), '/f', '/t']);
-            } else {
-                backendProcess.kill('SIGTERM');
-            }
-        } catch (_) {}
+        const pid = backendProcess.pid;
         backendProcess = null;
+        log(`[Electron] Encerrando backend e árvore de processos (PID ${pid})...`);
+        killProcessTreeSync(pid);
     }
+    try {
+        const pidFile = getBackendPidFile();
+        if (pidFile && fs.existsSync(pidFile)) {
+            const raw = fs.readFileSync(pidFile, 'utf8').trim();
+            const filePid = parseInt(raw, 10);
+            if (filePid && filePid !== process.pid) {
+                killProcessTreeSync(filePid);
+            }
+            fs.unlinkSync(pidFile);
+        }
+    } catch (_) {}
+    try {
+        if (logStream) {
+            logStream.end();
+            logStream = null;
+        }
+    } catch (_) {}
 }
 
 app.on('ready', async () => {
@@ -476,16 +664,25 @@ app.on('ready', async () => {
             'Erro ao Iniciar o Sistema',
             `Não foi possível iniciar o servidor local:\n\n${err.message}`
         );
+        killBackend();
         app.quit();
     }
 });
 
 app.on('window-all-closed', () => {
+    isQuitting = true;
     killBackend();
     app.quit();
+    setTimeout(() => app.exit(0), 400);
 });
 
 app.on('before-quit', () => {
+    isQuitting = true;
+    killBackend();
+});
+
+app.on('will-quit', () => {
+    isQuitting = true;
     killBackend();
 });
 

@@ -10,7 +10,12 @@ export class ConfigService {
 
         if (!config) {
             config = await prisma.systemConfig.create({
-                data: { id: 'system_settings' }
+                data: { id: 'system_settings', themeLogo: '/logo.png' }
+            });
+        } else if (!config.themeLogo || config.themeLogo.includes('i.imgur.com/VpiXTOC.png')) {
+            config = await prisma.systemConfig.update({
+                where: { id: 'system_settings' },
+                data: { themeLogo: '/logo.png' }
             });
         }
 

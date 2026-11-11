@@ -85,9 +85,10 @@ export const applyAppearanceTheme = (
     storageKeys.themeBackground,
     defaultThemeAppearance.themeBackground
   );
-  const themeLogo = Object.prototype.hasOwnProperty.call(appearance, 'themeLogo')
+  const rawLogo = Object.prototype.hasOwnProperty.call(appearance, 'themeLogo')
     ? appearance.themeLogo || ''
     : localStorage.getItem(storageKeys.themeLogo) || '';
+  const themeLogo = !rawLogo || rawLogo.includes('i.imgur.com/VpiXTOC.png') ? defaultThemeAppearance.themeLogo : rawLogo;
 
   const root = document.documentElement;
   root.style.setProperty('--primary-color', themeColor);

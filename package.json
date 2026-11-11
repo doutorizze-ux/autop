@@ -48,7 +48,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Centro Automotivo 0058"
+      "shortcutName": "Centro Automotivo 0058",
+      "include": "build/installer.nsh"
     }
   }
 }
