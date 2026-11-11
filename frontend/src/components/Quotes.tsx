@@ -144,7 +144,7 @@ const formatCurrencyValue = (value?: string | number) => {
 };
 
 const hasUsablePrice = (result?: QuoteResult | null) =>
-    !!result && !result.error && Number.isFinite(parsePriceValue(result.price));
+    !!result && !result.error && Number.isFinite(parsePriceValue(result.price)) && parsePriceValue(result.price) > 0;
 
 const hasManualWhatsappQuote = (result?: QuoteResult | null) =>
     !!result?.whatsappStatus && hasUsablePrice(result);
@@ -152,12 +152,36 @@ const hasManualWhatsappQuote = (result?: QuoteResult | null) =>
 const isComparableOffer = (result?: QuoteResult | null) =>
     hasUsablePrice(result) && (!result?.whatsappStatus || hasManualWhatsappQuote(result));
 
+const isResultInStock = (result?: QuoteResult | null): boolean => {
+    if (!result || result.error) return false;
+    const stockNum = Number(result.stock);
+    if (!Number.isNaN(stockNum) && stockNum > 0) return true;
+
+    const text = String(result.stockText || '').trim().toLowerCase();
+    if (!text) {
+        return !Number.isNaN(stockNum) && stockNum > 0;
+    }
+    // Expressões explícitas de indisponibilidade ou estoque zero
+    if (
+        /sem estoque|indispon[íi]vel|esgotad|avise-me|sob encomenda|consulte\s*filial|saldo:\s*0\b|estoque:\s*0\b|\b0\s*(un|pç|pc|itens|item)?\b/i.test(text)
+    ) {
+        return false;
+    }
+    // Expressões de pronta entrega ou quantidade positiva
+    if (/\b[1-9]\d*\b/.test(text) || /pronta\s*entrega|dispon[íi]vel|em estoque/i.test(text)) {
+        return true;
+    }
+    return false;
+};
+
 const formatResultPrice = (result?: QuoteResult | null) => {
     if (!result) return '---';
     if (hasUsablePrice(result)) return `R$ ${formatCurrencyValue(result.price)}`;
     if (result.whatsappStatus === 'queued') return 'Aguardando resposta';
     if (result.whatsappStatus === 'pending') return 'Enviando WhatsApp';
     if (result.whatsappStatus === 'failed') return 'Falha no envio';
+    if (result.stockText && /indispon[íi]vel|sem estoque/i.test(result.stockText)) return 'Indisponível';
+    if (parsePriceValue(result.price) === 0) return 'Indisponível';
     return '---';
 };
 
@@ -1083,25 +1107,31 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                                     const aExact = normalizeCodeValue(a.code) === normalizedQueryCode;
                                     const bExact = normalizeCodeValue(b.code) === normalizedQueryCode;
                                     if (aExact !== bExact) return aExact ? -1 : 1;
-                                    const aHasStock = Number(a.stock || 0) > 0 || (!!a.stockText && !/sem estoque|indisponivel/i.test(a.stockText));
-                                    const bHasStock = Number(b.stock || 0) > 0 || (!!b.stockText && !/sem estoque|indisponivel/i.test(b.stockText));
+                                    const aHasStock = isResultInStock(a);
+                                    const bHasStock = isResultInStock(b);
                                     if (aHasStock !== bHasStock) return aHasStock ? -1 : 1;
                                     return parsePriceValue(a.price) - parsePriceValue(b.price);
                                 })[0] || null;
+
+                            const bestResultHasStock = isResultInStock(bestResult);
 
                             return (
                                 <div key={item.query} className="quote-item-card">
                                     <div className="quote-item-header">
                                         <div className="part-cell-main">{item.query}</div>
                                         {bestResult && (
-                                            <div className="best-offer-badge">
+                                            <div className={`best-offer-badge ${bestResultHasStock ? 'in-stock' : 'no-stock'}`}>
                                                 {bestResult.whatsappStatus
                                                     ? hasManualWhatsappQuote(bestResult)
                                                         ? 'Melhor valor WhatsApp'
                                                         : 'Solicitação WhatsApp'
-                                                    : hasExactMatch
-                                                        ? 'Melhor oferta exata atual'
-                                                        : 'Melhor similar atual'}: {bestResult.provider} • {formatResultPrice(bestResult)}
+                                                    : bestResultHasStock
+                                                        ? hasExactMatch
+                                                            ? 'Melhor pronta entrega (código exato)'
+                                                            : 'Melhor pronta entrega (similar)'
+                                                        : hasExactMatch
+                                                            ? 'Menor preço de catálogo (sem estoque)'
+                                                            : 'Menor similar de catálogo (sem estoque)'}: {bestResult.provider} • {formatResultPrice(bestResult)}
                                             </div>
                                         )}
                                     </div>
@@ -1186,8 +1216,8 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
 
                                                         <div className="supplier-card-tags">
                                                             {isBestOffer && (
-                                                                <div className="supplier-card-badge">
-                                                                    Menor valor real
+                                                                <div className={`supplier-card-badge ${bestResultHasStock ? 'in-stock' : 'no-stock'}`}>
+                                                                    {bestResultHasStock ? 'Menor valor real (em estoque)' : 'Menor preço de catálogo'}
                                                                 </div>
                                                             )}
                                                             {!supplierResult.error && (
@@ -1724,6 +1754,11 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                     font-size: 0.82rem;
                     font-weight: 700;
                 }
+                .best-offer-badge.no-stock {
+                    background: rgba(245, 158, 11, 0.12);
+                    color: #b45309;
+                    border-color: rgba(245, 158, 11, 0.22);
+                }
                 .supplier-view-card {
                     border: 1px solid var(--border-color);
                     border-radius: 10px;
@@ -1923,6 +1958,11 @@ export const Quotes = ({ openHistoryId }: QuotesProps) => {
                     font-weight: 800;
                     text-transform: uppercase;
                     letter-spacing: 0.04em;
+                }
+                .supplier-card-badge.no-stock {
+                    background: rgba(245, 158, 11, 0.12);
+                    color: #b45309;
+                    border-color: rgba(245, 158, 11, 0.22);
                 }
                 .supplier-card-match {
                     display: inline-flex;

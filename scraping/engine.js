@@ -797,7 +797,10 @@ function buildBrowserPayload(items, supplier, query) {
             variantKey: buildVariantKey(item.nome || item.name || item.product, item.aplicacao || item.application),
         };
     }).filter((item) => {
-        if (!(item.price > 0)) return false;
+        const hasZeroPriceWithStockSignal = (item.price === 0 || !item.price) && 
+            (item.available === false || /indispon[íi]vel|sem estoque|avise-me/i.test(item.stockText));
+        
+        if (!(item.price > 0) && !hasZeroPriceWithStockSignal) return false;
         if (isGenericProductName(item.product, supplier.name)) return false;
         if (query && !matchesQueryCode(query, item)) return false;
         return true;
@@ -1529,8 +1532,13 @@ async function scrapeProductUnsafe(supplier, productName, options = {}) {
             console.error(`[DEBUG ${supplier.name}] buildBrowserPayload retornou ${finalItems.length} itens`);
 
             if (!finalItems.length && hasVisibleItemsWithoutPrice(items)) {
-                if (supplier.needsLogin && (supplier.password || supplier.loginCredential) && !didLoginThisRun) {
-                    console.error(`[WARN] ${supplier.name} exibiu itens sem preco. Sessao expirou! Tentando re-login automatico imediato...`);
+                const isConfirmedLoggedIn = await page.evaluate(() => {
+                    const txt = document.body.innerText || '';
+                    return txt.includes('Sair') || txt.includes('Minhas Listas') || txt.includes('OFICINA DO') || window.location.href.includes('/compras');
+                }).catch(() => false);
+
+                if (!isConfirmedLoggedIn && supplier.needsLogin && (supplier.password || supplier.loginCredential) && !didLoginThisRun) {
+                    console.error(`[WARN] ${supplier.name} exibiu itens sem preco e sessão NÃO está ativa. Tentando re-login automatico imediato...`);
                     await page.goto(loginUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
                     await page.waitForTimeout(1500);
                     await dismissTransientUi(page);

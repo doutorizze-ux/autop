@@ -220,14 +220,28 @@ export const WhatsAppWebTab: React.FC<WhatsAppWebTabProps> = ({
     const node = webviewRef.current;
     if (!node) return;
 
+    let safetyTimer: any = setTimeout(() => {
+      setIsLoading(false);
+    }, 3500);
+
     const onFinish = () => {
       setIsLoading(false);
       isDomReadyRef.current = true;
+      if (safetyTimer) clearTimeout(safetyTimer);
       syncSignature();
     };
-    const onStart = () => setIsLoading(true);
+
+    const onStart = () => {
+      // Só mostra loading na carga inicial se a página ainda não estiver pronta
+      if (!isDomReadyRef.current) {
+        setIsLoading(true);
+      }
+    };
+
     const onDomReady = () => {
+      setIsLoading(false);
       isDomReadyRef.current = true;
+      if (safetyTimer) clearTimeout(safetyTimer);
       syncSignature();
     };
 
@@ -236,6 +250,7 @@ export const WhatsAppWebTab: React.FC<WhatsAppWebTabProps> = ({
     node.addEventListener('dom-ready', onDomReady);
 
     return () => {
+      if (safetyTimer) clearTimeout(safetyTimer);
       node.removeEventListener('did-finish-load', onFinish);
       node.removeEventListener('did-start-loading', onStart);
       node.removeEventListener('dom-ready', onDomReady);

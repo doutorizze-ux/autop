@@ -140,13 +140,13 @@ module.exports = {
                 if (!fullTitle) continue;
 
                 const priceMatch = rawText.match(/R\$\s?[0-9.,]+/);
-                const isIndisponivel = rawText.toLowerCase().includes('indisponível') || rawText.toLowerCase().includes('avise-me');
+                const isIndisponivel = rawText.toLowerCase().includes('indisponível') || rawText.toLowerCase().includes('avise-me') || rawText.toLowerCase().includes('sem estoque');
                 
                 // Se não tem preço nem texto válido, pula; se tem preço ou aviso de indisponível, mantém
                 const preco = priceMatch ? priceMatch[0] : (isIndisponivel ? 'R$ 0,00' : '');
-                if (!preco) continue;
+                if (!preco && !isIndisponivel) continue;
 
-                // Match code and description e.g. "W7122 - FILTRO DE OLEO" or "W712/16 - FILTRO"
+                // Match code and description e.g. "HG41172 - AMORTECEDOR DE SUSPENSAO"
                 const parts = fullTitle.split('-').map((s) => s.trim());
                 const codigo = parts[0] || '';
 
@@ -154,20 +154,26 @@ module.exports = {
                 if (seen.has(key)) continue;
                 seen.add(key);
 
-                let marca = '';
-                if (/MANN/i.test(rawText)) marca = 'MANN-FILTER';
-                else if (/WEGA/i.test(rawText)) marca = 'WEGA';
-                else if (/FRAM/i.test(rawText)) marca = 'FRAM';
-                else if (/TECFIL/i.test(rawText)) marca = 'TECFIL';
-                else if (/SEINECA/i.test(rawText)) marca = 'SEINECA';
+                const marcaEl = el.querySelector('.nome-marca');
+                let marca = (marcaEl ? marcaEl.innerText : '').trim();
+                if (!marca) {
+                    if (/MANN/i.test(rawText)) marca = 'MANN-FILTER';
+                    else if (/WEGA/i.test(rawText)) marca = 'WEGA';
+                    else if (/FRAM/i.test(rawText)) marca = 'FRAM';
+                    else if (/TECFIL/i.test(rawText)) marca = 'TECFIL';
+                    else if (/SEINECA/i.test(rawText)) marca = 'SEINECA';
+                    else if (/AFFINIA/i.test(rawText)) marca = 'AFFINIA';
+                    else if (/NAKATA/i.test(rawText)) marca = 'NAKATA';
+                    else if (/COFAP/i.test(rawText)) marca = 'COFAP';
+                }
 
                 results.push({
                     codigo,
                     nome: fullTitle,
-                    preco,
+                    preco: preco || 'R$ 0,00',
                     marca,
                     estoque: isIndisponivel ? 0 : 10,
-                    estoqueTexto: isIndisponivel ? 'Sem estoque' : 'Em estoque',
+                    estoqueTexto: isIndisponivel ? 'Indisponível' : (preco ? 'Em estoque' : 'Sem estoque'),
                     disponivel: !isIndisponivel,
                     available: !isIndisponivel,
                     link: window.location.href,
