@@ -30,6 +30,41 @@ function getStoredAccessToken() {
     return '';
 }
 
+function isStrictCodeQuery(query) {
+    const clean = String(query || '').trim();
+    return /^[A-Za-z0-9./_-]{2,}$/.test(clean) && !/\s/.test(clean);
+}
+
+function matchesQueryCode(query, item) {
+    if (!isStrictCodeQuery(query)) {
+        return true;
+    }
+
+    const cleanQuery = String(query).replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (!cleanQuery) return true;
+
+    const itemCode = String(item.code || item.codigo || item.productGestCode || item.productCode || item.sku || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (itemCode) {
+        if (itemCode === cleanQuery || itemCode.startsWith(cleanQuery) || cleanQuery.startsWith(itemCode)) {
+            return true;
+        }
+    }
+
+    const fullText = [
+        item.nome,
+        item.name,
+        item.product,
+        item.description,
+        item.application,
+        item.applicationSummary,
+        item.textoCompleto,
+    ].filter(Boolean).join(' ');
+
+    const cleanText = fullText.replace(/[^A-Za-z0-9]/g, ' ').toUpperCase();
+    const tokens = cleanText.split(/\s+/).filter(Boolean);
+    return tokens.includes(cleanQuery);
+}
+
 function mapApiItemsToNormalized(rawItems, query) {
     if (!Array.isArray(rawItems)) return [];
 
@@ -63,7 +98,11 @@ function mapApiItemsToNormalized(rawItems, query) {
             link: item.sku ? `${RMP_BASE_URL}/product/${item.sku}` : `${RMP_BASE_URL}/products/search?q=${encodeURIComponent(query)}`,
             textoCompleto: `${description} ${code} ${manufacturer} ${application}`,
         };
-    }).filter((it) => it.preco > 0);
+    }).filter((it) => {
+        if (!(it.preco > 0)) return false;
+        if (query && !matchesQueryCode(query, it)) return false;
+        return true;
+    });
 }
 
 module.exports = {

@@ -1,5 +1,16 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { PhoneCall, ExternalLink, RotateCw, ShieldCheck, MessageSquare, Monitor, Globe } from 'lucide-react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import {
+  PhoneCall,
+  ExternalLink,
+  RotateCw,
+  ShieldCheck,
+  MessageSquare,
+  Monitor,
+  Globe,
+  UserCheck,
+  Sparkles,
+} from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface WhatsAppWebTabProps {
   channelKey: string;
@@ -12,14 +23,171 @@ export const WhatsAppWebTab: React.FC<WhatsAppWebTabProps> = ({
   channelLabel,
   description,
 }) => {
-  const isElectron = typeof window !== 'undefined' && (
-    Boolean((window as any).electronAPI) ||
-    navigator.userAgent.includes('Electron')
-  );
+  const { user } = useAuth();
+  const isElectron =
+    typeof window !== 'undefined' &&
+    (Boolean((window as any).electronAPI) || navigator.userAgent.includes('Electron'));
 
   const safePartition = `persist:whatsapp_${channelKey.replace(/-/g, '_')}`;
   const webviewRef = useRef<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Assinatura do atendente local (armazenada por máquina/usuário)
+  const [signatureName, setSignatureName] = useState<string>(() => {
+    return (
+      localStorage.getItem(`wa_sig_name_${channelKey}`) ||
+      localStorage.getItem('wa_sig_name_global') ||
+      ''
+    );
+  });
+
+  const [signatureEnabled, setSignatureEnabled] = useState<boolean>(() => {
+    const val = localStorage.getItem(`wa_sig_enabled_${channelKey}`);
+    return val === null ? true : val === 'true';
+  });
+
+  const [signatureFormat, setSignatureFormat] = useState<'prefix' | 'suffix'>(() => {
+    return (localStorage.getItem('wa_sig_format') as 'prefix' | 'suffix') || 'prefix';
+  });
+
+  // Preenche com o nome do usuário logado se ainda não tiver configurado
+  useEffect(() => {
+    if (!signatureName && user?.name) {
+      setSignatureName(user.name);
+      localStorage.setItem(`wa_sig_name_${channelKey}`, user.name);
+      localStorage.setItem('wa_sig_name_global', user.name);
+    }
+  }, [user, signatureName, channelKey]);
+
+  // Gerador do script que intercepta Enter e Enviar no WhatsApp Web
+  const getSignatureInjectionCode = useCallback(
+    (cfg: { name: string; enabled: boolean; format: 'prefix' | 'suffix' }) => {
+      return `
+(function() {
+  window.__ATTENDANT_SIGNATURE_CONFIG = ${JSON.stringify(cfg)};
+  if (window.__ATTENDANT_SIGNATURE_INSTALLED) return;
+  window.__ATTENDANT_SIGNATURE_INSTALLED = true;
+
+  function getComposer() {
+    return document.querySelector('footer div[contenteditable="true"][role="textbox"]') ||
+           document.querySelector('div[contenteditable="true"][data-tab="10"]');
+  }
+
+  function applySignature(composer) {
+    const config = window.__ATTENDANT_SIGNATURE_CONFIG;
+    if (!config || !config.enabled || !config.name || !config.name.trim()) return false;
+    
+    const name = config.name.trim();
+    const rawText = composer.innerText || composer.textContent || '';
+    const cleanText = rawText.replace(/\\u200B/g, '').trim();
+    if (!cleanText) return false;
+
+    const prefix = '*[' + name + ']:* ';
+    const prefixCheck = '[' + name + ']:';
+    const suffix = '\\n\\n_~ Atendente ' + name + '_';
+    const suffixCheck = '~ Atendente ' + name;
+
+    let newText = cleanText;
+    if (config.format === 'suffix') {
+      if (cleanText.includes(suffixCheck)) return false;
+      newText = cleanText + suffix;
+    } else {
+      if (cleanText.includes(prefixCheck) || cleanText.startsWith('*[')) return false;
+      newText = prefix + cleanText;
+    }
+
+    try {
+      composer.focus();
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(composer);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      
+      const success = document.execCommand('insertText', false, newText);
+      if (!success) {
+        const dt = new DataTransfer();
+        dt.setData('text/plain', newText);
+        composer.dispatchEvent(new ClipboardEvent('paste', {
+          clipboardData: dt,
+          bubbles: true,
+          cancelable: true
+        }));
+      }
+      return true;
+    } catch (e) {
+      console.warn('[Signature] Falha ao assinar:', e);
+      return false;
+    }
+  }
+
+  window.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
+      const composer = getComposer();
+      if (composer && (composer === e.target || composer.contains(e.target))) {
+        applySignature(composer);
+      }
+    }
+  }, true);
+
+  window.addEventListener('pointerdown', function(e) {
+    const sendBtn = e.target && e.target.closest && e.target.closest('button[aria-label*="Enviar" i], button span[data-icon="send"], span[data-icon="send"]');
+    if (sendBtn) {
+      const composer = getComposer();
+      if (composer) {
+        applySignature(composer);
+      }
+    }
+  }, true);
+})();
+`;
+    },
+    []
+  );
+
+  const syncSignature = useCallback(() => {
+    const cfg = {
+      name: signatureName.trim(),
+      enabled: signatureEnabled,
+      format: signatureFormat,
+    };
+
+    if (webviewRef.current && typeof webviewRef.current.executeJavaScript === 'function') {
+      webviewRef.current.executeJavaScript(getSignatureInjectionCode(cfg)).catch(() => {});
+    }
+
+    const electron = (window as any).electronAPI;
+    if (electron?.updateWhatsappSignature) {
+      electron.updateWhatsappSignature(channelKey, {
+        signatureName: signatureName.trim(),
+        signatureEnabled,
+        signatureFormat,
+      });
+    }
+  }, [channelKey, signatureName, signatureEnabled, signatureFormat, getSignatureInjectionCode]);
+
+  useEffect(() => {
+    syncSignature();
+  }, [syncSignature]);
+
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setSignatureName(val);
+    localStorage.setItem(`wa_sig_name_${channelKey}`, val);
+    localStorage.setItem('wa_sig_name_global', val);
+  };
+
+  const handleToggleEnabled = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.checked;
+    setSignatureEnabled(val);
+    localStorage.setItem(`wa_sig_enabled_${channelKey}`, String(val));
+  };
+
+  const handleFormatChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value as 'prefix' | 'suffix';
+    setSignatureFormat(val);
+    localStorage.setItem('wa_sig_format', val);
+  };
 
   const handleReload = () => {
     if (webviewRef.current && typeof webviewRef.current.reload === 'function') {
@@ -31,7 +199,11 @@ export const WhatsAppWebTab: React.FC<WhatsAppWebTabProps> = ({
   const handleOpenWindow = () => {
     const electron = (window as any).electronAPI;
     if (electron && typeof electron.openWhatsappWindow === 'function') {
-      electron.openWhatsappWindow(channelKey, channelLabel);
+      electron.openWhatsappWindow(channelKey, channelLabel, {
+        signatureName: signatureName.trim(),
+        signatureEnabled,
+        signatureFormat,
+      });
     } else {
       window.open('https://web.whatsapp.com', '_blank');
     }
@@ -41,17 +213,32 @@ export const WhatsAppWebTab: React.FC<WhatsAppWebTabProps> = ({
     const node = webviewRef.current;
     if (!node) return;
 
-    const onFinish = () => setIsLoading(false);
+    const onFinish = () => {
+      setIsLoading(false);
+      syncSignature();
+    };
     const onStart = () => setIsLoading(true);
+    const onDomReady = () => {
+      syncSignature();
+    };
 
     node.addEventListener('did-finish-load', onFinish);
     node.addEventListener('did-start-loading', onStart);
+    node.addEventListener('dom-ready', onDomReady);
 
     return () => {
       node.removeEventListener('did-finish-load', onFinish);
       node.removeEventListener('did-start-loading', onStart);
+      node.removeEventListener('dom-ready', onDomReady);
     };
-  }, [channelKey]);
+  }, [channelKey, syncSignature]);
+
+  // Preview da mensagem
+  const sampleName = signatureName.trim() || 'Atendente';
+  const previewText =
+    signatureFormat === 'prefix'
+      ? `*[${sampleName}]:* Olá! Como posso te ajudar hoje?`
+      : `Olá! Como posso te ajudar hoje?\n\n_~ Atendente ${sampleName}_`;
 
   return (
     <div className="whatsapp-web-container">
@@ -89,6 +276,61 @@ export const WhatsAppWebTab: React.FC<WhatsAppWebTabProps> = ({
             <ExternalLink size={15} />
             Destacar em Janela Separada
           </button>
+        </div>
+      </div>
+
+      {/* Barra de Assinatura Automática do Atendente */}
+      <div className="whatsapp-signature-bar">
+        <div className="whatsapp-signature-left">
+          <div className="signature-icon-badge">
+            <UserCheck size={18} />
+          </div>
+          <div className="signature-fields">
+            <div className="signature-input-group">
+              <label htmlFor={`sig-name-${channelKey}`}>Colaborador(a):</label>
+              <input
+                id={`sig-name-${channelKey}`}
+                type="text"
+                className="signature-name-input"
+                value={signatureName}
+                onChange={handleNameChange}
+                placeholder="Seu nome (ex: Lucas, Mariana...)"
+                maxLength={30}
+              />
+            </div>
+
+            <div className="signature-select-group">
+              <label htmlFor={`sig-format-${channelKey}`}>Estilo:</label>
+              <select
+                id={`sig-format-${channelKey}`}
+                className="signature-format-select"
+                value={signatureFormat}
+                onChange={handleFormatChange}
+              >
+                <option value="prefix">Prefixo (*[Nome]:* Mensagem)</option>
+                <option value="suffix">Sufixo (Mensagem ~ Atendente Nome)</option>
+              </select>
+            </div>
+
+            <label className="signature-toggle-label">
+              <input
+                type="checkbox"
+                checked={signatureEnabled}
+                onChange={handleToggleEnabled}
+              />
+              <span>Assinar mensagens automaticamente</span>
+            </label>
+          </div>
+        </div>
+
+        <div className="whatsapp-signature-preview-box">
+          <span className="preview-label">
+            <Sparkles size={12} />
+            Como o cliente vê:
+          </span>
+          <div className={`preview-bubble ${!signatureEnabled ? 'disabled' : ''}`}>
+            {signatureEnabled ? previewText : 'Olá! Como posso te ajudar hoje? (Sem assinatura)'}
+          </div>
         </div>
       </div>
 
@@ -143,7 +385,7 @@ export const WhatsAppWebTab: React.FC<WhatsAppWebTabProps> = ({
               </div>
               <div className="whatsapp-browser-tip-item">
                 <Monitor size={18} className="tip-icon" />
-                <span><strong>No App Desktop (.exe):</strong> O WhatsApp Web roda 100% integrado diretamente dentro do sistema com sessões permanentes e chamadas de voz.</span>
+                <span><strong>No App Desktop (.exe):</strong> O WhatsApp Web roda 100% integrado diretamente dentro do sistema com sessões permanentes, chamadas de voz e assinatura automática de cada atendente.</span>
               </div>
             </div>
           </div>
@@ -153,7 +395,7 @@ export const WhatsAppWebTab: React.FC<WhatsAppWebTabProps> = ({
       <div className="whatsapp-web-footer-hint">
         <ShieldCheck size={14} />
         <span>
-          Sessão persistente e protegida. Só precisa escanear o QR Code uma vez. Chamadas com áudio e microfone liberados.
+          Sessão persistente e protegida. Só precisa escanear o QR Code uma vez. Chamadas liberadas e cada colaborador envia com a sua própria assinatura!
         </span>
       </div>
     </div>

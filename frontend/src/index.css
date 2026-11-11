@@ -1302,6 +1302,139 @@ table {
   border-color: var(--primary-hover);
 }
 
+/* WhatsApp Attendant Signature Bar */
+.whatsapp-signature-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.65rem 1.25rem;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
+.whatsapp-signature-left {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex: 1;
+  min-width: 320px;
+}
+
+.signature-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background: #e0f2fe;
+  color: #0284c7;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.signature-fields {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.signature-input-group,
+.signature-select-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.signature-name-input {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--text-color);
+  outline: none;
+  width: 160px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.signature-name-input:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+}
+
+.signature-format-select {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.82rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--text-color);
+  outline: none;
+  cursor: pointer;
+}
+
+.signature-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  color: var(--text-color);
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+}
+
+.signature-toggle-label input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: #10b981;
+}
+
+.whatsapp-signature-preview-box {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.preview-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+}
+
+.preview-bubble {
+  background: #dcf8c6;
+  color: #111827;
+  padding: 0.3rem 0.65rem;
+  border-radius: 6px;
+  font-family: monospace, sans-serif;
+  font-size: 0.8rem;
+  max-width: 360px;
+  white-space: pre-wrap;
+  border: 1px solid #bbf7d0;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+
+.preview-bubble.disabled {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #94a3b8;
+  font-style: italic;
+}
+
 .whatsapp-web-frame-wrapper {
   flex: 1;
   width: 100%;

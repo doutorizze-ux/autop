@@ -730,7 +730,44 @@ async function performSearch(page, supplier, query, strategy = {}) {
     }
 }
 
-function buildBrowserPayload(items, supplier) {
+function isStrictCodeQuery(query) {
+    const clean = String(query || '').trim();
+    return /^[A-Za-z0-9./_-]{2,}$/.test(clean) && !/\s/.test(clean);
+}
+
+function matchesQueryCode(query, item) {
+    if (!isStrictCodeQuery(query)) {
+        return true;
+    }
+
+    const cleanQuery = String(query).replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (!cleanQuery) return true;
+
+    const itemCode = String(item.code || item.codigo || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (itemCode) {
+        if (itemCode === cleanQuery || itemCode.startsWith(cleanQuery) || cleanQuery.startsWith(itemCode)) {
+            return true;
+        }
+    }
+
+    const fullText = [
+        item.product,
+        item.nome,
+        item.name,
+        item.application,
+        item.aplicacao,
+        item.brand,
+        item.marca,
+        item.textoCompleto,
+        item.fullText,
+    ].filter(Boolean).join(' ');
+
+    const cleanText = fullText.replace(/[^A-Za-z0-9]/g, ' ').toUpperCase();
+    const tokens = cleanText.split(/\s+/).filter(Boolean);
+    return tokens.includes(cleanQuery);
+}
+
+function buildBrowserPayload(items, supplier, query) {
     const mappedItems = items.map((item) => {
         const stockText = safeString(item.estoqueTexto || item.stockText);
         const rawText = [
@@ -742,6 +779,9 @@ function buildBrowserPayload(items, supplier) {
         ].map(safeString).filter(Boolean).join(' ');
         const unavailable = item.available === false || item.disponivel === false || hasUnavailableSignal(rawText);
         const product = safeString(item.nome || item.name || item.product);
+        const stockVal = parseStockValue(item.estoque || item.stock, stockText);
+        const finalStock = unavailable ? 0 : stockVal;
+        const finalStockText = unavailable ? (stockText || 'Sem estoque') : (stockText || `${finalStock} un.`);
 
         return {
             provider: safeString(item.provider || supplier.name),
@@ -752,11 +792,16 @@ function buildBrowserPayload(items, supplier) {
             code: safeString(item.codigo || item.code),
             brand: safeString(item.marca || item.brand),
             application: safeString(item.aplicacao || item.application),
-            stock: parseStockValue(item.estoque || item.stock, stockText),
-            stockText,
+            stock: finalStock,
+            stockText: finalStockText,
             variantKey: buildVariantKey(item.nome || item.name || item.product, item.aplicacao || item.application),
         };
-    }).filter((item) => item.price > 0 && item.available && !isGenericProductName(item.product, supplier.name));
+    }).filter((item) => {
+        if (!(item.price > 0)) return false;
+        if (isGenericProductName(item.product, supplier.name)) return false;
+        if (query && !matchesQueryCode(query, item)) return false;
+        return true;
+    });
 
     const uniqueItems = [];
     const seen = new Set();
@@ -1480,7 +1525,7 @@ async function scrapeProductUnsafe(supplier, productName, options = {}) {
                 items = await extractGeneric(page);
             }
 
-            finalItems = buildBrowserPayload(items, supplier);
+            finalItems = buildBrowserPayload(items, supplier, query);
             console.error(`[DEBUG ${supplier.name}] buildBrowserPayload retornou ${finalItems.length} itens`);
 
             if (!finalItems.length && hasVisibleItemsWithoutPrice(items)) {
@@ -1512,7 +1557,7 @@ async function scrapeProductUnsafe(supplier, productName, options = {}) {
                     if (!items.length) {
                         items = await extractWithConfiguredSelectors(page, supplier, strategy);
                     }
-                    finalItems = buildBrowserPayload(items, supplier);
+                    finalItems = buildBrowserPayload(items, supplier, query);
                 }
 
                 if (!finalItems.length) {

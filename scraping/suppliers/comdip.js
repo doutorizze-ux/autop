@@ -141,14 +141,16 @@ module.exports = {
 
                 const priceMatch = rawText.match(/R\$\s?[0-9.,]+/);
                 const isIndisponivel = rawText.toLowerCase().includes('indisponível') || rawText.toLowerCase().includes('avise-me');
-                if (isIndisponivel || !priceMatch) continue;
+                
+                // Se não tem preço nem texto válido, pula; se tem preço ou aviso de indisponível, mantém
+                const preco = priceMatch ? priceMatch[0] : (isIndisponivel ? 'R$ 0,00' : '');
+                if (!preco) continue;
 
                 // Match code and description e.g. "W7122 - FILTRO DE OLEO" or "W712/16 - FILTRO"
                 const parts = fullTitle.split('-').map((s) => s.trim());
                 const codigo = parts[0] || '';
-                const preco = priceMatch[0];
 
-                const key = `${codigo}|${preco}`;
+                const key = `${codigo}|${preco}|${isIndisponivel}`;
                 if (seen.has(key)) continue;
                 seen.add(key);
 
@@ -164,8 +166,10 @@ module.exports = {
                     nome: fullTitle,
                     preco,
                     marca,
-                    estoque: 10,
-                    estoqueTexto: 'Em estoque',
+                    estoque: isIndisponivel ? 0 : 10,
+                    estoqueTexto: isIndisponivel ? 'Sem estoque' : 'Em estoque',
+                    disponivel: !isIndisponivel,
+                    available: !isIndisponivel,
                     link: window.location.href,
                 });
             }

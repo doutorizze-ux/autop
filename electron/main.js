@@ -248,17 +248,110 @@ function createWindow() {
     });
 }
 
+const signatureConfigs = new Map();
+
+function generateWhatsappSignatureScript(cfg) {
+    if (!cfg) return '';
+    return `
+(function() {
+  window.__ATTENDANT_SIGNATURE_CONFIG = ${JSON.stringify(cfg)};
+  if (window.__ATTENDANT_SIGNATURE_INSTALLED) return;
+  window.__ATTENDANT_SIGNATURE_INSTALLED = true;
+
+  function getComposer() {
+    return document.querySelector('footer div[contenteditable="true"][role="textbox"]') ||
+           document.querySelector('div[contenteditable="true"][data-tab="10"]');
+  }
+
+  function applySignature(composer) {
+    const config = window.__ATTENDANT_SIGNATURE_CONFIG;
+    if (!config || !config.enabled || !config.name || !config.name.trim()) return false;
+    
+    const name = config.name.trim();
+    const rawText = composer.innerText || composer.textContent || '';
+    const cleanText = rawText.replace(/\\u200B/g, '').trim();
+    if (!cleanText) return false;
+
+    const prefix = '*[' + name + ']:* ';
+    const prefixCheck = '[' + name + ']:';
+    const suffix = '\\n\\n_~ Atendente ' + name + '_';
+    const suffixCheck = '~ Atendente ' + name;
+
+    let newText = cleanText;
+    if (config.format === 'suffix') {
+      if (cleanText.includes(suffixCheck)) return false;
+      newText = cleanText + suffix;
+    } else {
+      if (cleanText.includes(prefixCheck) || cleanText.startsWith('*[')) return false;
+      newText = prefix + cleanText;
+    }
+
+    try {
+      composer.focus();
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(composer);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      
+      const success = document.execCommand('insertText', false, newText);
+      if (!success) {
+        const dt = new DataTransfer();
+        dt.setData('text/plain', newText);
+        composer.dispatchEvent(new ClipboardEvent('paste', {
+          clipboardData: dt,
+          bubbles: true,
+          cancelable: true
+        }));
+      }
+      return true;
+    } catch (e) {
+      console.warn('[Signature] Error applying signature:', e);
+      return false;
+    }
+  }
+
+  window.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
+      const composer = getComposer();
+      if (composer && (composer === e.target || composer.contains(e.target))) {
+        applySignature(composer);
+      }
+    }
+  }, true);
+
+  window.addEventListener('pointerdown', function(e) {
+    const sendBtn = e.target && e.target.closest && e.target.closest('button[aria-label*="Enviar" i], button span[data-icon="send"], span[data-icon="send"]');
+    if (sendBtn) {
+      const composer = getComposer();
+      if (composer) {
+        applySignature(composer);
+      }
+    }
+  }, true);
+})();
+`;
+}
+
 // Handler para abrir qualquer uma das 3 contas em janela dedicada destacável
-ipcMain.handle('open-whatsapp-window', (event, { channelKey, label }) => {
+ipcMain.handle('open-whatsapp-window', (event, { channelKey, label, signatureName, signatureEnabled, signatureFormat }) => {
     const safeKey = String(channelKey || 'atendimento_1').replace(/-/g, '_');
     const partitionName = `persist:whatsapp_${safeKey}`;
     const windowKey = safeKey;
+
+    const signatureCfg = {
+        name: signatureName || '',
+        enabled: signatureEnabled !== false,
+        format: signatureFormat || 'prefix'
+    };
+    signatureConfigs.set(windowKey, signatureCfg);
 
     if (whatsappWindows.has(windowKey)) {
         const existingWin = whatsappWindows.get(windowKey);
         if (existingWin && !existingWin.isDestroyed()) {
             if (existingWin.isMinimized()) existingWin.restore();
             existingWin.focus();
+            existingWin.webContents.executeJavaScript(generateWhatsappSignatureScript(signatureCfg)).catch(() => {});
             return { success: true, focused: true };
         }
     }
@@ -286,6 +379,16 @@ ipcMain.handle('open-whatsapp-window', (event, { channelKey, label }) => {
         },
     });
 
+    const injectSignature = () => {
+        const cfg = signatureConfigs.get(windowKey);
+        if (cfg && !win.isDestroyed()) {
+            win.webContents.executeJavaScript(generateWhatsappSignatureScript(cfg)).catch(() => {});
+        }
+    };
+
+    win.webContents.on('dom-ready', injectSignature);
+    win.webContents.on('did-finish-load', injectSignature);
+
     win.loadURL('https://web.whatsapp.com', { userAgent: WHATSAPP_USER_AGENT });
 
     win.on('closed', () => {
@@ -294,6 +397,22 @@ ipcMain.handle('open-whatsapp-window', (event, { channelKey, label }) => {
 
     whatsappWindows.set(windowKey, win);
     return { success: true, opened: true };
+});
+
+ipcMain.handle('update-whatsapp-signature', (event, { channelKey, signatureName, signatureEnabled, signatureFormat }) => {
+    const safeKey = String(channelKey || 'atendimento_1').replace(/-/g, '_');
+    const signatureCfg = {
+        name: signatureName || '',
+        enabled: signatureEnabled !== false,
+        format: signatureFormat || 'prefix'
+    };
+    signatureConfigs.set(safeKey, signatureCfg);
+
+    const win = whatsappWindows.get(safeKey);
+    if (win && !win.isDestroyed()) {
+        win.webContents.executeJavaScript(generateWhatsappSignatureScript(signatureCfg)).catch(() => {});
+    }
+    return { success: true };
 });
 
 function killBackend() {

@@ -286,12 +286,33 @@ function hasReliableProductIdentity(item: any, supplier: any, productName: strin
     const application = normalizeVariantKey(item?.application || item?.aplicacao || '');
     const productKey = normalizeVariantKey(product);
     const queryKey = normalizeVariantKey(productName);
-    const queryLooksLikeCode = /^[A-Za-z0-9./_-]{3,}$/.test(String(productName || '').trim()) && !/\s/.test(String(productName || '').trim());
+    const queryLooksLikeCode = /^[A-Za-z0-9./_-]{2,}$/.test(String(productName || '').trim()) && !/\s/.test(String(productName || '').trim());
+
+    if (queryLooksLikeCode && queryCode) {
+        // Se a busca foi por código específico (ex: HG41172, PD58):
+        // O item só é aceito se o código bater, ou se o texto/aplicação mencionar o código pesquisado!
+        const fullText = [
+            product,
+            item?.application,
+            item?.aplicacao,
+            item?.brand,
+            item?.marca,
+        ].filter(Boolean).join(' ');
+        const cleanText = fullText.replace(/[^A-Za-z0-9]/g, ' ').toUpperCase();
+        const tokens = cleanText.split(/\s+/).filter(Boolean);
+        const matchesTextToken = tokens.includes(queryCode);
+
+        const codeMatches = code && (code === queryCode || code.startsWith(queryCode) || queryCode.startsWith(code));
+
+        if (!codeMatches && !matchesTextToken) {
+            return false;
+        }
+        return true;
+    }
 
     if (code) return true;
     if (isGenericProductName(product, supplier?.name)) return false;
     if (queryKey && productKey === queryKey && !brand && !application) return false;
-    if (queryLooksLikeCode && productKey.length >= 3) return true;
     return productKey.length >= 4 || Boolean(brand || application);
 }
 
