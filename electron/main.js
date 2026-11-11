@@ -33,6 +33,21 @@ function configureWhatsappSession(ses) {
     } catch (_) {}
 }
 
+let logStream = null;
+function log(msg) {
+    const line = `[${new Date().toISOString()}] ${msg}\n`;
+    try {
+        if (!logStream && app) {
+            const userDataDir = app.getPath('userData');
+            const logsDir = path.join(userDataDir, 'logs');
+            fs.mkdirSync(logsDir, { recursive: true });
+            logStream = fs.createWriteStream(path.join(logsDir, 'backend.log'), { flags: 'a' });
+        }
+        if (logStream) logStream.write(line);
+    } catch (_) {}
+    console.log(msg);
+}
+
 // Garantir instância única
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
@@ -80,14 +95,7 @@ function startBackend() {
         try {
             fs.mkdirSync(logsDir, { recursive: true });
         } catch (_) {}
-        const logFilePath = path.join(logsDir, 'backend.log');
-        const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
 
-        const log = (msg) => {
-            const line = `[${new Date().toISOString()}] ${msg}\n`;
-            try { logStream.write(line); } catch (_) {}
-            console.log(msg);
-        };
 
         log('[Electron] Iniciando backend em: ' + scriptPath);
 
@@ -235,6 +243,36 @@ function createWindow() {
         },
         autoHideMenuBar: true,
         show: false,
+    });
+
+    mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+        const levelNames = ['verbose', 'info', 'warning', 'error'];
+        log(`[Renderer ${levelNames[level] || level}] ${message} (${sourceId}:${line})`);
+    });
+
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+        log(`[Renderer ERR] did-fail-load: code=${errorCode}, desc=${errorDescription}, url=${validatedURL}`);
+        setTimeout(() => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                log('[Electron] Tentando recarregar mainWindow...');
+                mainWindow.loadURL(`http://127.0.0.1:${activeBackendPort}`);
+            }
+        }, 1500);
+    });
+
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+        if (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')) {
+            mainWindow.webContents.toggleDevTools();
+            event.preventDefault();
+        }
+        if (input.key === 'F5' || (input.control && input.key.toLowerCase() === 'r')) {
+            mainWindow.webContents.reload();
+            event.preventDefault();
+        }
+    });
+
+    mainWindow.webContents.on('did-finish-load', () => {
+        log('[Electron] mainWindow carregou com sucesso.');
     });
 
     mainWindow.loadURL(`http://127.0.0.1:${activeBackendPort}`);

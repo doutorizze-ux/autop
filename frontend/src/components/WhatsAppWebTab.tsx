@@ -30,6 +30,7 @@ export const WhatsAppWebTab: React.FC<WhatsAppWebTabProps> = ({
 
   const safePartition = `persist:whatsapp_${channelKey.replace(/-/g, '_')}`;
   const webviewRef = useRef<any>(null);
+  const isDomReadyRef = useRef<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Assinatura do atendente local (armazenada por máquina/usuário)
@@ -152,22 +153,28 @@ export const WhatsAppWebTab: React.FC<WhatsAppWebTabProps> = ({
       format: signatureFormat,
     };
 
-    if (webviewRef.current && typeof webviewRef.current.executeJavaScript === 'function') {
-      webviewRef.current.executeJavaScript(getSignatureInjectionCode(cfg)).catch(() => {});
+    if (isDomReadyRef.current && webviewRef.current && typeof webviewRef.current.executeJavaScript === 'function') {
+      try {
+        webviewRef.current.executeJavaScript(getSignatureInjectionCode(cfg)).catch(() => {});
+      } catch (_) {}
     }
 
     const electron = (window as any).electronAPI;
     if (electron?.updateWhatsappSignature) {
-      electron.updateWhatsappSignature(channelKey, {
-        signatureName: signatureName.trim(),
-        signatureEnabled,
-        signatureFormat,
-      });
+      try {
+        electron.updateWhatsappSignature(channelKey, {
+          signatureName: signatureName.trim(),
+          signatureEnabled,
+          signatureFormat,
+        });
+      } catch (_) {}
     }
   }, [channelKey, signatureName, signatureEnabled, signatureFormat, getSignatureInjectionCode]);
 
   useEffect(() => {
-    syncSignature();
+    if (isDomReadyRef.current) {
+      syncSignature();
+    }
   }, [syncSignature]);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -215,10 +222,12 @@ export const WhatsAppWebTab: React.FC<WhatsAppWebTabProps> = ({
 
     const onFinish = () => {
       setIsLoading(false);
+      isDomReadyRef.current = true;
       syncSignature();
     };
     const onStart = () => setIsLoading(true);
     const onDomReady = () => {
+      isDomReadyRef.current = true;
       syncSignature();
     };
 
